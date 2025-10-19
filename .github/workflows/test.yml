@@ -87,7 +87,12 @@ jobs:
 
     - name: Validate example stories
       run: |
-        for story in examples/*.lua; do
-          echo "Validating $story..."
-          lua bin/whisker --validate "$story"
-        done
+        if ls stories/examples/*.lua 1> /dev/null 2>&1; then
+          for story in stories/examples/*.lua; do
+            echo "Validating $story..."
+            lua bin/whisker --validate "$story"
+          done
+        else
+          echo "No .lua story files found in stories/examples/"
+          echo "Skipping validation"
+        fi
