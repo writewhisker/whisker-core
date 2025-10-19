@@ -199,7 +199,15 @@ function Renderer:apply_wrapping(text)
         end
     end
 
-    return table.concat(lines, "\n")
+    local result = table.concat(lines, "\n")
+
+    -- Remove trailing newline if original text didn't have one
+    -- This fixes Lua version differences in gmatch behavior
+    if #result > 0 and result:sub(-1) == "\n" and not text:match("\n$") then
+        result = result:sub(1, -2)
+    end
+
+    return result
 end
 
 -- Split text into paragraphs
