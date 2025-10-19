@@ -1,0 +1,22 @@
+version: 2
+updates:
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
+  # Note: Dependabot doesn't directly support LuaRocks
+  # For Lua dependencies, we rely on manual updates and security advisories
+  # Consider using tools like:
+  #   - GitHub security advisories
+  #   - Manual rockspec updates
+  #   - Community notifications for vulnerable packages

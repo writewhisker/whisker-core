@@ -1,0 +1,52 @@
+whisker-core
+Copyright (c) 2025 Jim Spring
+
+This project is a continuation of the whisker interactive fiction engine,
+originally developed at https://github.com/jmspring/whisker.
+
+LICENSE CONTINUITY
+==================
+
+This project continues under the MIT License, maintaining compatibility
+with the original whisker project. The core library has always been MIT
+licensed and remains so.
+
+REPOSITORY ORGANIZATION
+=======================
+
+As of 2025, the whisker project has been reorganized under the writewhisker
+GitHub organization to better separate concerns:
+
+- whisker-core (this repository) - MIT Licensed
+  Core Lua library for interactive fiction
+
+- whisker-editor-web - AGPLv3 Licensed
+  Visual web-based story editor
+  https://github.com/writewhisker/whisker-editor-web
+
+- whisker-editor-desktop - AGPLv3 Licensed
+  Desktop story editor with Tauri
+  https://github.com/writewhisker/whisker-editor-desktop
+
+The original repository at https://github.com/jmspring/whisker remains
+available for historical reference and is also MIT licensed.
+
+WHY DIFFERENT LICENSES?
+========================
+
+- MIT for whisker-core: Encourages broad adoption and allows integration
+  into commercial and open-source projects without restrictions.
+
+- AGPLv3 for editors: Ensures that improvements to the visual editing
+  tools are shared back with the community, especially for hosted/SaaS
+  deployments.
+
+ATTRIBUTION
+===========
+
+When using whisker-core in your projects, please include this attribution:
+
+    Powered by whisker-core
+    https://github.com/writewhisker/whisker-core
+
+This attribution is appreciated but not required under the MIT License.

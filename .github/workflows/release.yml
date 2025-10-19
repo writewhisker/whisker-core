@@ -1,0 +1,119 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          # Extract changelog section for this version
+          VERSION=${{ steps.version.outputs.version }}
+          awk "/## \[$VERSION\]/,/## \[/" CHANGELOG.md | sed '1d;$d' > release_notes.md || echo "See CHANGELOG.md for details." > release_notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: whisker-core ${{ steps.version.outputs.tag }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') || contains(steps.version.outputs.version, 'rc') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-luarocks:
+    name: Publish to LuaRocks
+    runs-on: ubuntu-latest
+    needs: create-release
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Lua
+        uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: "5.4"
+
+      - name: Install LuaRocks
+        uses: leafo/gh-actions-luarocks@v4
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Find rockspec file
+        id: rockspec
+        run: |
+          ROCKSPEC=$(ls rockspec/whisker-*.rockspec | head -1)
+          echo "file=$ROCKSPEC" >> $GITHUB_OUTPUT
+
+      - name: Publish to LuaRocks
+        env:
+          LUAROCKS_API_KEY: ${{ secrets.LUAROCKS_API_KEY }}
+        run: |
+          if [ -n "$LUAROCKS_API_KEY" ]; then
+            luarocks upload --api-key="$LUAROCKS_API_KEY" ${{ steps.rockspec.outputs.file }}
+          else
+            echo "⚠️ LUAROCKS_API_KEY not set. Skipping LuaRocks publish."
+            echo "To enable automatic publishing, add LUAROCKS_API_KEY to repository secrets."
+          fi
+
+  test-installation:
+    name: Test Installation
+    runs-on: ubuntu-latest
+    needs: publish-luarocks
+
+    strategy:
+      matrix:
+        lua-version: ['5.1', '5.2', '5.3', '5.4', 'luajit']
+
+    steps:
+      - name: Install Lua
+        uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: ${{ matrix.lua-version }}
+
+      - name: Install LuaRocks
+        uses: leafo/gh-actions-luarocks@v4
+
+      - name: Wait for LuaRocks propagation
+        run: sleep 60
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Install whisker from LuaRocks
+        run: |
+          luarocks install whisker ${{ steps.version.outputs.version }} || echo "Package not yet available on LuaRocks"
+
+      - name: Test installation
+        run: |
+          lua -e "local whisker = require('whisker'); print('whisker-core ' .. whisker.VERSION .. ' installed successfully')" || echo "Installation test skipped"

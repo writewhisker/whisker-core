@@ -1,0 +1,93 @@
+name: Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }} with Lua ${{ matrix.lua-version }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        lua-version: ['5.1', '5.2', '5.3', '5.4', 'luajit']
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Lua
+      uses: leafo/gh-actions-lua@v10
+      with:
+        luaVersion: ${{ matrix.lua-version }}
+
+    - name: Setup LuaRocks
+      uses: leafo/gh-actions-luarocks@v4
+
+    - name: Install busted
+      run: luarocks install busted
+
+    - name: Install luacov (coverage)
+      run: luarocks install luacov
+
+    - name: Run tests
+      run: busted --verbose --coverage
+
+    - name: Generate coverage report
+      if: matrix.lua-version == '5.4' && matrix.os == 'ubuntu-latest'
+      run: luacov
+
+    - name: Upload coverage
+      if: matrix.lua-version == '5.4' && matrix.os == 'ubuntu-latest'
+      uses: codecov/codecov-action@v4
+      with:
+        files: ./luacov.report.out
+        flags: unittests
+        name: codecov-whisker-core
+
+  lint:
+    name: Lint with LuaCheck
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Lua
+      uses: leafo/gh-actions-lua@v10
+      with:
+        luaVersion: '5.4'
+
+    - name: Setup LuaRocks
+      uses: leafo/gh-actions-luarocks@v4
+
+    - name: Install luacheck
+      run: luarocks install luacheck
+
+    - name: Run luacheck
+      run: luacheck lib/ bin/ --config .luacheckrc
+
+  validate:
+    name: Validate story examples
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Lua
+      uses: leafo/gh-actions-lua@v10
+      with:
+        luaVersion: '5.4'
+
+    - name: Validate example stories
+      run: |
+        for story in examples/*.lua; do
+          echo "Validating $story..."
+          lua bin/whisker --validate "$story"
+        done

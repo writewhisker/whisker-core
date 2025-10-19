@@ -1,0 +1,74 @@
+# Lua
+*.lua~
+*.luac
+luac.out
+
+# LuaRocks
+*.rock
+*.src.rock
+/luarocks/
+
+# Compiled files
+*.o
+*.so
+*.dylib
+*.dll
+
+# Build directories
+/build/
+/dist/
+/out/
+
+# Test coverage
+/coverage/
+*.coverage
+luacov.*.out
+luacov.report.out
+luacov.stats.out
+
+# Editor directories and files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Runtime generated
+/saves/
+/logs/
+*.log
+
+# Package manager
+/node_modules/
+package-lock.json
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Temporary files
+*.tmp
+*.temp
+/tmp/
+
+# Documentation builds
+/docs/_build/
+/docs/.doctrees/
+
+# LuaRocks local installation
+.luarocks/
+
+# Busted test framework
+/.busted_*
