@@ -246,4 +246,23 @@ function M.count_constructs(content, format)
   return count
 end
 
+-- Check if array contains a value
+function M.array_contains(array, value)
+  for _, v in ipairs(array) do
+    if v == value then
+      return true
+    end
+  end
+  return false
+end
+
+-- Count the number of keys in a table
+function M.count_table(tbl)
+  local count = 0
+  for _ in pairs(tbl) do
+    count = count + 1
+  end
+  return count
+end
+
 return M

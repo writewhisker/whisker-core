@@ -20,6 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Asset management methods: `add_asset(asset)`, `get_asset(asset_id)`, `remove_asset(asset_id)`, `list_assets()`, `has_asset(asset_id)`, `get_asset_references(asset_id)` on Story
   - Asset serialization in Story format
   - Example files demonstrating v2.0 features: typed variables, metadata usage, asset integration
+- **Story-Level Features (Phase 3)**:
+  - Story-level tags: `add_tag(tag)`, `remove_tag(tag)`, `has_tag(tag)`, `get_all_tags()`, `clear_tags()` on Story
+  - Story settings system: `set_setting(key, value)`, `get_setting(key, default)`, `has_setting(key)`, `delete_setting(key)`, `get_all_settings()`, `clear_settings()` on Story
+  - Variable usage tracking: `get_variable_usage(name)`, `get_all_variable_usage()`, `get_unused_variables()` on Story
+  - Enhanced serialization to include story tags and settings
+  - Example file demonstrating Phase 3 features: story-level categorization, configuration, variable tracking
 - Initial release of whisker-core as separate repository
 - Core Lua library for interactive fiction
 - Story parser supporting passage-based narratives

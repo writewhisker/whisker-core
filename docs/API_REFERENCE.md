@@ -218,6 +218,215 @@ for _, ref in ipairs(refs) do
 end
 ```
 
+##### `story:add_tag(tag)`
+
+Adds a tag to the story (story-level categorization).
+
+**Parameters:**
+- `tag` (string) - Tag name to add
+
+**Returns:** `void`
+
+**Example:**
+```lua
+story:add_tag("fantasy")
+story:add_tag("adventure")
+story:add_tag("short")
+```
+
+##### `story:remove_tag(tag)`
+
+Removes a tag from the story.
+
+**Parameters:**
+- `tag` (string) - Tag name to remove
+
+**Returns:** `void`
+
+**Example:**
+```lua
+story:remove_tag("outdated")
+```
+
+##### `story:has_tag(tag)`
+
+Checks if the story has a specific tag.
+
+**Parameters:**
+- `tag` (string) - Tag name to check
+
+**Returns:** `boolean`
+
+**Example:**
+```lua
+if story:has_tag("mature_content") then
+    print("Warning: Mature content")
+end
+```
+
+##### `story:get_all_tags()`
+
+Gets all story tags in sorted order.
+
+**Returns:** `table` - Array of tag strings
+
+**Example:**
+```lua
+local tags = story:get_all_tags()
+for _, tag in ipairs(tags) do
+    print("Tag: " .. tag)
+end
+```
+
+##### `story:clear_tags()`
+
+Removes all tags from the story.
+
+**Returns:** `void`
+
+**Example:**
+```lua
+story:clear_tags()
+```
+
+##### `story:set_setting(key, value)`
+
+Sets a story-level setting (configuration value).
+
+**Parameters:**
+- `key` (string) - Setting name
+- `value` (any) - Setting value
+
+**Returns:** `void`
+
+**Example:**
+```lua
+story:set_setting("difficulty", "hard")
+story:set_setting("music_volume", 0.7)
+story:set_setting("enable_hints", true)
+```
+
+##### `story:get_setting(key, default)`
+
+Gets a story setting with optional default value.
+
+**Parameters:**
+- `key` (string) - Setting name
+- `default` (any, optional) - Default value if setting not found
+
+**Returns:** Setting value or default
+
+**Example:**
+```lua
+local difficulty = story:get_setting("difficulty", "normal")
+local volume = story:get_setting("music_volume", 0.5)
+```
+
+##### `story:has_setting(key)`
+
+Checks if a story setting exists.
+
+**Parameters:**
+- `key` (string) - Setting name
+
+**Returns:** `boolean`
+
+**Example:**
+```lua
+if story:has_setting("custom_theme") then
+    local theme = story:get_setting("custom_theme")
+end
+```
+
+##### `story:delete_setting(key)`
+
+Deletes a story setting.
+
+**Parameters:**
+- `key` (string) - Setting name
+
+**Returns:** `boolean` - `true` if setting was deleted, `false` if it didn't exist
+
+**Example:**
+```lua
+local deleted = story:delete_setting("temp_setting")
+```
+
+##### `story:get_all_settings()`
+
+Gets a copy of all story settings.
+
+**Returns:** `table` - Copy of settings dictionary
+
+**Example:**
+```lua
+local settings = story:get_all_settings()
+for key, value in pairs(settings) do
+    print(string.format("%s = %s", key, tostring(value)))
+end
+```
+
+##### `story:clear_settings()`
+
+Removes all story settings.
+
+**Returns:** `void`
+
+**Example:**
+```lua
+story:clear_settings()
+```
+
+##### `story:get_variable_usage(variable_name)`
+
+Finds all passages where a variable is used.
+
+**Parameters:**
+- `variable_name` (string) - Name of variable to search for
+
+**Returns:** `table` - Array of usage objects with `passage_id`, `passage_name`, and `locations`
+
+**Example:**
+```lua
+local usage = story:get_variable_usage("health")
+for _, use in ipairs(usage) do
+    print(string.format("Variable 'health' used in %s at: %s",
+        use.passage_name, table.concat(use.locations, ", ")))
+end
+-- Output: Variable 'health' used in Battle Scene at: content, on_enter_script
+```
+
+##### `story:get_all_variable_usage()`
+
+Gets usage information for all variables in the story.
+
+**Returns:** `table` - Dictionary mapping variable names to usage arrays
+
+**Example:**
+```lua
+local all_usage = story:get_all_variable_usage()
+for var_name, usage in pairs(all_usage) do
+    print(string.format("%s: used in %d passages", var_name, #usage))
+end
+```
+
+##### `story:get_unused_variables()`
+
+Gets a list of variables that are never referenced in any passage.
+
+**Returns:** `table` - Array of unused variable names (sorted)
+
+**Example:**
+```lua
+local unused = story:get_unused_variables()
+if #unused > 0 then
+    print("Warning: The following variables are never used:")
+    for _, var in ipairs(unused) do
+        print("  - " .. var)
+    end
+end
+```
+
 #### Properties
 
 - `story.title` (string) - Story title
@@ -227,6 +436,8 @@ end
 - `story.description` (string) - Story description
 - `story.variables` (table) - Default variable values
 - `story.assets` (table) - Asset dictionary indexed by asset ID
+- `story.tags` (table) - Story-level tags dictionary
+- `story.settings` (table) - Story-level settings dictionary
 
 ---
 

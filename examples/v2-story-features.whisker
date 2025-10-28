@@ -1,0 +1,492 @@
+{
+  "format": "whisker",
+  "formatVersion": "2.0",
+  "metadata": {
+    "title": "The Enchanted Library",
+    "author": "Whisker Examples",
+    "version": "1.0.0",
+    "created": "2025-10-27T19:00:00Z",
+    "modified": "2025-10-27T19:00:00Z",
+    "ifid": "EXAMPLE-STORY-FEATURES-001",
+    "description": "Demonstrates Phase 3 features: story-level tags, settings, and variable usage tracking"
+  },
+  "tags": {
+    "fantasy": true,
+    "puzzle": true,
+    "educational": true,
+    "short": true
+  },
+  "settings": {
+    "difficulty": "medium",
+    "autoSave": true,
+    "musicVolume": 0.7,
+    "enableHints": true,
+    "theme": "dark",
+    "language": "en",
+    "maxUndoSteps": 10,
+    "startPassage": "entrance"
+  },
+  "variables": {
+    "playerName": {
+      "type": "string",
+      "default": "Adventurer"
+    },
+    "booksFound": {
+      "type": "number",
+      "default": 0
+    },
+    "totalBooks": {
+      "type": "number",
+      "default": 5
+    },
+    "hasLibraryCard": {
+      "type": "boolean",
+      "default": false
+    },
+    "hasMagnifyingGlass": {
+      "type": "boolean",
+      "default": false
+    },
+    "hasLantern": {
+      "type": "boolean",
+      "default": false
+    },
+    "currentRoom": {
+      "type": "string",
+      "default": "entrance"
+    },
+    "hintsUsed": {
+      "type": "number",
+      "default": 0
+    },
+    "score": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "passages": [
+    {
+      "id": "entrance",
+      "name": "Library Entrance",
+      "content": "Welcome, $playerName, to the Enchanted Library!\n\nYou stand before a grand oak door with mysterious glowing runes. A small plaque reads: \"Those who seek knowledge shall find it, but only the curious shall understand it.\"\n\nBooks Found: $booksFound / $totalBooks\nScore: $score points",
+      "tags": ["start", "introduction"],
+      "metadata": {
+        "difficulty": "easy",
+        "music": "mystical_ambient.mp3",
+        "backgroundColor": "#1a1a2e"
+      },
+      "on_enter_script": "currentRoom = 'entrance'",
+      "choices": [
+        {
+          "id": "choice-entrance-1",
+          "text": "Enter the library",
+          "target": "main_hall",
+          "condition": null,
+          "action": null
+        },
+        {
+          "id": "choice-entrance-2",
+          "text": "Examine the runes",
+          "target": "examine_runes",
+          "condition": null,
+          "action": "score = score + 5"
+        }
+      ]
+    },
+    {
+      "id": "examine_runes",
+      "name": "Examining the Runes",
+      "content": "You study the glowing runes carefully. They seem to shimmer and shift as you look at them, forming patterns that tell an ancient story.\n\n[Achievement: Curious Mind] +5 points",
+      "tags": ["optional", "lore"],
+      "metadata": {
+        "difficulty": "easy",
+        "achievement": "curious_mind",
+        "points": 5
+      },
+      "on_enter_script": "score = score + 5",
+      "choices": [
+        {
+          "id": "choice-runes-1",
+          "text": "Enter the library",
+          "target": "main_hall",
+          "condition": null,
+          "action": null
+        }
+      ]
+    },
+    {
+      "id": "main_hall",
+      "name": "Main Hall",
+      "content": "The main hall is vast and filled with towering bookshelves that reach up into shadows. Dust motes dance in rays of magical light filtering from enchanted crystals above.\n\nYou notice several areas to explore:\n- The Reading Room (north)\n- The Archive Section (east)\n- The Rare Books Collection (west)\n- The Librarian's Desk (center)",
+      "tags": ["hub", "exploration"],
+      "metadata": {
+        "difficulty": "medium",
+        "music": "library_ambience.mp3",
+        "hubLocation": true
+      },
+      "on_enter_script": "currentRoom = 'main_hall'",
+      "choices": [
+        {
+          "id": "choice-hall-1",
+          "text": "Visit the Reading Room",
+          "target": "reading_room",
+          "condition": null,
+          "action": null
+        },
+        {
+          "id": "choice-hall-2",
+          "text": "Explore the Archive Section",
+          "target": "archive",
+          "condition": "hasLantern == true",
+          "action": null
+        },
+        {
+          "id": "choice-hall-3",
+          "text": "Check the Rare Books Collection",
+          "target": "rare_books",
+          "condition": "hasLibraryCard == true",
+          "action": null
+        },
+        {
+          "id": "choice-hall-4",
+          "text": "Approach the Librarian's Desk",
+          "target": "librarian_desk",
+          "condition": null,
+          "action": null
+        }
+      ]
+    },
+    {
+      "id": "librarian_desk",
+      "name": "Librarian's Desk",
+      "content": "An ancient librarian sits behind a massive desk covered in open books, scrolls, and a curious glowing orb.\n\n\"Ah, a visitor,\" the librarian says without looking up. \"Here for a library card, I presume?\"",
+      "tags": ["npc", "important"],
+      "metadata": {
+        "difficulty": "easy",
+        "npcName": "Elder Librarian",
+        "npcType": "friendly"
+      },
+      "choices": [
+        {
+          "id": "choice-desk-1",
+          "text": "Request a library card",
+          "target": "get_card",
+          "condition": "hasLibraryCard == false",
+          "action": "hasLibraryCard = true; score = score + 10"
+        },
+        {
+          "id": "choice-desk-2",
+          "text": "Ask about the library",
+          "target": "library_info",
+          "condition": null,
+          "action": "hintsUsed = hintsUsed + 1"
+        },
+        {
+          "id": "choice-desk-3",
+          "text": "Return to main hall",
+          "target": "main_hall",
+          "condition": null,
+          "action": null
+        }
+      ]
+    },
+    {
+      "id": "get_card",
+      "name": "Library Card Obtained",
+      "content": "The librarian hands you an ornate card that glows faintly with magical energy.\n\n\"This will grant you access to our Rare Books Collection,\" the librarian explains. \"Use it wisely.\"\n\n[Item Obtained: Library Card]\n[Achievement: Registered Reader] +10 points",
+      "tags": ["item-obtained", "achievement"],
+      "metadata": {
+        "difficulty": "easy",
+        "achievement": "registered_reader",
+        "points": 10,
+        "itemObtained": "library_card"
+      },
+      "on_enter_script": "hasLibraryCard = true; score = score + 10",
+      "choices": [
+        {
+          "id": "choice-card-1",
+          "text": "Thank the librarian and continue",
+          "target": "main_hall",
+          "condition": null,
+          "action": null
+        }
+      ]
+    },
+    {
+      "id": "library_info",
+      "name": "About the Library",
+      "content": "The librarian smiles knowingly.\n\n\"This library contains five legendary books scattered throughout its halls. Each book holds ancient knowledge and power. Find all five, and you shall be granted the title of Master Scholar.\"\n\nThe librarian adds: \"Look for:\n- The Book of Mysteries (hidden)\n- The Tome of Elements (in the archive)\n- The Chronicle of Heroes (rare collection)\n- The Codex of Wisdom (reading room)\n- The Atlas of Worlds (must search carefully)\"\n\nHints Used: $hintsUsed",
+      "tags": ["hint", "tutorial"],
+      "metadata": {
+        "difficulty": "easy",
+        "hintsProvided": 5
+      },
+      "on_enter_script": "hintsUsed = hintsUsed + 1",
+      "choices": [
+        {
+          "id": "choice-info-1",
+          "text": "Continue exploring",
+          "target": "main_hall",
+          "condition": null,
+          "action": null
+        }
+      ]
+    },
+    {
+      "id": "reading_room",
+      "name": "Reading Room",
+      "content": "Cozy armchairs and warm lighting make this room inviting. Several books lie open on tables, as if readers just stepped away.\n\nYou notice \"The Codex of Wisdom\" sitting prominently on a reading stand.",
+      "tags": ["book-location", "safe"],
+      "metadata": {
+        "difficulty": "easy",
+        "bookAvailable": "codex_of_wisdom",
+        "music": "peaceful_strings.mp3"
+      },
+      "on_enter_script": "currentRoom = 'reading_room'",
+      "choices": [
+        {
+          "id": "choice-reading-1",
+          "text": "Take the Codex of Wisdom",
+          "target": "found_codex",
+          "condition": "booksFound < totalBooks",
+          "action": "booksFound = booksFound + 1; score = score + 20"
+        },
+        {
+          "id": "choice-reading-2",
+          "text": "Return to main hall",
+          "target": "main_hall",
+          "condition": null,
+          "action": null
+        }
+      ]
+    },
+    {
+      "id": "found_codex",
+      "name": "Codex of Wisdom Found",
+      "content": "You carefully pick up the Codex of Wisdom. Its pages glow softly as you touch them, and you feel a surge of understanding wash over you.\n\n[Book Found: 1/5 - The Codex of Wisdom] +20 points\n\nBooks Collected: $booksFound / $totalBooks\nScore: $score points",
+      "tags": ["book-collected", "achievement"],
+      "metadata": {
+        "difficulty": "easy",
+        "achievement": "wisdom_seeker",
+        "points": 20,
+        "bookName": "Codex of Wisdom"
+      },
+      "on_enter_script": "booksFound = booksFound + 1; score = score + 20",
+      "choices": [
+        {
+          "id": "choice-codex-1",
+          "text": "Continue searching for books",
+          "target": "main_hall",
+          "condition": "booksFound < totalBooks",
+          "action": null
+        },
+        {
+          "id": "choice-codex-2",
+          "text": "Check your progress",
+          "target": "check_progress",
+          "condition": null,
+          "action": null
+        }
+      ]
+    },
+    {
+      "id": "archive",
+      "name": "Archive Section",
+      "content": "The archive is dimly lit and filled with ancient scrolls and dusty tomes. Your lantern illuminates forgotten corners filled with knowledge.\n\nAmong the shelves, you spot \"The Tome of Elements\" glowing with elemental energy.",
+      "tags": ["book-location", "requires-item"],
+      "metadata": {
+        "difficulty": "medium",
+        "bookAvailable": "tome_of_elements",
+        "requiredItem": "lantern",
+        "ambientSound": "wind_whispers.mp3"
+      },
+      "on_enter_script": "currentRoom = 'archive'",
+      "choices": [
+        {
+          "id": "choice-archive-1",
+          "text": "Take the Tome of Elements",
+          "target": "found_tome",
+          "condition": "booksFound < totalBooks and hasLantern == true",
+          "action": "booksFound = booksFound + 1; score = score + 20"
+        },
+        {
+          "id": "choice-archive-2",
+          "text": "Return to main hall",
+          "target": "main_hall",
+          "condition": null,
+          "action": null
+        }
+      ]
+    },
+    {
+      "id": "found_tome",
+      "name": "Tome of Elements Found",
+      "content": "The Tome of Elements pulses with primal energy as you lift it from the shelf. Fire, Water, Earth, and Air swirl within its pages.\n\n[Book Found: 2/5 - The Tome of Elements] +20 points\n\nBooks Collected: $booksFound / $totalBooks\nScore: $score points",
+      "tags": ["book-collected", "achievement"],
+      "metadata": {
+        "difficulty": "medium",
+        "achievement": "elemental_master",
+        "points": 20,
+        "bookName": "Tome of Elements"
+      },
+      "choices": [
+        {
+          "id": "choice-tome-1",
+          "text": "Continue your quest",
+          "target": "main_hall",
+          "condition": "booksFound < totalBooks",
+          "action": null
+        },
+        {
+          "id": "choice-tome-2",
+          "text": "Check completion status",
+          "target": "check_progress",
+          "condition": null,
+          "action": null
+        }
+      ]
+    },
+    {
+      "id": "rare_books",
+      "name": "Rare Books Collection",
+      "content": "The Rare Books Collection is protected by magical barriers that shimmer around ancient texts. Your library card allows you safe passage.\n\n\"The Chronicle of Heroes\" sits in a place of honor, its cover emblazoned with legendary tales.",
+      "tags": ["book-location", "requires-card"],
+      "metadata": {
+        "difficulty": "medium",
+        "bookAvailable": "chronicle_of_heroes",
+        "requiredItem": "library_card",
+        "backgroundColor": "#2d1b69"
+      },
+      "on_enter_script": "currentRoom = 'rare_books'",
+      "choices": [
+        {
+          "id": "choice-rare-1",
+          "text": "Take the Chronicle of Heroes",
+          "target": "found_chronicle",
+          "condition": "booksFound < totalBooks and hasLibraryCard == true",
+          "action": "booksFound = booksFound + 1; score = score + 20"
+        },
+        {
+          "id": "choice-rare-2",
+          "text": "Return to main hall",
+          "target": "main_hall",
+          "condition": null,
+          "action": null
+        }
+      ]
+    },
+    {
+      "id": "found_chronicle",
+      "name": "Chronicle of Heroes Found",
+      "content": "As you take the Chronicle of Heroes, images of legendary warriors and mages flash through your mind. Their stories become part of you.\n\n[Book Found: 3/5 - The Chronicle of Heroes] +20 points\n\nBooks Collected: $booksFound / $totalBooks\nScore: $score points",
+      "tags": ["book-collected", "achievement"],
+      "metadata": {
+        "difficulty": "medium",
+        "achievement": "hero_scholar",
+        "points": 20,
+        "bookName": "Chronicle of Heroes"
+      },
+      "choices": [
+        {
+          "id": "choice-chronicle-1",
+          "text": "Press onward",
+          "target": "main_hall",
+          "condition": "booksFound < totalBooks",
+          "action": null
+        },
+        {
+          "id": "choice-chronicle-2",
+          "text": "Review your progress",
+          "target": "check_progress",
+          "condition": null,
+          "action": null
+        }
+      ]
+    },
+    {
+      "id": "check_progress",
+      "name": "Quest Progress",
+      "content": "You take a moment to reflect on your journey through the Enchanted Library.\n\n=== Progress Report ===\nPlayer: $playerName\nCurrent Location: $currentRoom\nBooks Found: $booksFound / $totalBooks\nScore: $score points\nHints Used: $hintsUsed\n\nInventory:\n- Library Card: $hasLibraryCard\n- Magnifying Glass: $hasMagnifyingGlass\n- Lantern: $hasLantern\n\n===================",
+      "tags": ["status", "meta"],
+      "metadata": {
+        "difficulty": "easy",
+        "systemPassage": true
+      },
+      "choices": [
+        {
+          "id": "choice-progress-1",
+          "text": "Continue exploring",
+          "target": "main_hall",
+          "condition": "booksFound < totalBooks",
+          "action": null
+        },
+        {
+          "id": "choice-progress-2",
+          "text": "Complete your quest",
+          "target": "ending",
+          "condition": "booksFound >= totalBooks",
+          "action": null
+        }
+      ]
+    },
+    {
+      "id": "ending",
+      "name": "Master Scholar",
+      "content": "Congratulations, $playerName!\n\nYou have found all 5 legendary books and proven yourself worthy of the title \"Master Scholar\".\n\nFinal Statistics:\n- Books Collected: $booksFound / $totalBooks\n- Final Score: $score points\n- Hints Used: $hintsUsed\n- Completion Rate: 100%\n\nThe Elder Librarian appears before you, smiling warmly.\n\n\"You have done well, Master Scholar. The knowledge you've gathered will serve you well. May your wisdom grow with each passing day.\"\n\n[QUEST COMPLETE]\n[Achievement: Master Scholar] +50 points",
+      "tags": ["ending", "success", "achievement"],
+      "metadata": {
+        "difficulty": "easy",
+        "endingType": "success",
+        "achievement": "master_scholar",
+        "points": 50,
+        "completionRate": 100
+      },
+      "on_enter_script": "score = score + 50",
+      "choices": []
+    }
+  ],
+  "stylesheets": [
+    "/* Main theme styles */\n.passage { \n  background-color: #1a1a2e;\n  color: #e0e0e0;\n  font-family: 'Georgia', serif;\n  padding: 2rem;\n  line-height: 1.6;\n}\n\n.passage h1 {\n  color: #ffd700;\n  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);\n}\n\n.choice {\n  background-color: #16213e;\n  border: 1px solid #0f4c75;\n  color: #3282b8;\n  padding: 0.5rem 1rem;\n  margin: 0.5rem 0;\n  border-radius: 5px;\n  transition: all 0.3s;\n}\n\n.choice:hover {\n  background-color: #0f4c75;\n  color: #bbe1fa;\n  box-shadow: 0 0 15px rgba(50, 130, 184, 0.5);\n}"
+  ],
+  "scripts": [
+    "-- Global helper functions\nfunction formatScore(score)\n  if score >= 100 then\n    return \"Excellent!\"\n  elseif score >= 50 then\n    return \"Good job!\"\n  else\n    return \"Keep trying!\"\n  end\nend\n\nfunction checkCompletion()\n  if booksFound >= totalBooks then\n    return true\n  end\n  return false\nend"
+  ],
+  "assets": [
+    {
+      "id": "mystical_ambient",
+      "name": "Mystical Ambient Music",
+      "path": "assets/audio/mystical_ambient.mp3",
+      "mimeType": "audio/mpeg",
+      "size": 2456789,
+      "metadata": {
+        "duration": 180,
+        "loop": true,
+        "volume": 0.7
+      }
+    },
+    {
+      "id": "library_ambience",
+      "name": "Library Ambience",
+      "path": "assets/audio/library_ambience.mp3",
+      "mimeType": "audio/mpeg",
+      "size": 1894532,
+      "metadata": {
+        "duration": 120,
+        "loop": true,
+        "volume": 0.5
+      }
+    },
+    {
+      "id": "peaceful_strings",
+      "name": "Peaceful Strings",
+      "path": "assets/audio/peaceful_strings.mp3",
+      "mimeType": "audio/mpeg",
+      "size": 1567890,
+      "metadata": {
+        "duration": 90,
+        "loop": true,
+        "volume": 0.6
+      }
+    }
+  ]
+}
