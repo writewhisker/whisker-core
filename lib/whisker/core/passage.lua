@@ -77,8 +77,37 @@ function Passage:set_metadata(key, value)
     self.metadata[key] = value
 end
 
-function Passage:get_metadata(key)
-    return self.metadata[key]
+function Passage:get_metadata(key, default)
+    local value = self.metadata[key]
+    if value ~= nil then
+        return value
+    end
+    return default
+end
+
+function Passage:has_metadata(key)
+    return self.metadata[key] ~= nil
+end
+
+function Passage:delete_metadata(key)
+    if self.metadata[key] ~= nil then
+        self.metadata[key] = nil
+        return true
+    end
+    return false
+end
+
+function Passage:clear_metadata()
+    self.metadata = {}
+end
+
+function Passage:get_all_metadata()
+    -- Return a copy to prevent external modification
+    local copy = {}
+    for k, v in pairs(self.metadata) do
+        copy[k] = v
+    end
+    return copy
 end
 
 function Passage:set_on_enter_script(script)

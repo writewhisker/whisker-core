@@ -79,8 +79,37 @@ function Choice:set_metadata(key, value)
     self.metadata[key] = value
 end
 
-function Choice:get_metadata(key)
-    return self.metadata[key]
+function Choice:get_metadata(key, default)
+    local value = self.metadata[key]
+    if value ~= nil then
+        return value
+    end
+    return default
+end
+
+function Choice:has_metadata(key)
+    return self.metadata[key] ~= nil
+end
+
+function Choice:delete_metadata(key)
+    if self.metadata[key] ~= nil then
+        self.metadata[key] = nil
+        return true
+    end
+    return false
+end
+
+function Choice:clear_metadata()
+    self.metadata = {}
+end
+
+function Choice:get_all_metadata()
+    -- Return a copy to prevent external modification
+    local copy = {}
+    for k, v in pairs(self.metadata) do
+        copy[k] = v
+    end
+    return copy
 end
 
 function Choice:validate()

@@ -1,0 +1,162 @@
+{
+  "format": "whisker",
+  "formatVersion": "2.0",
+  "metadata": {
+    "name": "Typed Variables Example",
+    "author": "Whisker Team",
+    "version": "1.0.0",
+    "created": "2025-10-28T00:00:00.000Z",
+    "modified": "2025-10-28T00:00:00.000Z",
+    "ifid": "12345678-1234-4234-8234-123456789abc",
+    "description": "Demonstrates v2.0 typed variable format"
+  },
+  "settings": {
+    "startPassage": "start",
+    "scriptingLanguage": "lua"
+  },
+  "variables": {
+    "playerName": {
+      "type": "string",
+      "default": "Hero"
+    },
+    "health": {
+      "type": "number",
+      "default": 100
+    },
+    "maxHealth": {
+      "type": "number",
+      "default": 100
+    },
+    "gold": {
+      "type": "number",
+      "default": 50
+    },
+    "hasKey": {
+      "type": "boolean",
+      "default": false
+    },
+    "hasMap": {
+      "type": "boolean",
+      "default": false
+    },
+    "visitedTown": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "passages": [
+    {
+      "id": "start",
+      "name": "Start",
+      "content": "Welcome, ${playerName}! You have ${health} health and ${gold} gold.",
+      "position": { "x": 0, "y": 0 },
+      "size": { "width": 200, "height": 150 },
+      "tags": ["start"],
+      "choices": [
+        {
+          "id": "ch_001",
+          "text": "Check inventory",
+          "target_passage": "inventory"
+        },
+        {
+          "id": "ch_002",
+          "text": "Explore the forest",
+          "target_passage": "forest",
+          "condition": "health > 20"
+        },
+        {
+          "id": "ch_003",
+          "text": "Visit the town",
+          "target_passage": "town",
+          "condition": "!visitedTown"
+        }
+      ]
+    },
+    {
+      "id": "inventory",
+      "name": "Inventory",
+      "content": "You have:\n- Health: ${health}/${maxHealth}\n- Gold: ${gold}\n- Key: ${hasKey ? 'Yes' : 'No'}\n- Map: ${hasMap ? 'Yes' : 'No'}",
+      "position": { "x": 200, "y": 0 },
+      "size": { "width": 200, "height": 150 },
+      "choices": [
+        {
+          "id": "ch_004",
+          "text": "Back",
+          "target_passage": "start"
+        }
+      ]
+    },
+    {
+      "id": "forest",
+      "name": "Forest",
+      "content": "You venture into the dark forest. The trees tower above you.",
+      "position": { "x": 0, "y": 200 },
+      "size": { "width": 200, "height": 150 },
+      "choices": [
+        {
+          "id": "ch_005",
+          "text": "Search for treasures",
+          "target_passage": "treasure",
+          "action": "gold = gold + 25; health = health - 10"
+        },
+        {
+          "id": "ch_006",
+          "text": "Return home",
+          "target_passage": "start"
+        }
+      ]
+    },
+    {
+      "id": "treasure",
+      "name": "Treasure Found",
+      "content": "You found 25 gold, but took some damage in the process! (Health: ${health})",
+      "position": { "x": 200, "y": 200 },
+      "size": { "width": 200, "height": 150 },
+      "choices": [
+        {
+          "id": "ch_007",
+          "text": "Continue",
+          "target_passage": "start"
+        }
+      ]
+    },
+    {
+      "id": "town",
+      "name": "Town",
+      "content": "You arrive at the bustling town. Merchants hawk their wares.",
+      "position": { "x": -200, "y": 0 },
+      "size": { "width": 200, "height": 150 },
+      "on_enter_script": "visitedTown = true",
+      "choices": [
+        {
+          "id": "ch_008",
+          "text": "Buy health potion (30 gold)",
+          "target_passage": "buy_potion",
+          "condition": "gold >= 30"
+        },
+        {
+          "id": "ch_009",
+          "text": "Return",
+          "target_passage": "start"
+        }
+      ]
+    },
+    {
+      "id": "buy_potion",
+      "name": "Buy Potion",
+      "content": "You purchased a health potion and restored some health!",
+      "position": { "x": -200, "y": 200 },
+      "size": { "width": 200, "height": 150 },
+      "on_enter_script": "gold = gold - 30; health = math.min(health + 50, maxHealth)",
+      "choices": [
+        {
+          "id": "ch_010",
+          "text": "Continue",
+          "target_passage": "town"
+        }
+      ]
+    }
+  ],
+  "stylesheets": [],
+  "scripts": []
+}

@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Format v2.0 Support (Phase 1)**:
+  - Typed variables with `{ type, default }` format
+  - Choice IDs for stable tracking across versions
+  - Passage and choice metadata system
+  - Passage size property (width, height)
+  - Asset management with `asset://` URL scheme
+  - Auto-migration from v1.0 to v2.0 format
+- **Enhanced API (Phase 2)**:
+  - Metadata helper methods: `get_metadata(key, default)`, `has_metadata(key)`, `delete_metadata(key)`, `clear_metadata()`, `get_all_metadata()` on both Passage and Choice
+  - Asset management methods: `add_asset(asset)`, `get_asset(asset_id)`, `remove_asset(asset_id)`, `list_assets()`, `has_asset(asset_id)`, `get_asset_references(asset_id)` on Story
+  - Asset serialization in Story format
+  - Example files demonstrating v2.0 features: typed variables, metadata usage, asset integration
 - Initial release of whisker-core as separate repository
 - Core Lua library for interactive fiction
 - Story parser supporting passage-based narratives

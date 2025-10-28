@@ -1,0 +1,366 @@
+{
+  "format": "whisker",
+  "formatVersion": "2.0",
+  "metadata": {
+    "name": "Assets Example",
+    "author": "Whisker Team",
+    "version": "1.0.0",
+    "created": "2025-10-28T00:00:00.000Z",
+    "modified": "2025-10-28T00:00:00.000Z",
+    "ifid": "34567890-3456-4456-8456-345678901abc",
+    "description": "Demonstrates asset management with images, audio, and video"
+  },
+  "settings": {
+    "startPassage": "gallery",
+    "scriptingLanguage": "lua"
+  },
+  "variables": {
+    "volume": {
+      "type": "number",
+      "default": 0.8
+    },
+    "currentMusic": {
+      "type": "string",
+      "default": ""
+    }
+  },
+  "passages": [
+    {
+      "id": "gallery",
+      "name": "Art Gallery",
+      "content": "Welcome to the interactive gallery!\n\n![Ancient Painting](asset://painting_01)\n\nThis ancient painting dates back centuries. The brushwork is exquisite.",
+      "position": { "x": 0, "y": 0 },
+      "size": { "width": 300, "height": 200 },
+      "tags": ["start", "gallery"],
+      "on_enter_script": "currentMusic = 'ambient'",
+      "choices": [
+        {
+          "id": "ch_201",
+          "text": "View sculpture exhibit",
+          "target_passage": "sculpture"
+        },
+        {
+          "id": "ch_202",
+          "text": "Visit multimedia room",
+          "target_passage": "multimedia"
+        },
+        {
+          "id": "ch_203",
+          "text": "Explore outdoor installation",
+          "target_passage": "outdoor"
+        }
+      ]
+    },
+    {
+      "id": "sculpture",
+      "name": "Sculpture Hall",
+      "content": "The sculpture hall features modern metalwork.\n\n![Modern Sculpture](asset://sculpture_01)\n\nThis piece represents the intersection of tradition and innovation.",
+      "position": { "x": -250, "y": 250 },
+      "size": { "width": 280, "height": 200 },
+      "metadata": {
+        "audioEnabled": true,
+        "ambientSound": "asset://hall_echo"
+      },
+      "choices": [
+        {
+          "id": "ch_204",
+          "text": "Listen to audio guide",
+          "target_passage": "audio_guide",
+          "metadata": {
+            "requiresAudio": true
+          }
+        },
+        {
+          "id": "ch_205",
+          "text": "Return to gallery",
+          "target_passage": "gallery"
+        }
+      ]
+    },
+    {
+      "id": "audio_guide",
+      "name": "Audio Tour",
+      "content": "You activate the audio guide.\n\n🔊 Playing narration...\n\n[Audio: Gallery Narration](asset://guide_narration)\n\nThe narrator explains the history and meaning behind each sculpture in detail.",
+      "position": { "x": -250, "y": 450 },
+      "size": { "width": 280, "height": 180 },
+      "on_enter_script": "-- Play audio asset\nplayAudio('asset://guide_narration', volume)",
+      "choices": [
+        {
+          "id": "ch_206",
+          "text": "Continue",
+          "target_passage": "sculpture"
+        }
+      ]
+    },
+    {
+      "id": "multimedia",
+      "name": "Multimedia Room",
+      "content": "Step into an immersive multimedia experience.\n\n![Digital Art Display](asset://digital_art_01)\n\n📹 Watch the artist's statement:\n\n[Video: Artist Interview](asset://artist_interview)\n\nThe room pulses with synchronized light and sound.",
+      "position": { "x": 250, "y": 250 },
+      "size": { "width": 300, "height": 220 },
+      "metadata": {
+        "hasVideo": true,
+        "hasAudio": true,
+        "recommendedDuration": "5 minutes"
+      },
+      "on_enter_script": "-- Start ambient background music\nplayAudio('asset://electronic_ambient', volume * 0.6)\ncurrentMusic = 'electronic'",
+      "on_exit_script": "-- Stop background music\nstopAudio('asset://electronic_ambient')",
+      "choices": [
+        {
+          "id": "ch_207",
+          "text": "View another digital piece",
+          "target_passage": "digital_gallery"
+        },
+        {
+          "id": "ch_208",
+          "text": "Return to entrance",
+          "target_passage": "gallery"
+        }
+      ]
+    },
+    {
+      "id": "digital_gallery",
+      "name": "Digital Gallery",
+      "content": "The walls shimmer with ever-changing digital canvases.\n\n![Abstract Digital Art](asset://digital_art_02)\n\n![Generative Art](asset://digital_art_03)\n\nEach piece responds to viewer presence and movement.",
+      "position": { "x": 250, "y": 500 },
+      "size": { "width": 300, "height": 200 },
+      "choices": [
+        {
+          "id": "ch_209",
+          "text": "Back",
+          "target_passage": "multimedia"
+        }
+      ]
+    },
+    {
+      "id": "outdoor",
+      "name": "Outdoor Installation",
+      "content": "You step outside into the sculpture garden.\n\n![Garden Installation](asset://outdoor_installation)\n\n🎵 Natural sounds fill the air\n\n[Audio: Birds and Wind](asset://nature_sounds)\n\nThe installation harmonizes with the natural environment.",
+      "position": { "x": 0, "y": 300 },
+      "size": { "width": 280, "height": 200 },
+      "metadata": {
+        "environment": "outdoor",
+        "weatherDependent": true
+      },
+      "on_enter_script": "playAudio('asset://nature_sounds', volume)",
+      "choices": [
+        {
+          "id": "ch_210",
+          "text": "Photograph the installation",
+          "target_passage": "photo_mode",
+          "metadata": {
+            "icon": "📷"
+          }
+        },
+        {
+          "id": "ch_211",
+          "text": "Return inside",
+          "target_passage": "gallery"
+        }
+      ]
+    },
+    {
+      "id": "photo_mode",
+      "name": "Photo Captured",
+      "content": "📸 You capture a beautiful photograph!\n\n![Your Photo](asset://outdoor_installation)\n\nYour photo has been saved to the gallery.",
+      "position": { "x": 0, "y": 500 },
+      "size": { "width": 250, "height": 150 },
+      "choices": [
+        {
+          "id": "ch_212",
+          "text": "Continue exploring",
+          "target_passage": "outdoor"
+        },
+        {
+          "id": "ch_213",
+          "text": "Exit gallery",
+          "target_passage": "exit"
+        }
+      ]
+    },
+    {
+      "id": "exit",
+      "name": "Gallery Exit",
+      "content": "Thank you for visiting our gallery!\n\n![Gallery Logo](asset://gallery_logo)\n\nWe hope you enjoyed the experience. Visit again soon!",
+      "position": { "x": 0, "y": 700 },
+      "size": { "width": 250, "height": 150 },
+      "metadata": {
+        "type": "ending"
+      },
+      "choices": [
+        {
+          "id": "ch_214",
+          "text": "Visit again",
+          "target_passage": "gallery"
+        }
+      ]
+    }
+  ],
+  "assets": [
+    {
+      "id": "painting_01",
+      "name": "Ancient Painting",
+      "path": "assets/images/painting-ancient.jpg",
+      "mimeType": "image/jpeg",
+      "size": 245680,
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "artist": "Unknown",
+        "period": "Renaissance",
+        "year": "c. 1520"
+      }
+    },
+    {
+      "id": "sculpture_01",
+      "name": "Modern Sculpture",
+      "path": "assets/images/sculpture-modern.jpg",
+      "mimeType": "image/jpeg",
+      "size": 189234,
+      "metadata": {
+        "width": 1600,
+        "height": 1200,
+        "artist": "Maria Chen",
+        "year": "2023",
+        "material": "Steel and bronze"
+      }
+    },
+    {
+      "id": "digital_art_01",
+      "name": "Digital Art Display",
+      "path": "assets/images/digital-display.png",
+      "mimeType": "image/png",
+      "size": 512000,
+      "metadata": {
+        "width": 3840,
+        "height": 2160,
+        "format": "4K",
+        "animated": true
+      }
+    },
+    {
+      "id": "digital_art_02",
+      "name": "Abstract Digital Art",
+      "path": "assets/images/abstract-digital.png",
+      "mimeType": "image/png",
+      "size": 456789,
+      "metadata": {
+        "width": 2560,
+        "height": 1440,
+        "generative": true,
+        "algorithm": "Perlin noise"
+      }
+    },
+    {
+      "id": "digital_art_03",
+      "name": "Generative Art",
+      "path": "assets/images/generative-art.png",
+      "mimeType": "image/png",
+      "size": 398421,
+      "metadata": {
+        "width": 2560,
+        "height": 1440,
+        "interactive": true,
+        "framework": "p5.js"
+      }
+    },
+    {
+      "id": "outdoor_installation",
+      "name": "Garden Installation",
+      "path": "assets/images/outdoor-sculpture.jpg",
+      "mimeType": "image/jpeg",
+      "size": 678912,
+      "metadata": {
+        "width": 4096,
+        "height": 2304,
+        "location": "Sculpture Garden",
+        "season": "Spring"
+      }
+    },
+    {
+      "id": "gallery_logo",
+      "name": "Gallery Logo",
+      "path": "assets/images/logo.svg",
+      "mimeType": "image/svg+xml",
+      "size": 12456,
+      "metadata": {
+        "vectorFormat": true,
+        "scalable": true
+      }
+    },
+    {
+      "id": "guide_narration",
+      "name": "Gallery Audio Guide",
+      "path": "assets/audio/guide-narration.mp3",
+      "mimeType": "audio/mpeg",
+      "size": 3456789,
+      "metadata": {
+        "duration": 180,
+        "bitrate": "192kbps",
+        "narrator": "James Wilson",
+        "language": "English"
+      }
+    },
+    {
+      "id": "hall_echo",
+      "name": "Hall Ambience",
+      "path": "assets/audio/hall-echo.mp3",
+      "mimeType": "audio/mpeg",
+      "size": 1234567,
+      "metadata": {
+        "duration": 60,
+        "loop": true,
+        "spatial": true
+      }
+    },
+    {
+      "id": "electronic_ambient",
+      "name": "Electronic Ambient Music",
+      "path": "assets/audio/electronic-ambient.mp3",
+      "mimeType": "audio/mpeg",
+      "size": 4567890,
+      "metadata": {
+        "duration": 240,
+        "loop": true,
+        "genre": "Electronic Ambient",
+        "bpm": 80
+      }
+    },
+    {
+      "id": "nature_sounds",
+      "name": "Nature Soundscape",
+      "path": "assets/audio/nature-birds-wind.mp3",
+      "mimeType": "audio/mpeg",
+      "size": 2345678,
+      "metadata": {
+        "duration": 120,
+        "loop": true,
+        "binaural": true,
+        "environment": "outdoor"
+      }
+    },
+    {
+      "id": "artist_interview",
+      "name": "Artist Statement Video",
+      "path": "assets/video/artist-interview.mp4",
+      "mimeType": "video/mp4",
+      "size": 45678901,
+      "metadata": {
+        "duration": 120,
+        "resolution": "1920x1080",
+        "codec": "H.264",
+        "fps": 30,
+        "hasSubtitles": true
+      }
+    }
+  ],
+  "stylesheets": [
+    ".passage { background: linear-gradient(to bottom, #1a1a1a, #2d2d2d); color: #e0e0e0; font-family: 'Helvetica Neue', sans-serif; }",
+    ".choice { border: 2px solid #4a90e2; border-radius: 8px; padding: 12px; margin: 8px 0; transition: all 0.3s; }",
+    ".choice:hover { background: #4a90e2; transform: translateX(5px); }"
+  ],
+  "scripts": [
+    "-- Audio playback helper\nfunction playAudio(assetUrl, volumeLevel)\n  -- Implementation would load and play audio\n  print('Playing audio: ' .. assetUrl .. ' at volume ' .. volumeLevel)\nend",
+    "function stopAudio(assetUrl)\n  -- Implementation would stop audio playback\n  print('Stopping audio: ' .. assetUrl)\nend"
+  ]
+}

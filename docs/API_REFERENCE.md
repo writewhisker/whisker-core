@@ -114,6 +114,110 @@ Gets the starting passage ID.
 
 **Returns:** `string` - The start passage ID
 
+##### `story:add_asset(asset)`
+
+Adds an asset to the story.
+
+**Parameters:**
+- `asset` (table) - The asset object with id, name, path, mimeType, size, and optional metadata
+
+**Returns:** `void`
+
+**Example:**
+```lua
+story:add_asset({
+    id = "hero_image",
+    name = "Hero Portrait",
+    path = "assets/images/hero.png",
+    mimeType = "image/png",
+    size = 45678,
+    metadata = {
+        width = 512,
+        height = 512,
+        artist = "Jane Doe"
+    }
+})
+```
+
+##### `story:get_asset(asset_id)`
+
+Gets an asset by its ID.
+
+**Parameters:**
+- `asset_id` (string) - The asset ID
+
+**Returns:** `table` or `nil` - The asset object
+
+**Example:**
+```lua
+local asset = story:get_asset("hero_image")
+if asset then
+    print(asset.path)
+end
+```
+
+##### `story:remove_asset(asset_id)`
+
+Removes an asset from the story.
+
+**Parameters:**
+- `asset_id` (string) - The asset ID to remove
+
+**Returns:** `void`
+
+**Example:**
+```lua
+story:remove_asset("old_image")
+```
+
+##### `story:list_assets()`
+
+Gets all assets in the story.
+
+**Returns:** `table` - Array of asset objects
+
+**Example:**
+```lua
+local assets = story:list_assets()
+for _, asset in ipairs(assets) do
+    print(asset.id, asset.name)
+end
+```
+
+##### `story:has_asset(asset_id)`
+
+Checks if an asset exists.
+
+**Parameters:**
+- `asset_id` (string) - The asset ID
+
+**Returns:** `boolean` - True if asset exists
+
+**Example:**
+```lua
+if story:has_asset("background_music") then
+    print("Music asset is loaded")
+end
+```
+
+##### `story:get_asset_references(asset_id)`
+
+Finds all passages that reference an asset.
+
+**Parameters:**
+- `asset_id` (string) - The asset ID to search for
+
+**Returns:** `table` - Array of reference objects with `type`, `passage_id`, and `passage_name`
+
+**Example:**
+```lua
+local refs = story:get_asset_references("hero_image")
+for _, ref in ipairs(refs) do
+    print(string.format("%s in passage %s (%s)",
+        ref.type, ref.passage_id, ref.passage_name))
+end
+```
+
 #### Properties
 
 - `story.title` (string) - Story title
@@ -122,6 +226,7 @@ Gets the starting passage ID.
 - `story.version` (string) - Version number
 - `story.description` (string) - Story description
 - `story.variables` (table) - Default variable values
+- `story.assets` (table) - Asset dictionary indexed by asset ID
 
 ---
 
@@ -200,6 +305,93 @@ Gets the passage ID.
 
 **Returns:** `string` - The passage ID
 
+##### `passage:set_metadata(key, value)`
+
+Sets a metadata value.
+
+**Parameters:**
+- `key` (string) - Metadata key
+- `value` (any) - Metadata value
+
+**Returns:** `void`
+
+**Example:**
+```lua
+passage:set_metadata("difficulty", "hard")
+passage:set_metadata("background_music", "dungeon_theme.mp3")
+```
+
+##### `passage:get_metadata(key, default)`
+
+Gets a metadata value with optional default.
+
+**Parameters:**
+- `key` (string) - Metadata key
+- `default` (any, optional) - Default value if key not found
+
+**Returns:** `any` - The metadata value or default
+
+**Example:**
+```lua
+local difficulty = passage:get_metadata("difficulty", "normal")
+local music = passage:get_metadata("background_music")
+```
+
+##### `passage:has_metadata(key)`
+
+Checks if metadata key exists.
+
+**Parameters:**
+- `key` (string) - Metadata key
+
+**Returns:** `boolean` - True if key exists
+
+**Example:**
+```lua
+if passage:has_metadata("boss_fight") then
+    print("This is a boss fight passage!")
+end
+```
+
+##### `passage:delete_metadata(key)`
+
+Deletes a metadata key.
+
+**Parameters:**
+- `key` (string) - Metadata key to delete
+
+**Returns:** `boolean` - True if key was deleted, false if it didn't exist
+
+**Example:**
+```lua
+local deleted = passage:delete_metadata("temporary_flag")
+```
+
+##### `passage:clear_metadata()`
+
+Clears all metadata.
+
+**Returns:** `void`
+
+**Example:**
+```lua
+passage:clear_metadata()  -- Remove all metadata
+```
+
+##### `passage:get_all_metadata()`
+
+Gets a copy of all metadata.
+
+**Returns:** `table` - Copy of metadata table
+
+**Example:**
+```lua
+local metadata = passage:get_all_metadata()
+for key, value in pairs(metadata) do
+    print(key, value)
+end
+```
+
 #### Properties
 
 - `passage.id` (string) - Passage identifier
@@ -208,6 +400,9 @@ Gets the passage ID.
 - `passage.tags` (table) - Array of tags
 - `passage.on_enter` (string) - Entry script
 - `passage.on_exit` (string) - Exit script
+- `passage.metadata` (table) - Custom metadata key-value pairs
+- `passage.position` (table) - Position in editor `{x, y}`
+- `passage.size` (table) - Size in editor `{width, height}`
 
 ---
 
@@ -286,14 +481,104 @@ Checks if the choice is enabled.
 
 **Returns:** `boolean` - True if enabled
 
+##### `choice:set_metadata(key, value)`
+
+Sets a metadata value on the choice.
+
+**Parameters:**
+- `key` (string) - Metadata key
+- `value` (any) - Metadata value
+
+**Returns:** `void`
+
+**Example:**
+```lua
+choice:set_metadata("points", 50)
+choice:set_metadata("difficulty", "hard")
+choice:set_metadata("icon", "⚔️")
+```
+
+##### `choice:get_metadata(key, default)`
+
+Gets a metadata value with optional default.
+
+**Parameters:**
+- `key` (string) - Metadata key
+- `default` (any, optional) - Default value if key not found
+
+**Returns:** `any` - The metadata value or default
+
+**Example:**
+```lua
+local points = choice:get_metadata("points", 0)
+local icon = choice:get_metadata("icon", "➡️")
+```
+
+##### `choice:has_metadata(key)`
+
+Checks if metadata key exists.
+
+**Parameters:**
+- `key` (string) - Metadata key
+
+**Returns:** `boolean` - True if key exists
+
+**Example:**
+```lua
+if choice:has_metadata("achievement") then
+    print("This choice unlocks an achievement!")
+end
+```
+
+##### `choice:delete_metadata(key)`
+
+Deletes a metadata key.
+
+**Parameters:**
+- `key` (string) - Metadata key to delete
+
+**Returns:** `boolean` - True if key was deleted, false if it didn't exist
+
+**Example:**
+```lua
+local deleted = choice:delete_metadata("temporary_flag")
+```
+
+##### `choice:clear_metadata()`
+
+Clears all metadata.
+
+**Returns:** `void`
+
+**Example:**
+```lua
+choice:clear_metadata()  -- Remove all metadata
+```
+
+##### `choice:get_all_metadata()`
+
+Gets a copy of all metadata.
+
+**Returns:** `table` - Copy of metadata table
+
+**Example:**
+```lua
+local metadata = choice:get_all_metadata()
+for key, value in pairs(metadata) do
+    print(key, value)
+end
+```
+
 #### Properties
 
+- `choice.id` (string) - Unique choice identifier
 - `choice.text` (string) - Choice text
 - `choice.target` (string) - Target passage ID
 - `choice.condition` (string) - Condition expression
 - `choice.action` (string) - Action script
 - `choice.visible` (boolean) - Visibility flag
 - `choice.enabled` (boolean) - Enabled flag
+- `choice.metadata` (table) - Custom metadata key-value pairs
 
 ---
 
