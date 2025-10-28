@@ -1,6 +1,14 @@
 -- whisker Format Specification
 -- Defines the JSON schema for whisker story files
--- Version 1.0
+-- Version 2.0
+--
+-- v2.0 Changes (backward compatible):
+-- - Typed Variables: Variables can now have explicit types
+--   v1.0: variables = { health = 100 }
+--   v2.0: variables = { health = { type = "number", default = 100 } }
+-- - Choice IDs: Choices now have unique identifiers
+--   v2.0: choices = { { id = "ch_xxx", text = "Go", target = "room" } }
+-- - Auto-migration: v1.0 files automatically upgrade to v2.0 on load
 
 -- Lua 5.1/5.2+ compatibility for load()
 local function load_compat(code, chunkname, mode, env)
@@ -21,8 +29,11 @@ end
 local whiskerFormat = {}
 
 -- Format version
-whiskerFormat.VERSION = "1.0"
+whiskerFormat.VERSION = "2.0"  -- Updated from 1.0 to 2.0
 whiskerFormat.FORMAT_NAME = "whisker"
+
+-- Legacy version for compatibility
+whiskerFormat.LEGACY_VERSION = "1.0"
 
 -- Create a new whisker format document
 function whiskerFormat.create_document(title, author)
@@ -393,7 +404,27 @@ whiskerFormat.SCHEMA = {
                 }
             }
         },
-        variables = {type = "object"},
+        variables = {
+            type = "object",
+            -- v2.0: Supports both simple (v1.0) and typed (v2.0) format
+            patternProperties = {
+                [".*"] = {
+                    oneOf = {
+                        -- Simple format (v1.0 - backward compatible)
+                        {type = {"string", "number", "boolean"}},
+                        -- Typed format (v2.0 - preferred)
+                        {
+                            type = "object",
+                            required = {"type", "default"},
+                            properties = {
+                                type = {type = "string", enum = {"string", "number", "boolean", "table", "array"}},
+                                default = {type = {"string", "number", "boolean", "object", "array"}}
+                            }
+                        }
+                    }
+                }
+            }
+        },
         scripts = {type = "array"},
         stylesheets = {type = "array"},
         assets = {type = "array"}

@@ -1,8 +1,66 @@
 -- src/format/whisker_loader.lua
 -- Loads native Whisker JSON format files and converts them to Story objects
--- Supports both verbose (1.0) and compact (2.0) formats
+-- Supports v1.0 (simple variables) and v2.0 (typed variables, choice IDs)
+-- Auto-migrates v1.0 to v2.0
 
 local whisker_loader = {}
+
+-- Helper: Generate choice ID
+local function generate_choice_id()
+    local template = "ch_xxxxxxxxxxxx"
+    return string.gsub(template, "x", function()
+        return string.format("%x", math.random(0, 0xf))
+    end)
+end
+
+-- Helper: Check if variables are in v2.0 typed format
+local function is_typed_variable(var_data)
+    return type(var_data) == "table" and var_data.type ~= nil and var_data.default ~= nil
+end
+
+-- Migrate v1.0 to v2.0 format
+function whisker_loader.migrate_v1_to_v2(data)
+    local migrated = {}
+    for k, v in pairs(data) do
+        migrated[k] = v
+    end
+
+    -- Set format version to 2.0
+    migrated.formatVersion = "2.0"
+
+    -- Migrate variables from simple to typed format
+    if migrated.variables then
+        local typed_vars = {}
+        for name, value in pairs(migrated.variables) do
+            if is_typed_variable(value) then
+                -- Already typed
+                typed_vars[name] = value
+            else
+                -- Convert to typed format
+                typed_vars[name] = {
+                    type = type(value),
+                    default = value
+                }
+            end
+        end
+        migrated.variables = typed_vars
+    end
+
+    -- Add IDs to choices in passages
+    if migrated.passages then
+        for i, passage in ipairs(migrated.passages) do
+            if passage.choices then
+                for j, choice in ipairs(passage.choices) do
+                    if not choice.id then
+                        choice.id = generate_choice_id()
+                    end
+                end
+            end
+        end
+    end
+
+    return migrated
+end
 
 -- Load Story, Passage, and Choice classes
 local Story = require("whisker.core.story")
@@ -42,14 +100,10 @@ function whisker_loader.load_from_string(json_text)
         return nil, "Invalid format: expected 'whisker', got '" .. tostring(format) .. "'"
     end
 
-    -- Auto-convert compact format (2.0) to verbose format (1.0) for processing
-    if data.formatVersion == "2.0" then
-        local converter = CompactConverter.new()
-        local verbose_data, conv_err = converter:to_verbose(data)
-        if conv_err then
-            return nil, "Failed to convert compact format: " .. conv_err
-        end
-        data = verbose_data
+    -- Auto-migrate v1.0 to v2.0 if needed
+    local format_version = data.formatVersion or "1.0"
+    if format_version == "1.0" then
+        data = whisker_loader.migrate_v1_to_v2(data)
     end
 
     -- Create Story object
@@ -149,9 +203,11 @@ function whisker_loader.convert_passage(passage_data)
         -- Use explicit choices array
         for _, choice_data in ipairs(passage_data.choices) do
             local choice_options = {
+                id = choice_data.id,  -- NEW: Pass through choice ID
                 text = choice_data.text,
                 target = choice_data.target_passage or choice_data.target,
-                condition = choice_data.condition
+                condition = choice_data.condition,
+                action = choice_data.action  -- NEW: Include action
             }
             local choice = Choice.new(choice_options)
             passage:add_choice(choice)
