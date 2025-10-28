@@ -4,6 +4,48 @@
 local Story = {}
 Story.__index = Story
 
+-- Helper function: Detect if variables are in typed format (v2.0)
+local function is_typed_variable_format(var_data)
+    if type(var_data) ~= "table" then
+        return false
+    end
+    -- Check if it has 'type' and 'default' fields
+    return var_data.type ~= nil and var_data.default ~= nil
+end
+
+-- Helper function: Convert v1.0 variables to v2.0 typed format
+local function migrate_variables_to_typed(variables)
+    local typed_vars = {}
+    for name, value in pairs(variables) do
+        if is_typed_variable_format(value) then
+            -- Already typed, keep as-is
+            typed_vars[name] = value
+        else
+            -- Convert to typed format
+            typed_vars[name] = {
+                type = type(value),
+                default = value
+            }
+        end
+    end
+    return typed_vars
+end
+
+-- Helper function: Convert v2.0 typed variables to v1.0 simple format
+local function variables_to_simple(variables)
+    local simple_vars = {}
+    for name, value in pairs(variables) do
+        if is_typed_variable_format(value) then
+            -- Extract default value
+            simple_vars[name] = value.default
+        else
+            -- Already simple, keep as-is
+            simple_vars[name] = value
+        end
+    end
+    return simple_vars
+end
+
 function Story.new(options)
     options = options or {}
     local instance = {
@@ -87,6 +129,34 @@ end
 
 function Story:get_variable(key)
     return self.variables[key]
+end
+
+-- NEW: Get variable value (handles both v1.0 and v2.0 formats)
+function Story:get_variable_value(key)
+    local var = self.variables[key]
+    if is_typed_variable_format(var) then
+        return var.default
+    else
+        return var
+    end
+end
+
+-- NEW: Set variable in typed format (v2.0)
+function Story:set_typed_variable(key, var_type, default_value)
+    self.variables[key] = {
+        type = var_type,
+        default = default_value
+    }
+end
+
+-- NEW: Migrate variables to typed format (v2.0)
+function Story:migrate_variables_to_typed()
+    self.variables = migrate_variables_to_typed(self.variables)
+end
+
+-- NEW: Convert variables to simple format (v1.0)
+function Story:variables_to_simple()
+    return variables_to_simple(self.variables)
 end
 
 function Story:add_stylesheet(css_code)

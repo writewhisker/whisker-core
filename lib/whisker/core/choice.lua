@@ -4,6 +4,14 @@
 local Choice = {}
 Choice.__index = Choice
 
+-- Generate a unique choice ID
+local function generate_choice_id()
+    local template = "ch_xxxxxxxxxxxx"
+    return string.gsub(template, "x", function()
+        return string.format("%x", math.random(0, 0xf))
+    end)
+end
+
 function Choice.new(text_or_options, target)
     -- Support both old table-based and new parameter patterns
     local options = {}
@@ -15,6 +23,7 @@ function Choice.new(text_or_options, target)
     end
 
     local instance = {
+        id = options.id or generate_choice_id(),  -- NEW: Auto-generate ID if missing
         text = options.text or "",
         target_passage = options.target or options.target_passage or nil,
         condition = options.condition or nil,
@@ -88,6 +97,7 @@ end
 
 function Choice:serialize()
     return {
+        id = self.id,  -- NEW: Include ID in serialization
         text = self.text,
         target_passage = self.target_passage,
         condition = self.condition,
@@ -97,6 +107,7 @@ function Choice:serialize()
 end
 
 function Choice:deserialize(data)
+    self.id = data.id or generate_choice_id()  -- NEW: Restore or generate ID
     self.text = data.text or ""
     self.target_passage = data.target_passage
     self.condition = data.condition
@@ -129,6 +140,7 @@ function Choice.from_table(data)
 
     -- Create a new instance with the data
     return Choice.new({
+        id = data.id,  -- NEW: Preserve ID if present
         text = data.text,
         target = data.target_passage,
         condition = data.condition,
