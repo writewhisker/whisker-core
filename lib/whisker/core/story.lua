@@ -65,7 +65,9 @@ function Story.new(options)
         start_passage = options.start_passage or nil,
         stylesheets = options.stylesheets or {},
         scripts = options.scripts or {},
-        assets = options.assets or {}
+        assets = options.assets or {},
+        tags = options.tags or {},  -- Story-level tags
+        settings = options.settings or {}  -- Story-level settings
     }
 
     setmetatable(instance, Story)
@@ -233,6 +235,153 @@ function Story:get_asset_references(asset_id)
     return references
 end
 
+-- Story-level tag management methods
+function Story:add_tag(tag)
+    if not tag or tag == "" then
+        error("Invalid tag: tag cannot be empty")
+    end
+    -- Use tag as both key and value for easy lookup
+    self.tags[tag] = true
+end
+
+function Story:remove_tag(tag)
+    self.tags[tag] = nil
+end
+
+function Story:has_tag(tag)
+    return self.tags[tag] ~= nil
+end
+
+function Story:get_all_tags()
+    local tag_list = {}
+    for tag, _ in pairs(self.tags) do
+        table.insert(tag_list, tag)
+    end
+    -- Sort for consistent ordering
+    table.sort(tag_list)
+    return tag_list
+end
+
+function Story:clear_tags()
+    self.tags = {}
+end
+
+-- Story-level settings management methods
+function Story:set_setting(key, value)
+    if not key or key == "" then
+        error("Invalid setting key: key cannot be empty")
+    end
+    self.settings[key] = value
+end
+
+function Story:get_setting(key, default)
+    local value = self.settings[key]
+    if value ~= nil then
+        return value
+    end
+    return default
+end
+
+function Story:has_setting(key)
+    return self.settings[key] ~= nil
+end
+
+function Story:delete_setting(key)
+    if self.settings[key] ~= nil then
+        self.settings[key] = nil
+        return true
+    end
+    return false
+end
+
+function Story:get_all_settings()
+    local copy = {}
+    for k, v in pairs(self.settings) do
+        copy[k] = v
+    end
+    return copy
+end
+
+function Story:clear_settings()
+    self.settings = {}
+end
+
+-- Variable usage tracking
+function Story:get_variable_usage(variable_name)
+    local usage = {}
+
+    -- Search all passages for variable references
+    for id, passage in pairs(self.passages) do
+        local found_in_passage = false
+        local locations = {}
+
+        -- Check passage content
+        if passage.content and string.find(passage.content, variable_name, 1, true) then
+            table.insert(locations, "content")
+            found_in_passage = true
+        end
+
+        -- Check on_enter_script
+        if passage.on_enter_script and string.find(passage.on_enter_script, variable_name, 1, true) then
+            table.insert(locations, "on_enter_script")
+            found_in_passage = true
+        end
+
+        -- Check on_exit_script
+        if passage.on_exit_script and string.find(passage.on_exit_script, variable_name, 1, true) then
+            table.insert(locations, "on_exit_script")
+            found_in_passage = true
+        end
+
+        -- Check choices
+        for _, choice in ipairs(passage.choices) do
+            if choice.condition and string.find(choice.condition, variable_name, 1, true) then
+                table.insert(locations, "choice_condition")
+                found_in_passage = true
+            end
+            if choice.action and string.find(choice.action, variable_name, 1, true) then
+                table.insert(locations, "choice_action")
+                found_in_passage = true
+            end
+        end
+
+        if found_in_passage then
+            table.insert(usage, {
+                passage_id = id,
+                passage_name = passage.name,
+                locations = locations
+            })
+        end
+    end
+
+    return usage
+end
+
+function Story:get_all_variable_usage()
+    local usage_map = {}
+
+    for variable_name, _ in pairs(self.variables) do
+        usage_map[variable_name] = self:get_variable_usage(variable_name)
+    end
+
+    return usage_map
+end
+
+function Story:get_unused_variables()
+    local unused = {}
+
+    for variable_name, _ in pairs(self.variables) do
+        local usage = self:get_variable_usage(variable_name)
+        if #usage == 0 then
+            table.insert(unused, variable_name)
+        end
+    end
+
+    -- Sort for consistent ordering
+    table.sort(unused)
+    return unused
+end
+
 function Story:validate()
     -- Check required metadata
     if not self.metadata.name or self.metadata.name == "" then
@@ -267,7 +416,9 @@ function Story:serialize()
         start_passage = self.start_passage,
         stylesheets = self.stylesheets,
         scripts = self.scripts,
-        assets = self.assets
+        assets = self.assets,
+        tags = self.tags,
+        settings = self.settings
     }
 end
 
@@ -279,6 +430,8 @@ function Story:deserialize(data)
     self.stylesheets = data.stylesheets or {}
     self.scripts = data.scripts or {}
     self.assets = data.assets or {}
+    self.tags = data.tags or {}
+    self.settings = data.settings or {}
 
     -- Restore metatables for passage objects if needed
     if self.passages then
@@ -348,6 +501,8 @@ function Story.from_table(data)
     instance.stylesheets = data.stylesheets or {}
     instance.scripts = data.scripts or {}
     instance.assets = data.assets or {}
+    instance.tags = data.tags or {}
+    instance.settings = data.settings or {}
 
     -- Restore passages with proper metatables
     if data.passages then
