@@ -64,7 +64,8 @@ function Story.new(options)
         passages = options.passages or {},
         start_passage = options.start_passage or nil,
         stylesheets = options.stylesheets or {},
-        scripts = options.scripts or {}
+        scripts = options.scripts or {},
+        assets = options.assets or {}
     }
 
     setmetatable(instance, Story)
@@ -167,6 +168,71 @@ function Story:add_script(script_code)
     table.insert(self.scripts, script_code)
 end
 
+-- Asset management methods
+function Story:add_asset(asset)
+    if not asset or not asset.id then
+        error("Invalid asset: missing id")
+    end
+    self.assets[asset.id] = asset
+end
+
+function Story:get_asset(asset_id)
+    return self.assets[asset_id]
+end
+
+function Story:remove_asset(asset_id)
+    self.assets[asset_id] = nil
+end
+
+function Story:list_assets()
+    local list = {}
+    for id, asset in pairs(self.assets) do
+        table.insert(list, asset)
+    end
+    return list
+end
+
+function Story:has_asset(asset_id)
+    return self.assets[asset_id] ~= nil
+end
+
+function Story:get_asset_references(asset_id)
+    local references = {}
+    local pattern = "asset://" .. asset_id
+
+    -- Search all passages for references
+    for id, passage in pairs(self.passages) do
+        -- Check passage content
+        if passage.content and string.find(passage.content, pattern, 1, true) then
+            table.insert(references, {
+                type = "passage_content",
+                passage_id = id,
+                passage_name = passage.name
+            })
+        end
+
+        -- Check on_enter_script
+        if passage.on_enter_script and string.find(passage.on_enter_script, pattern, 1, true) then
+            table.insert(references, {
+                type = "on_enter_script",
+                passage_id = id,
+                passage_name = passage.name
+            })
+        end
+
+        -- Check on_exit_script
+        if passage.on_exit_script and string.find(passage.on_exit_script, pattern, 1, true) then
+            table.insert(references, {
+                type = "on_exit_script",
+                passage_id = id,
+                passage_name = passage.name
+            })
+        end
+    end
+
+    return references
+end
+
 function Story:validate()
     -- Check required metadata
     if not self.metadata.name or self.metadata.name == "" then
@@ -200,7 +266,8 @@ function Story:serialize()
         passages = self.passages,
         start_passage = self.start_passage,
         stylesheets = self.stylesheets,
-        scripts = self.scripts
+        scripts = self.scripts,
+        assets = self.assets
     }
 end
 
@@ -211,6 +278,7 @@ function Story:deserialize(data)
     self.start_passage = data.start_passage
     self.stylesheets = data.stylesheets or {}
     self.scripts = data.scripts or {}
+    self.assets = data.assets or {}
 
     -- Restore metatables for passage objects if needed
     if self.passages then
@@ -279,6 +347,7 @@ function Story.from_table(data)
     instance.start_passage = data.start_passage
     instance.stylesheets = data.stylesheets or {}
     instance.scripts = data.scripts or {}
+    instance.assets = data.assets or {}
 
     -- Restore passages with proper metatables
     if data.passages then

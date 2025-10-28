@@ -1,0 +1,231 @@
+{
+  "format": "whisker",
+  "formatVersion": "2.0",
+  "metadata": {
+    "name": "Metadata Example",
+    "author": "Whisker Team",
+    "version": "1.0.0",
+    "created": "2025-10-28T00:00:00.000Z",
+    "modified": "2025-10-28T00:00:00.000Z",
+    "ifid": "23456789-2345-4345-8345-234567890abc",
+    "description": "Demonstrates passage and choice metadata usage"
+  },
+  "settings": {
+    "startPassage": "start",
+    "scriptingLanguage": "lua"
+  },
+  "variables": {
+    "score": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "passages": [
+    {
+      "id": "start",
+      "name": "Tutorial Hub",
+      "content": "Welcome to the Metadata Example. This demonstrates how metadata can be used to store additional information.",
+      "position": { "x": 0, "y": 0 },
+      "size": { "width": 250, "height": 175 },
+      "tags": ["start", "hub"],
+      "metadata": {
+        "difficulty": "easy",
+        "theme": "tutorial",
+        "music": "calm_ambient.mp3",
+        "backgroundColor": "#f0f0f0",
+        "author": "Jane Doe",
+        "lastEdited": "2025-10-28",
+        "wordCount": 15
+      },
+      "choices": [
+        {
+          "id": "ch_101",
+          "text": "Easy path",
+          "target_passage": "easy_path",
+          "metadata": {
+            "difficulty": "easy",
+            "icon": "🟢",
+            "recommended": true,
+            "estimatedTime": "2 minutes"
+          }
+        },
+        {
+          "id": "ch_102",
+          "text": "Hard path",
+          "target_passage": "hard_path",
+          "metadata": {
+            "difficulty": "hard",
+            "icon": "🔴",
+            "recommended": false,
+            "estimatedTime": "5 minutes",
+            "requirement": "Advanced players only"
+          }
+        },
+        {
+          "id": "ch_103",
+          "text": "Secret path",
+          "target_passage": "secret_path",
+          "condition": "score >= 100",
+          "metadata": {
+            "difficulty": "medium",
+            "icon": "⭐",
+            "hidden": true,
+            "achievement": "Found the secret"
+          }
+        }
+      ]
+    },
+    {
+      "id": "easy_path",
+      "name": "Easy Path",
+      "content": "You chose the easy path. The road is clear and well-marked.",
+      "position": { "x": -200, "y": 200 },
+      "size": { "width": 200, "height": 150 },
+      "metadata": {
+        "difficulty": "easy",
+        "theme": "peaceful",
+        "music": "birds_chirping.mp3",
+        "backgroundColor": "#e8f5e9",
+        "completionRate": 0.95,
+        "averageTime": "2m 15s"
+      },
+      "choices": [
+        {
+          "id": "ch_104",
+          "text": "Continue forward",
+          "target_passage": "easy_reward",
+          "action": "score = score + 10",
+          "metadata": {
+            "points": 10,
+            "type": "progress"
+          }
+        }
+      ]
+    },
+    {
+      "id": "hard_path",
+      "name": "Hard Path",
+      "content": "You chose the hard path. Dangers lurk around every corner.",
+      "position": { "x": 200, "y": 200 },
+      "size": { "width": 200, "height": 150 },
+      "metadata": {
+        "difficulty": "hard",
+        "theme": "danger",
+        "music": "intense_battle.mp3",
+        "backgroundColor": "#ffebee",
+        "completionRate": 0.45,
+        "averageTime": "5m 30s",
+        "deathCount": 127
+      },
+      "choices": [
+        {
+          "id": "ch_105",
+          "text": "Fight the monster",
+          "target_passage": "hard_reward",
+          "action": "score = score + 50",
+          "metadata": {
+            "points": 50,
+            "type": "combat",
+            "risk": "high"
+          }
+        },
+        {
+          "id": "ch_106",
+          "text": "Retreat",
+          "target_passage": "start",
+          "metadata": {
+            "points": 0,
+            "type": "retreat",
+            "penalty": "none"
+          }
+        }
+      ]
+    },
+    {
+      "id": "secret_path",
+      "name": "Secret Path",
+      "content": "You discovered the secret path! Only masters find this.",
+      "position": { "x": 0, "y": 400 },
+      "size": { "width": 250, "height": 175 },
+      "metadata": {
+        "difficulty": "secret",
+        "theme": "mystery",
+        "music": "mystical_wonder.mp3",
+        "backgroundColor": "#f3e5f5",
+        "completionRate": 0.05,
+        "discovered": "0.05% of players"
+      },
+      "choices": [
+        {
+          "id": "ch_107",
+          "text": "Claim the treasure",
+          "target_passage": "secret_reward",
+          "action": "score = score + 1000",
+          "metadata": {
+            "points": 1000,
+            "type": "treasure",
+            "achievement": "Master Explorer",
+            "rarity": "legendary"
+          }
+        }
+      ]
+    },
+    {
+      "id": "easy_reward",
+      "name": "Safe Victory",
+      "content": "You completed the easy path. Well done! (+10 points)",
+      "position": { "x": -200, "y": 400 },
+      "size": { "width": 200, "height": 150 },
+      "metadata": {
+        "type": "ending",
+        "rank": "C"
+      },
+      "choices": [
+        {
+          "id": "ch_108",
+          "text": "Try again",
+          "target_passage": "start"
+        }
+      ]
+    },
+    {
+      "id": "hard_reward",
+      "name": "Hard-Earned Victory",
+      "content": "You conquered the hard path! Impressive! (+50 points)",
+      "position": { "x": 200, "y": 400 },
+      "size": { "width": 200, "height": 150 },
+      "metadata": {
+        "type": "ending",
+        "rank": "B"
+      },
+      "choices": [
+        {
+          "id": "ch_109",
+          "text": "Try again",
+          "target_passage": "start"
+        }
+      ]
+    },
+    {
+      "id": "secret_reward",
+      "name": "Legendary Treasure",
+      "content": "You found the legendary treasure! You are a true master! (+1000 points)",
+      "position": { "x": 0, "y": 600 },
+      "size": { "width": 250, "height": 175 },
+      "metadata": {
+        "type": "ending",
+        "rank": "S",
+        "achievement": "Master Explorer"
+      },
+      "choices": [
+        {
+          "id": "ch_110",
+          "text": "Restart",
+          "target_passage": "start"
+        }
+      ]
+    }
+  ],
+  "stylesheets": [],
+  "scripts": []
+}
