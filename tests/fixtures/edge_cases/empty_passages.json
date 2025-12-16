@@ -1,0 +1,25 @@
+{
+  "name": "Empty Passages Edge Case",
+  "version": "2.0",
+  "start": "start",
+  "passages": {
+    "start": {
+      "id": "start",
+      "title": "Start",
+      "content": "",
+      "choices": [
+        {
+          "id": "to_empty",
+          "text": "Go to empty passage",
+          "target": "empty"
+        }
+      ]
+    },
+    "empty": {
+      "id": "empty",
+      "title": "",
+      "content": "",
+      "choices": []
+    }
+  }
+}

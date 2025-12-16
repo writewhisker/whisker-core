@@ -1,0 +1,36 @@
+{
+  "name": "Simple Test Story",
+  "version": "2.0",
+  "start": "start",
+  "passages": {
+    "start": {
+      "id": "start",
+      "title": "The Beginning",
+      "content": "You stand at a crossroads.",
+      "choices": [
+        {
+          "id": "go_left",
+          "text": "Go left",
+          "target": "left_path"
+        },
+        {
+          "id": "go_right",
+          "text": "Go right",
+          "target": "right_path"
+        }
+      ]
+    },
+    "left_path": {
+      "id": "left_path",
+      "title": "The Left Path",
+      "content": "You took the left path and found treasure!",
+      "choices": []
+    },
+    "right_path": {
+      "id": "right_path",
+      "title": "The Right Path",
+      "content": "You took the right path and found adventure!",
+      "choices": []
+    }
+  }
+}

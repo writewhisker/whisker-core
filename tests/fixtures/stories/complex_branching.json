@@ -1,0 +1,125 @@
+{
+  "name": "Complex Branching Story",
+  "version": "2.0",
+  "start": "entrance",
+  "variables": {
+    "has_key": { "type": "boolean", "default": false },
+    "coins": { "type": "number", "default": 0 },
+    "player_name": { "type": "string", "default": "Adventurer" }
+  },
+  "passages": {
+    "entrance": {
+      "id": "entrance",
+      "title": "Castle Entrance",
+      "content": "You arrive at an ancient castle. The gate is locked, but you notice a side path.",
+      "choices": [
+        {
+          "id": "try_gate",
+          "text": "Try the gate",
+          "target": "locked_gate"
+        },
+        {
+          "id": "side_path",
+          "text": "Take the side path",
+          "target": "garden"
+        }
+      ]
+    },
+    "locked_gate": {
+      "id": "locked_gate",
+      "title": "Locked Gate",
+      "content": "The gate is firmly locked. You need a key to enter.",
+      "choices": [
+        {
+          "id": "use_key",
+          "text": "Use the key",
+          "target": "castle_interior",
+          "condition": "has_key == true"
+        },
+        {
+          "id": "back_entrance",
+          "text": "Go back",
+          "target": "entrance"
+        }
+      ]
+    },
+    "garden": {
+      "id": "garden",
+      "title": "Hidden Garden",
+      "content": "A beautiful garden with a fountain. Something glints in the water.",
+      "choices": [
+        {
+          "id": "search_fountain",
+          "text": "Search the fountain",
+          "target": "find_key",
+          "actions": [{ "type": "set", "variable": "coins", "value": 5 }]
+        },
+        {
+          "id": "explore_garden",
+          "text": "Explore further",
+          "target": "garden_end"
+        },
+        {
+          "id": "return_gate",
+          "text": "Return to the gate",
+          "target": "entrance"
+        }
+      ]
+    },
+    "find_key": {
+      "id": "find_key",
+      "title": "Discovery!",
+      "content": "You found a rusty key and some coins in the fountain!",
+      "actions": [{ "type": "set", "variable": "has_key", "value": true }],
+      "choices": [
+        {
+          "id": "to_gate",
+          "text": "Try the gate with your new key",
+          "target": "locked_gate"
+        }
+      ]
+    },
+    "garden_end": {
+      "id": "garden_end",
+      "title": "Garden End",
+      "content": "The garden ends at a high wall. There's nothing more here.",
+      "choices": [
+        {
+          "id": "go_back",
+          "text": "Go back",
+          "target": "garden"
+        }
+      ]
+    },
+    "castle_interior": {
+      "id": "castle_interior",
+      "title": "Inside the Castle",
+      "content": "The key works! You enter the grand hall of the castle.",
+      "choices": [
+        {
+          "id": "throne_room",
+          "text": "Enter the throne room",
+          "target": "throne"
+        },
+        {
+          "id": "treasury",
+          "text": "Find the treasury",
+          "target": "treasure_room",
+          "condition": "coins >= 5"
+        }
+      ]
+    },
+    "throne": {
+      "id": "throne",
+      "title": "Throne Room",
+      "content": "An empty throne awaits. You have conquered the castle!",
+      "choices": []
+    },
+    "treasure_room": {
+      "id": "treasure_room",
+      "title": "Treasury",
+      "content": "Gold and jewels fill the room. Your adventure was worthwhile!",
+      "choices": []
+    }
+  }
+}
