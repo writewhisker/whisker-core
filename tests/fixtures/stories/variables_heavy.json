@@ -1,0 +1,133 @@
+{
+  "name": "Variable-Heavy Story",
+  "version": "2.0",
+  "start": "intro",
+  "variables": {
+    "health": { "type": "number", "default": 100 },
+    "mana": { "type": "number", "default": 50 },
+    "strength": { "type": "number", "default": 10 },
+    "has_sword": { "type": "boolean", "default": false },
+    "has_shield": { "type": "boolean", "default": false },
+    "has_potion": { "type": "boolean", "default": true },
+    "enemy_defeated": { "type": "boolean", "default": false },
+    "player_name": { "type": "string", "default": "Hero" },
+    "current_quest": { "type": "string", "default": "none" },
+    "gold": { "type": "number", "default": 25 }
+  },
+  "passages": {
+    "intro": {
+      "id": "intro",
+      "title": "Character Setup",
+      "content": "Welcome, {player_name}! Your stats: Health {health}, Mana {mana}, Strength {strength}.",
+      "choices": [
+        {
+          "id": "to_shop",
+          "text": "Visit the shop",
+          "target": "shop"
+        },
+        {
+          "id": "to_battle",
+          "text": "Face the enemy",
+          "target": "battle"
+        }
+      ]
+    },
+    "shop": {
+      "id": "shop",
+      "title": "The Shop",
+      "content": "You have {gold} gold. What would you like to buy?",
+      "choices": [
+        {
+          "id": "buy_sword",
+          "text": "Buy sword (15 gold)",
+          "target": "bought_sword",
+          "condition": "gold >= 15 and has_sword == false",
+          "actions": [
+            { "type": "set", "variable": "gold", "expression": "gold - 15" },
+            { "type": "set", "variable": "has_sword", "value": true },
+            { "type": "set", "variable": "strength", "expression": "strength + 5" }
+          ]
+        },
+        {
+          "id": "buy_shield",
+          "text": "Buy shield (10 gold)",
+          "target": "bought_shield",
+          "condition": "gold >= 10 and has_shield == false",
+          "actions": [
+            { "type": "set", "variable": "gold", "expression": "gold - 10" },
+            { "type": "set", "variable": "has_shield", "value": true }
+          ]
+        },
+        {
+          "id": "leave_shop",
+          "text": "Leave",
+          "target": "intro"
+        }
+      ]
+    },
+    "bought_sword": {
+      "id": "bought_sword",
+      "title": "Purchased!",
+      "content": "You bought a mighty sword! Strength increased to {strength}.",
+      "choices": [
+        { "id": "continue_shop", "text": "Continue shopping", "target": "shop" }
+      ]
+    },
+    "bought_shield": {
+      "id": "bought_shield",
+      "title": "Purchased!",
+      "content": "You bought a sturdy shield!",
+      "choices": [
+        { "id": "continue_shop", "text": "Continue shopping", "target": "shop" }
+      ]
+    },
+    "battle": {
+      "id": "battle",
+      "title": "Battle!",
+      "content": "A fierce enemy appears! Your strength is {strength}.",
+      "choices": [
+        {
+          "id": "attack",
+          "text": "Attack!",
+          "target": "battle_result",
+          "actions": [
+            { "type": "set", "variable": "health", "expression": "health - 20" }
+          ]
+        },
+        {
+          "id": "use_potion",
+          "text": "Use health potion",
+          "target": "healed",
+          "condition": "has_potion == true",
+          "actions": [
+            { "type": "set", "variable": "has_potion", "value": false },
+            { "type": "set", "variable": "health", "expression": "health + 30" }
+          ]
+        },
+        {
+          "id": "flee",
+          "text": "Flee!",
+          "target": "intro"
+        }
+      ]
+    },
+    "healed": {
+      "id": "healed",
+      "title": "Healed",
+      "content": "You drink the potion. Health restored to {health}!",
+      "choices": [
+        { "id": "back_to_battle", "text": "Continue battle", "target": "battle" }
+      ]
+    },
+    "battle_result": {
+      "id": "battle_result",
+      "title": "Victory!",
+      "content": "You defeated the enemy! Health remaining: {health}",
+      "actions": [
+        { "type": "set", "variable": "enemy_defeated", "value": true },
+        { "type": "set", "variable": "gold", "expression": "gold + 50" }
+      ],
+      "choices": []
+    }
+  }
+}

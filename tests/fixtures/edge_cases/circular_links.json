@@ -1,0 +1,63 @@
+{
+  "name": "Circular Links Edge Case",
+  "version": "2.0",
+  "start": "room_a",
+  "passages": {
+    "room_a": {
+      "id": "room_a",
+      "title": "Room A",
+      "content": "You are in Room A.",
+      "choices": [
+        {
+          "id": "to_b",
+          "text": "Go to Room B",
+          "target": "room_b"
+        },
+        {
+          "id": "to_c",
+          "text": "Go to Room C",
+          "target": "room_c"
+        }
+      ]
+    },
+    "room_b": {
+      "id": "room_b",
+      "title": "Room B",
+      "content": "You are in Room B.",
+      "choices": [
+        {
+          "id": "to_a",
+          "text": "Go to Room A",
+          "target": "room_a"
+        },
+        {
+          "id": "to_c",
+          "text": "Go to Room C",
+          "target": "room_c"
+        }
+      ]
+    },
+    "room_c": {
+      "id": "room_c",
+      "title": "Room C",
+      "content": "You are in Room C.",
+      "choices": [
+        {
+          "id": "to_a",
+          "text": "Go to Room A",
+          "target": "room_a"
+        },
+        {
+          "id": "to_b",
+          "text": "Go to Room B",
+          "target": "room_b"
+        },
+        {
+          "id": "self_loop",
+          "text": "Stay here",
+          "target": "room_c"
+        }
+      ]
+    }
+  }
+}
