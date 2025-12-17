@@ -1,0 +1,69 @@
+{
+  "inkVersion": 21,
+  "root": [
+    [
+      "^This is the story intro.\n",
+      {"#": "title: My Test Story"},
+      {"#": "author: Test Author"},
+      {"#": "theme: dark"},
+      "done"
+    ],
+    {
+      "start": [
+        [
+          "^Welcome to the start knot!\n",
+          "done"
+        ],
+        {
+          "intro": [
+            "^This is the intro stitch.\n",
+            "done"
+          ],
+          "outro": [
+            "^This is the outro stitch.\n",
+            "done"
+          ]
+        }
+      ],
+      "meeting": [
+        [
+          "^You meet someone.\n",
+          "done"
+        ],
+        {
+          "greet": [
+            "^Hello there!\n",
+            "done"
+          ],
+          "farewell": [
+            "^Goodbye!\n",
+            "done"
+          ]
+        }
+      ],
+      "global decl": [
+        "ev",
+        {"VAR=": "player_name"},
+        "str",
+        "^Unknown",
+        "/str",
+        "/ev",
+        "ev",
+        {"VAR=": "score"},
+        0,
+        "/ev",
+        "ev",
+        {"VAR=": "has_key"},
+        false,
+        "/ev",
+        "ev",
+        {"VAR=": "health"},
+        100.5,
+        "/ev",
+        "end"
+      ],
+      "#n": "g-0"
+    }
+  ],
+  "listDefs": {}
+}
