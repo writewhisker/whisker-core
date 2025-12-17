@@ -17,6 +17,7 @@ end
 -- Module loaders
 ink.JsonLoader = lazy_require("json_loader")
 ink.Format = lazy_require("format")
+ink.Story = lazy_require("story")
 
 -- Get the format handler instance
 function ink.get_format()
