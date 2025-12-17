@@ -312,4 +312,24 @@ function InkEngine:is_started()
   return self._started
 end
 
+-- Get the state manager for this engine
+-- @return InkState
+function InkEngine:get_state()
+  if not self._state then
+    local InkState = require("whisker.formats.ink.state")
+    self._state = InkState.new(self)
+    if self._event_emitter then
+      self._state:set_event_emitter(self._event_emitter)
+    end
+  end
+  return self._state
+end
+
+-- Set state (for IEngine optional interface compliance)
+-- @param state table - State snapshot to restore
+function InkEngine:set_state(state)
+  local ink_state = self:get_state()
+  ink_state:restore(state)
+end
+
 return InkEngine
