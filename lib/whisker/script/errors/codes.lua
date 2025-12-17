@@ -41,9 +41,29 @@ M.Parser = {
   TOO_MANY_PARSER_ERRORS = "WSK0115",
 }
 
---- Semantic error codes (WSK02xx - reserved for future stages)
+--- Semantic error codes (WSK02xx)
 M.Semantic = {
-  -- Reserved for Stage 20+
+  -- Reference resolution errors
+  UNDEFINED_PASSAGE = "WSK0200",
+  UNDEFINED_VARIABLE = "WSK0201",
+  UNDEFINED_FUNCTION = "WSK0202",
+
+  -- Duplicate definition errors
+  DUPLICATE_PASSAGE = "WSK0210",
+  DUPLICATE_VARIABLE = "WSK0211",
+
+  -- Variable usage errors
+  UNINITIALIZED_VARIABLE = "WSK0220",
+
+  -- Function errors
+  WRONG_ARGUMENT_COUNT = "WSK0230",
+
+  -- Control flow errors
+  TUNNEL_RETURN_OUTSIDE_PASSAGE = "WSK0240",
+
+  -- Warnings
+  UNREACHABLE_PASSAGE = "WSK0250",
+  UNUSED_VARIABLE = "WSK0251",
 }
 
 --- Generator error codes (WSK03xx - reserved for future stages)
@@ -171,6 +191,58 @@ M.Messages = {
     message = "Too many parser errors, stopping",
     severity = M.Severity.ERROR,
     suggestion = "Fix the errors above and try again",
+  },
+
+  -- Semantic errors
+  [M.Semantic.UNDEFINED_PASSAGE] = {
+    message = "Undefined passage '%1'",
+    severity = M.Severity.ERROR,
+    suggestion = "Check the passage name for typos, or create a passage with this name",
+  },
+  [M.Semantic.UNDEFINED_VARIABLE] = {
+    message = "Undefined variable '$%1'",
+    severity = M.Severity.ERROR,
+    suggestion = "Make sure this variable is defined before use",
+  },
+  [M.Semantic.UNDEFINED_FUNCTION] = {
+    message = "Unknown function '%1'",
+    severity = M.Severity.ERROR,
+    suggestion = "Check the function name for typos",
+  },
+  [M.Semantic.DUPLICATE_PASSAGE] = {
+    message = "Duplicate passage '%1' (first defined at line %2)",
+    severity = M.Severity.ERROR,
+    suggestion = "Rename one of the passages to avoid conflicts",
+  },
+  [M.Semantic.DUPLICATE_VARIABLE] = {
+    message = "Variable '$%1' already defined at line %2",
+    severity = M.Severity.ERROR,
+    suggestion = "Use a different variable name or reuse the existing one",
+  },
+  [M.Semantic.UNINITIALIZED_VARIABLE] = {
+    message = "Variable '$%1' may be used before initialization",
+    severity = M.Severity.WARNING,
+    suggestion = "Assign a value to this variable before reading it",
+  },
+  [M.Semantic.WRONG_ARGUMENT_COUNT] = {
+    message = "Function '%1' expects %2 argument(s) but got %3",
+    severity = M.Severity.ERROR,
+    suggestion = "Check the function documentation for correct usage",
+  },
+  [M.Semantic.TUNNEL_RETURN_OUTSIDE_PASSAGE] = {
+    message = "Tunnel return (->->) outside of passage",
+    severity = M.Severity.ERROR,
+    suggestion = "Tunnel returns can only be used inside a passage body",
+  },
+  [M.Semantic.UNREACHABLE_PASSAGE] = {
+    message = "Passage '%1' is never referenced",
+    severity = M.Severity.WARNING,
+    suggestion = "Add a divert to this passage or remove it if unused",
+  },
+  [M.Semantic.UNUSED_VARIABLE] = {
+    message = "Variable '$%1' is defined but never used",
+    severity = M.Severity.WARNING,
+    suggestion = "Remove this variable or use it somewhere in your story",
   },
 }
 

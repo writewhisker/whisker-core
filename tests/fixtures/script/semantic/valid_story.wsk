@@ -1,0 +1,48 @@
+# A valid Whisker Script story
+@@ title: The Adventure
+@@ author: Test Author
+
+:: Start
+Welcome to the adventure!
+~ $gold = 100
+~ $health = 100
+
++ [Go to the market] -> Market
++ [Enter the forest] -> Forest
+
+:: Market
+You see various merchants.
+Your gold: {$gold}
+
+~ $gold -= 10
+
++ [Buy sword] -> BuySword
++ [Return] -> Start
+
+:: BuySword
+~ $gold -= 50
+You bought a sword!
+-> Market
+
+:: Forest
+The forest is dark and mysterious.
+~ $health -= 5
+
+{ $health > 50:
+    You feel strong enough to continue.
+- else:
+    You're getting tired.
+}
+
++ [Go deeper] -> DeepForest
++ [Return home] -> Start
+
+:: DeepForest
+You venture deeper into the forest.
+The path ends here.
+
+->-> HiddenPath
+
+:: HiddenPath [helper]
+A secret path appears!
+->->

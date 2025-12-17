@@ -1,0 +1,8 @@
+# Story with undefined passage reference
+@@ title: Bad References
+
+:: Start
+Welcome to the story.
+
++ [Go somewhere] -> NonExistent
++ [Stay here] -> Start

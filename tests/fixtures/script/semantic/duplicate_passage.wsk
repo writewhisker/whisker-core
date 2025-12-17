@@ -1,0 +1,11 @@
+# Story with duplicate passage names
+@@ title: Duplicates
+
+:: Start
+First definition of Start.
+
+:: Middle
+Some content.
+
+:: Start
+Second definition of Start - this is an error!
