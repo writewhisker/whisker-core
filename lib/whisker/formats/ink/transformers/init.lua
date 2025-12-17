@@ -31,10 +31,11 @@ end
 transformers.knot = lazy_require("knot")
 transformers.stitch = lazy_require("stitch")
 transformers.gather = lazy_require("gather")
+transformers.choice = lazy_require("choice")
 
 -- Get all available transformer names
 function transformers.list()
-  return { "knot", "stitch", "gather" }
+  return { "knot", "stitch", "gather", "choice" }
 end
 
 -- Create a transformer instance by name

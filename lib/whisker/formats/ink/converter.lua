@@ -40,7 +40,8 @@ function InkConverter:_load_default_transformers()
   self._transformers = {
     knot = transformers.knot(),
     stitch = transformers.stitch(),
-    gather = transformers.gather()
+    gather = transformers.gather(),
+    choice = transformers.choice()
   }
 end
 
