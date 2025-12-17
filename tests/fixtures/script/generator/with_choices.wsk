@@ -1,0 +1,18 @@
+@@ title: Choices Story
+@@ author: Test
+
+:: Start
+You stand at a crossroads.
+
++ [Go north] -> North
++ [Go south] -> South
++ { $has_map } [Check map] -> Map
+
+:: North
+You went north.
+
+:: South
+You went south.
+
+:: Map
+The map shows the way.

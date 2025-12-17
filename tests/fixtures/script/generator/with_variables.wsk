@@ -1,0 +1,21 @@
+@@ title: Variables Story
+@@ author: Test
+
+:: Start
+~ $gold = 100
+~ $name = "Player"
+
+Hello, {$name}! You have {$gold} gold.
+
++ [Buy item] -> Shop
++ [Leave] -> End
+
+:: Shop
+~ $gold -= 10
+You bought an item for 10 gold.
+Remaining: {$gold}
+
+-> End
+
+:: End
+Thanks for playing!
