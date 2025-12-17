@@ -38,7 +38,9 @@ end
 function InkConverter:_load_default_transformers()
   local transformers = require("whisker.formats.ink.transformers")
   self._transformers = {
-    knot = transformers.knot()
+    knot = transformers.knot(),
+    stitch = transformers.stitch(),
+    gather = transformers.gather()
   }
 end
 
@@ -113,8 +115,68 @@ function InkConverter:_convert_knots(ink_story, story)
     local passage = knot_transformer:transform(ink_story, knot_path, self._options)
     if passage then
       story:add_passage(passage)
+
+      -- Convert stitches within this knot
+      self:_convert_stitches(ink_story, story, knot_path)
     end
   end
+end
+
+-- Convert stitches within a knot
+function InkConverter:_convert_stitches(ink_story, story, knot_path)
+  local stitch_transformer = self._transformers.stitch
+  if not stitch_transformer then
+    return
+  end
+
+  -- Get the knot data to find stitches
+  local data = ink_story:get_data()
+  local root = data.root
+
+  if not root then
+    return
+  end
+
+  -- Find the knot container
+  local knot_data = self:_find_knot_data(root, knot_path)
+  if not knot_data then
+    return
+  end
+
+  -- Find stitches in the knot
+  local stitches = stitch_transformer:find_stitches(knot_data)
+
+  for stitch_name, stitch_data in pairs(stitches) do
+    local passage = stitch_transformer:transform(
+      ink_story, knot_path, stitch_name, stitch_data, self._options
+    )
+    if passage then
+      story:add_passage(passage)
+    end
+  end
+end
+
+-- Find knot data in root
+function InkConverter:_find_knot_data(root, knot_path)
+  if type(root) ~= "table" then
+    return nil
+  end
+
+  -- Check if root is an array with a trailing dictionary
+  if root[1] ~= nil then
+    local last = root[#root]
+    if type(last) == "table" and not last[1] then
+      if last[knot_path] then
+        return last[knot_path]
+      end
+    end
+  else
+    if root[knot_path] then
+      return root[knot_path]
+    end
+  end
+
+  return nil
 end
 
 -- Convert global variables
