@@ -128,8 +128,8 @@ describe("SemanticAnalyzer", function()
       local analyzer = SemanticAnalyzer.new()
       local ast = Node.script({}, {}, {
         Node.passage("Start", {}, {
-          Node.divert("NonExistent", {}, make_pos(2, 1)),  -- error
-          Node.text({ Node.variable_ref("unset", nil, make_pos(3, 3)) }, make_pos(3, 1))  -- warning
+          Node.divert("NonExistent", {}, make_pos(2, 1)),  -- warning (undefined passage)
+          Node.text({ Node.variable_ref("unset", nil, make_pos(3, 3)) }, make_pos(3, 1))  -- warning (uninitialized var)
         }, make_pos(1, 1))
       })
 
@@ -138,8 +138,8 @@ describe("SemanticAnalyzer", function()
       local errors = analyzer:get_errors()
       local warnings = analyzer:get_warnings()
 
-      assert.is_true(#errors >= 1)
-      assert.is_true(#warnings >= 1)
+      -- Both issues are warnings (undefined passages and uninitialized variables)
+      assert.is_true(#warnings >= 2)
     end)
   end)
 

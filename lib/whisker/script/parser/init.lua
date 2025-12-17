@@ -91,6 +91,10 @@ end
 -- @param token_type string Token type to check
 -- @return boolean
 function Parser:check(token_type)
+  -- Special case: checking for EOF should succeed when at end
+  if token_type == TokenType.EOF then
+    return self:is_at_end()
+  end
   if self:is_at_end() then return false end
   return self:peek().type == token_type
 end
@@ -269,20 +273,24 @@ end
 function Parser:synchronize()
   self.panic_mode = false
 
+  -- Must advance at least once to make progress
+  local advanced = false
+
   while not self:is_at_end() do
-    -- Check if previous token was a natural statement end
+    -- Check if previous token was a natural statement end (but only after advancing)
     local prev = self:previous()
-    if prev and prev.type == TokenType.NEWLINE then
+    if advanced and prev and prev.type == TokenType.NEWLINE then
       return
     end
 
-    -- Check for synchronization points
+    -- Check for synchronization points that indicate new constructs
     local current = self:peek()
-    if recovery_module.is_sync_point(current.type) then
-      return
+    if current.type == TokenType.PASSAGE_DECL then
+      return  -- Start of new passage
     end
 
     self:advance()
+    advanced = true
   end
 end
 
