@@ -95,21 +95,79 @@ function Lexer:next_token()
     return self:newline()
   end
 
-  -- Handle comments
+  -- Handle comments (// style)
   if self.scanner:peek() == '/' and self.scanner:peek(1) == '/' then
     return self:comment()
+  end
+
+  -- Handle # style comments
+  if self.scanner:peek() == '#' then
+    return self:hash_comment()
   end
 
   -- Get next character for dispatch
   local char = self.scanner:peek()
 
   -- Mark position for token
-  self.scanner:mark()
   local start_pos = self.scanner:get_position()
 
-  -- This stage implements basic token recognition
-  -- Full structural/expression tokens are in stages 6-7
-  -- For now, just recognize basic patterns
+  -- Structural tokens (Stage 6)
+
+  -- Passage declaration ::
+  if char == ':' and self.scanner:peek(1) == ':' then
+    return self:passage_decl()
+  end
+
+  -- Colon (single)
+  if char == ':' then
+    self.scanner:advance()
+    return Token.new(TokenType.COLON, ":", nil, start_pos)
+  end
+
+  -- Divert -> or Tunnel ->->
+  if char == '-' and self.scanner:peek(1) == '>' then
+    return self:divert_or_tunnel()
+  end
+
+  -- Thread <-
+  if char == '<' and self.scanner:peek(1) == '-' then
+    return self:thread()
+  end
+
+  -- Comparison operators with <
+  if char == '<' then
+    return self:less_than_operator()
+  end
+
+  -- Comparison operators with >
+  if char == '>' and self.scanner:peek(1) == '>' then
+    return self:include()
+  end
+
+  if char == '>' then
+    return self:greater_than_operator()
+  end
+
+  -- Metadata @@
+  if char == '@' and self.scanner:peek(1) == '@' then
+    return self:metadata()
+  end
+
+  -- Assignment ~ (at line start or in context)
+  if char == '~' then
+    self.scanner:advance()
+    return Token.new(TokenType.ASSIGN, "~", nil, start_pos)
+  end
+
+  -- Choice + (context-sensitive)
+  if char == '+' then
+    return self:plus_or_choice()
+  end
+
+  -- Minus - (for operators or dash)
+  if char == '-' then
+    return self:minus_operator()
+  end
 
   -- Identifier or keyword
   if scanner_module.is_identifier_start(char) then
@@ -131,8 +189,35 @@ function Lexer:next_token()
     return self:variable()
   end
 
-  -- Single character tokens (basic set for core lexer)
-  -- Full structural tokens will be added in Stage 6
+  -- Assignment and comparison operators
+  if char == '=' then
+    return self:equals_operator()
+  end
+
+  if char == '!' then
+    return self:bang_operator()
+  end
+
+  -- Arithmetic operators
+  if char == '*' then
+    return self:star_operator()
+  end
+
+  if char == '/' then
+    self.scanner:advance()
+    if self.scanner:peek() == '=' then
+      self.scanner:advance()
+      return Token.new(TokenType.SLASH_EQ, "/=", nil, start_pos)
+    end
+    return Token.new(TokenType.SLASH, "/", nil, start_pos)
+  end
+
+  if char == '%' then
+    self.scanner:advance()
+    return Token.new(TokenType.PERCENT, "%", nil, start_pos)
+  end
+
+  -- Single character tokens
   local single_char_tokens = {
     ['{'] = TokenType.LBRACE,
     ['}'] = TokenType.RBRACE,
@@ -147,7 +232,7 @@ function Lexer:next_token()
 
   if single_char_tokens[char] then
     self.scanner:advance()
-    return self:make_token_with_span(single_char_tokens[char], start_pos)
+    return Token.new(single_char_tokens[char], char, nil, start_pos)
   end
 
   -- Unknown character - create error token
@@ -350,6 +435,177 @@ function Lexer:variable()
 
   local name = self.scanner:match_while(scanner_module.is_identifier_char)
   return Token.new(TokenType.VARIABLE, "$" .. name, name, start_pos)
+end
+
+-- Structural Token Handlers (Stage 6)
+
+--- Tokenize passage declaration ::
+-- @return Token
+function Lexer:passage_decl()
+  local start_pos = self.scanner:get_position()
+  self.scanner:advance()  -- :
+  self.scanner:advance()  -- :
+  return Token.new(TokenType.PASSAGE_DECL, "::", nil, start_pos)
+end
+
+--- Tokenize divert -> or tunnel ->->
+-- @return Token
+function Lexer:divert_or_tunnel()
+  local start_pos = self.scanner:get_position()
+  self.scanner:advance()  -- -
+  self.scanner:advance()  -- >
+
+  -- Check for tunnel ->->
+  if self.scanner:peek() == '-' and self.scanner:peek(1) == '>' then
+    self.scanner:advance()  -- -
+    self.scanner:advance()  -- >
+    return Token.new(TokenType.TUNNEL, "->->", nil, start_pos)
+  end
+
+  return Token.new(TokenType.DIVERT, "->", nil, start_pos)
+end
+
+--- Tokenize thread <-
+-- @return Token
+function Lexer:thread()
+  local start_pos = self.scanner:get_position()
+  self.scanner:advance()  -- <
+  self.scanner:advance()  -- -
+  return Token.new(TokenType.THREAD, "<-", nil, start_pos)
+end
+
+--- Tokenize metadata @@
+-- @return Token
+function Lexer:metadata()
+  local start_pos = self.scanner:get_position()
+  self.scanner:advance()  -- @
+  self.scanner:advance()  -- @
+  return Token.new(TokenType.METADATA, "@@", nil, start_pos)
+end
+
+--- Tokenize include >>
+-- @return Token
+function Lexer:include()
+  local start_pos = self.scanner:get_position()
+  self.scanner:advance()  -- >
+  self.scanner:advance()  -- >
+  return Token.new(TokenType.INCLUDE, ">>", nil, start_pos)
+end
+
+--- Tokenize + as CHOICE or PLUS based on context
+-- @return Token
+function Lexer:plus_or_choice()
+  local start_pos = self.scanner:get_position()
+  self.scanner:advance()  -- +
+
+  -- Check for compound assignment +=
+  if self.scanner:peek() == '=' then
+    self.scanner:advance()
+    return Token.new(TokenType.PLUS_EQ, "+=", nil, start_pos)
+  end
+
+  -- At effective line start (after indentation), + is CHOICE
+  -- This is a heuristic - parser may need to refine
+  -- For now, check if previous non-whitespace token was INDENT, NEWLINE, or start
+  return Token.new(TokenType.PLUS, "+", nil, start_pos)
+end
+
+--- Tokenize - operators (MINUS, MINUS_EQ, DASH)
+-- @return Token
+function Lexer:minus_operator()
+  local start_pos = self.scanner:get_position()
+  self.scanner:advance()  -- -
+
+  -- Check for compound assignment -=
+  if self.scanner:peek() == '=' then
+    self.scanner:advance()
+    return Token.new(TokenType.MINUS_EQ, "-=", nil, start_pos)
+  end
+
+  return Token.new(TokenType.MINUS, "-", nil, start_pos)
+end
+
+--- Tokenize < operators (LT, LT_EQ)
+-- @return Token
+function Lexer:less_than_operator()
+  local start_pos = self.scanner:get_position()
+  self.scanner:advance()  -- <
+
+  if self.scanner:peek() == '=' then
+    self.scanner:advance()
+    return Token.new(TokenType.LT_EQ, "<=", nil, start_pos)
+  end
+
+  return Token.new(TokenType.LT, "<", nil, start_pos)
+end
+
+--- Tokenize > operators (GT, GT_EQ)
+-- @return Token
+function Lexer:greater_than_operator()
+  local start_pos = self.scanner:get_position()
+  self.scanner:advance()  -- >
+
+  if self.scanner:peek() == '=' then
+    self.scanner:advance()
+    return Token.new(TokenType.GT_EQ, ">=", nil, start_pos)
+  end
+
+  return Token.new(TokenType.GT, ">", nil, start_pos)
+end
+
+--- Tokenize = operators (EQ, EQ_EQ)
+-- @return Token
+function Lexer:equals_operator()
+  local start_pos = self.scanner:get_position()
+  self.scanner:advance()  -- =
+
+  if self.scanner:peek() == '=' then
+    self.scanner:advance()
+    return Token.new(TokenType.EQ_EQ, "==", nil, start_pos)
+  end
+
+  return Token.new(TokenType.EQ, "=", nil, start_pos)
+end
+
+--- Tokenize ! operators (NOT, BANG_EQ)
+-- @return Token
+function Lexer:bang_operator()
+  local start_pos = self.scanner:get_position()
+  self.scanner:advance()  -- !
+
+  if self.scanner:peek() == '=' then
+    self.scanner:advance()
+    return Token.new(TokenType.BANG_EQ, "!=", nil, start_pos)
+  end
+
+  return Token.new(TokenType.NOT, "!", nil, start_pos)
+end
+
+--- Tokenize * operators (STAR, STAR_EQ)
+-- @return Token
+function Lexer:star_operator()
+  local start_pos = self.scanner:get_position()
+  self.scanner:advance()  -- *
+
+  if self.scanner:peek() == '=' then
+    self.scanner:advance()
+    return Token.new(TokenType.STAR_EQ, "*=", nil, start_pos)
+  end
+
+  return Token.new(TokenType.STAR, "*", nil, start_pos)
+end
+
+--- Tokenize # style comment
+-- @return Token
+function Lexer:hash_comment()
+  local start_pos = self.scanner:get_position()
+  self.scanner:advance()  -- #
+
+  local content = self.scanner:match_while(function(c)
+    return not scanner_module.is_newline(c)
+  end)
+
+  return Token.new(TokenType.COMMENT, "#" .. content, content, start_pos)
 end
 
 --- Create a token at current position

@@ -333,7 +333,8 @@ describe("Lexer", function()
     end)
 
     it("should accumulate errors", function()
-      local lexer = lexer_module.Lexer.new("@ # @")
+      -- Note: # is now a valid comment character, so use different test
+      local lexer = lexer_module.Lexer.new("@ ^ @")
       lexer:tokenize()
       local errors = lexer:get_errors()
       assert.is_true(#errors >= 2)
