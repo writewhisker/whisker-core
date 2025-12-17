@@ -332,4 +332,31 @@ function InkEngine:set_state(state)
   ink_state:restore(state)
 end
 
+-- Get the external function manager for this engine
+-- @return InkExternals
+function InkEngine:get_externals()
+  if not self._externals then
+    local InkExternals = require("whisker.formats.ink.externals")
+    self._externals = InkExternals.new(self)
+    if self._event_emitter then
+      self._externals:set_event_emitter(self._event_emitter)
+    end
+  end
+  return self._externals
+end
+
+-- Bind an external function (convenience method)
+-- @param name string - Function name
+-- @param fn function - The function to bind
+-- @param lookahead_safe boolean|nil - Whether safe for lookahead
+function InkEngine:bind_external(name, fn, lookahead_safe)
+  return self:get_externals():bind(name, fn, lookahead_safe)
+end
+
+-- Unbind an external function (convenience method)
+-- @param name string - Function name
+function InkEngine:unbind_external(name)
+  return self:get_externals():unbind(name)
+end
+
 return InkEngine
