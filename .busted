@@ -1,7 +1,7 @@
 return {
   _all = {
-    -- Test file pattern
-    pattern = "test_",
+    -- Test file patterns (matches test_*.lua and *_spec.lua)
+    pattern = {"_spec", "test_"},
 
     -- Exclude test helper and old test runner
     exclude = {
@@ -9,8 +9,8 @@ return {
       "test_all.lua"
     },
 
-    -- Root directory for tests
-    ROOT = {"tests/"},
+    -- Root directories for tests
+    ROOT = {"tests/", "spec/"},
 
     -- Lua path for source code
     lpath = "lib/?.lua;lib/?/init.lua",

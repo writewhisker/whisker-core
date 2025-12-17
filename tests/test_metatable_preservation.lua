@@ -128,7 +128,14 @@ describe("Metatable Preservation", function()
 
       assert.is_nil(getmetatable(from_json))
 
-      local restored = Story.from_table(from_json)
+      -- Create a passage restorer that also restores choice metatables
+      local function passage_restorer(data)
+        return Passage.from_table(data, function(choice_data)
+          return Choice.from_table(choice_data)
+        end)
+      end
+
+      local restored = Story.from_table(from_json, passage_restorer)
 
       assert.equals("function", type(restored.get_metadata))
       assert.equals("Test Story", restored:get_metadata("name"))
