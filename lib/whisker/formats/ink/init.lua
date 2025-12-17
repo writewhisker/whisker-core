@@ -24,6 +24,8 @@ ink.State = lazy_require("state")
 ink.Events = lazy_require("events")
 ink.Externals = lazy_require("externals")
 ink.Flows = lazy_require("flows")
+ink.Converter = lazy_require("converter")
+ink.Transformers = lazy_require("transformers")
 
 -- Get the format handler instance
 function ink.get_format()
