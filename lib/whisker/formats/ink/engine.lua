@@ -359,4 +359,17 @@ function InkEngine:unbind_external(name)
   return self:get_externals():unbind(name)
 end
 
+-- Get the flow manager for this engine
+-- @return InkFlows
+function InkEngine:get_flows()
+  if not self._flows then
+    local InkFlows = require("whisker.formats.ink.flows")
+    self._flows = InkFlows.new(self)
+    if self._event_emitter then
+      self._flows:set_event_emitter(self._event_emitter)
+    end
+  end
+  return self._flows
+end
+
 return InkEngine
