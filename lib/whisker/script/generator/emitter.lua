@@ -18,12 +18,18 @@ local Emitter = setmetatable({}, { __index = Visitor })
 Emitter.__index = Emitter
 
 --- Create a new emitter
+-- @param options table Options { source_map: SourceMap, source_file: string }
 -- @return Emitter
-function Emitter.new()
+function Emitter.new(options)
+  options = options or {}
   local self = setmetatable(Visitor.new(), { __index = Emitter })
   self.story = nil
   self.current_passage = nil
   self.passage_order = {}
+  self.source_map = options.source_map
+  self.source_file = options.source_file or "input.wsk"
+  self.generated_line = 1
+  self.generated_column = 0
   return self
 end
 
@@ -591,6 +597,54 @@ function Emitter:_serialize_content_element(elem)
     return "[conditional]"
   end
   return ""
+end
+
+-- ============================================
+-- Source Map Recording
+-- ============================================
+
+--- Record a mapping from generated position to source position
+-- @param source_node table Source AST node with pos field
+-- @param name string|nil Optional name for the mapping
+function Emitter:_record_mapping(source_node, name)
+  if not self.source_map then return end
+  if not source_node or not source_node.pos then return end
+
+  self.source_map:add_mapping({
+    generated_line = self.generated_line,
+    generated_column = self.generated_column,
+    source_line = source_node.pos.line,
+    source_column = source_node.pos.column,
+    name = name
+  })
+end
+
+--- Advance the generated position by content
+-- @param content string Generated content
+function Emitter:_advance_position(content)
+  if not content then return end
+
+  for i = 1, #content do
+    local c = content:sub(i, i)
+    if c == "\n" then
+      self.generated_line = self.generated_line + 1
+      self.generated_column = 0
+    else
+      self.generated_column = self.generated_column + 1
+    end
+  end
+end
+
+--- Get the source map
+-- @return SourceMap|nil
+function Emitter:get_source_map()
+  return self.source_map
+end
+
+--- Set the source map
+-- @param source_map SourceMap
+function Emitter:set_source_map(source_map)
+  self.source_map = source_map
 end
 
 M.Emitter = Emitter
