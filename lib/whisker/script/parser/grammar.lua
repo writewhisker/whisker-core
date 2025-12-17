@@ -321,33 +321,284 @@ function M.parse_passage_body(parser)
 end
 
 -- ============================================
--- Statement Parsing (Placeholder)
+-- Statement Parsing
 -- ============================================
 
 --- Parse a single statement
 -- @param parser Parser Parser instance
 -- @return table Statement node or nil
 function M.parse_statement(parser)
-  -- For now, parse simple text or skip to next line
-  -- Full implementation in Stages 13-18
+  local token = parser:peek()
 
   if parser:check(TokenType.DIVERT) then
     return M.parse_divert(parser)
+  elseif parser:check(TokenType.TUNNEL) then
+    return M.parse_tunnel(parser)
+  elseif parser:check(TokenType.THREAD) then
+    return M.parse_thread(parser)
   elseif parser:check(TokenType.PLUS) then
-    -- Choice - will be implemented in Stage 14
-    parser:synchronize_statement()
-    return nil
+    return M.parse_choice(parser)
   elseif parser:check(TokenType.ASSIGN) then
-    -- Assignment - will be implemented in Stage 18
-    parser:synchronize_statement()
-    return nil
-  elseif parser:check(TokenType.IDENTIFIER) then
-    -- Could be text or function call
+    return M.parse_assignment(parser)
+  elseif parser:check(TokenType.IF) then
+    return M.parse_conditional(parser)
+  elseif parser:check_any(TokenType.IDENTIFIER, TokenType.STRING, TokenType.NUMBER) then
+    return M.parse_text_line(parser)
+  elseif parser:check(TokenType.LBRACE) then
+    return M.parse_text_line(parser)
+  elseif parser:check(TokenType.VARIABLE) then
+    -- Could be assignment without ~ or text
     return M.parse_text_line(parser)
   else
-    -- Treat as text
-    return M.parse_text_line(parser)
+    -- Treat remaining as text or skip
+    if not parser:check_any(TokenType.NEWLINE, TokenType.DEDENT, TokenType.EOF) then
+      return M.parse_text_line(parser)
+    end
+    return nil
   end
+end
+
+--- Parse tunnel call ->->
+-- @param parser Parser Parser instance
+-- @return table TunnelCallNode or nil
+function M.parse_tunnel(parser)
+  local start_pos = parser:peek().pos
+  parser:expect(TokenType.TUNNEL, "Expected '->->'")
+
+  local target_token = parser:expect(TokenType.IDENTIFIER, "Expected passage name")
+  if not target_token then
+    parser:synchronize_statement()
+    return nil
+  end
+
+  parser:match(TokenType.NEWLINE)
+  return Node.tunnel_call(target_token.literal, {}, start_pos)
+end
+
+--- Parse thread start <-
+-- @param parser Parser Parser instance
+-- @return table ThreadStartNode or nil
+function M.parse_thread(parser)
+  local start_pos = parser:peek().pos
+  parser:expect(TokenType.THREAD, "Expected '<-'")
+
+  local target_token = parser:expect(TokenType.IDENTIFIER, "Expected passage name")
+  if not target_token then
+    parser:synchronize_statement()
+    return nil
+  end
+
+  parser:match(TokenType.NEWLINE)
+  return Node.thread_start(target_token.literal, start_pos)
+end
+
+--- Parse choice statement (placeholder for Stage 14)
+-- @param parser Parser Parser instance
+-- @return table ChoiceNode or nil
+function M.parse_choice(parser)
+  local start_pos = parser:peek().pos
+  parser:advance()  -- Consume +
+
+  -- Parse choice text
+  local text = M.parse_text_line(parser)
+
+  return Node.choice(text, nil, nil, {}, false, start_pos)
+end
+
+--- Parse assignment statement (placeholder for Stage 18)
+-- @param parser Parser Parser instance
+-- @return table AssignmentNode or nil
+function M.parse_assignment(parser)
+  local start_pos = parser:peek().pos
+  parser:advance()  -- Consume ~
+
+  -- Expect variable
+  local var_token = parser:expect(TokenType.VARIABLE, "Expected variable")
+  if not var_token then
+    parser:synchronize_statement()
+    return nil
+  end
+
+  local variable = Node.variable_ref(var_token.literal, nil, var_token.pos)
+
+  -- Expect operator
+  local op = "="
+  if parser:match(TokenType.EQ) then op = "="
+  elseif parser:match(TokenType.PLUS_EQ) then op = "+="
+  elseif parser:match(TokenType.MINUS_EQ) then op = "-="
+  elseif parser:match(TokenType.STAR_EQ) then op = "*="
+  elseif parser:match(TokenType.SLASH_EQ) then op = "/="
+  else
+    parser:error_at_current("Expected assignment operator")
+    parser:synchronize_statement()
+    return nil
+  end
+
+  -- Parse value expression (simplified)
+  local value = M.parse_expression(parser)
+  if not value then
+    parser:synchronize_statement()
+    return nil
+  end
+
+  parser:match(TokenType.NEWLINE)
+  return Node.assignment(variable, op, value, start_pos)
+end
+
+--- Parse conditional statement (placeholder for Stage 17)
+-- @param parser Parser Parser instance
+-- @return table ConditionalNode or nil
+function M.parse_conditional(parser)
+  local start_pos = parser:peek().pos
+  parser:advance()  -- Consume 'if'
+
+  -- Parse condition
+  local condition = M.parse_expression(parser)
+  if not condition then
+    parser:synchronize_statement()
+    return nil
+  end
+
+  parser:match(TokenType.NEWLINE)
+
+  -- Parse then body
+  local then_body = {}
+  if parser:check(TokenType.INDENT) then
+    parser:advance()
+    while not parser:check_any(TokenType.DEDENT, TokenType.EOF) do
+      if parser:check_any(TokenType.NEWLINE, TokenType.COMMENT) then
+        parser:advance()
+      else
+        local stmt = M.parse_statement(parser)
+        if stmt then table.insert(then_body, stmt) end
+      end
+    end
+    parser:match(TokenType.DEDENT)
+  end
+
+  return Node.conditional(condition, then_body, {}, nil, start_pos)
+end
+
+--- Parse expression (simplified for now)
+-- @param parser Parser Parser instance
+-- @return table Expression node or nil
+function M.parse_expression(parser)
+  return M.parse_comparison(parser)
+end
+
+--- Parse comparison expression
+function M.parse_comparison(parser)
+  local left = M.parse_term(parser)
+  if not left then return nil end
+
+  while parser:check_any(TokenType.EQ_EQ, TokenType.BANG_EQ, TokenType.LT, TokenType.GT, TokenType.LT_EQ, TokenType.GT_EQ) do
+    local op = parser:advance().lexeme
+    local right = M.parse_term(parser)
+    if not right then return nil end
+    left = Node.binary_expr(op, left, right, left.pos)
+  end
+
+  return left
+end
+
+--- Parse term (add/subtract)
+function M.parse_term(parser)
+  local left = M.parse_factor(parser)
+  if not left then return nil end
+
+  while parser:check_any(TokenType.PLUS, TokenType.MINUS) do
+    local op = parser:advance().lexeme
+    local right = M.parse_factor(parser)
+    if not right then return nil end
+    left = Node.binary_expr(op, left, right, left.pos)
+  end
+
+  return left
+end
+
+--- Parse factor (multiply/divide)
+function M.parse_factor(parser)
+  local left = M.parse_unary(parser)
+  if not left then return nil end
+
+  while parser:check_any(TokenType.STAR, TokenType.SLASH, TokenType.PERCENT) do
+    local op = parser:advance().lexeme
+    local right = M.parse_unary(parser)
+    if not right then return nil end
+    left = Node.binary_expr(op, left, right, left.pos)
+  end
+
+  return left
+end
+
+--- Parse unary expression
+function M.parse_unary(parser)
+  if parser:check_any(TokenType.MINUS, TokenType.NOT) then
+    local op = parser:advance().lexeme
+    local operand = M.parse_unary(parser)
+    if not operand then return nil end
+    return Node.unary_expr(op, operand, parser:previous().pos)
+  end
+
+  return M.parse_primary(parser)
+end
+
+--- Parse primary expression
+function M.parse_primary(parser)
+  local start_pos = parser:peek().pos
+
+  if parser:check(TokenType.NUMBER) then
+    local token = parser:advance()
+    return Node.literal(token.literal, "number", start_pos)
+  elseif parser:check(TokenType.STRING) then
+    local token = parser:advance()
+    return Node.literal(token.literal, "string", start_pos)
+  elseif parser:check(TokenType.TRUE) then
+    parser:advance()
+    return Node.literal(true, "boolean", start_pos)
+  elseif parser:check(TokenType.FALSE) then
+    parser:advance()
+    return Node.literal(false, "boolean", start_pos)
+  elseif parser:check(TokenType.NULL) then
+    parser:advance()
+    return Node.literal(nil, "null", start_pos)
+  elseif parser:check(TokenType.VARIABLE) then
+    local token = parser:advance()
+    return Node.variable_ref(token.literal, nil, start_pos)
+  elseif parser:check(TokenType.IDENTIFIER) then
+    local token = parser:advance()
+    -- Check for function call
+    if parser:check(TokenType.LPAREN) then
+      return M.parse_function_call(parser, token.literal, start_pos)
+    end
+    return Node.literal(token.literal, "string", start_pos)
+  elseif parser:check(TokenType.LPAREN) then
+    parser:advance()
+    local expr = M.parse_expression(parser)
+    parser:expect(TokenType.RPAREN, "Expected ')'")
+    return expr
+  else
+    return nil
+  end
+end
+
+--- Parse function call
+function M.parse_function_call(parser, name, start_pos)
+  parser:expect(TokenType.LPAREN, "Expected '('")
+
+  local args = {}
+  if not parser:check(TokenType.RPAREN) then
+    local arg = M.parse_expression(parser)
+    if arg then table.insert(args, arg) end
+
+    while parser:match(TokenType.COMMA) do
+      arg = M.parse_expression(parser)
+      if arg then table.insert(args, arg) end
+    end
+  end
+
+  parser:expect(TokenType.RPAREN, "Expected ')'")
+  return Node.function_call(name, args, start_pos)
 end
 
 --- Parse simple text line
