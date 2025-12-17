@@ -1,8 +1,18 @@
--- src/core/story.lua
+-- whisker/core/story.lua
 -- Story data structure and management
+-- Container for passages, variables, and story metadata
 
 local Story = {}
 Story.__index = Story
+
+-- Module metadata for container auto-registration
+Story._whisker = {
+  name = "Story",
+  version = "2.0.0",
+  description = "Story data structure and container for passages",
+  depends = {},
+  capability = "core.story"
+}
 
 -- Helper function: Detect if variables are in typed format (v2.0)
 local function is_typed_variable_format(var_data)
@@ -67,11 +77,30 @@ function Story.new(options)
         scripts = options.scripts or {},
         assets = options.assets or {},
         tags = options.tags or {},  -- Story-level tags
-        settings = options.settings or {}  -- Story-level settings
+        settings = options.settings or {},  -- Story-level settings
+        _event_emitter = nil  -- Optional event emitter for structural changes
     }
 
     setmetatable(instance, Story)
     return instance
+end
+
+-- Set an event emitter for structural change notifications
+-- @param emitter table|nil - Object with emit(event_name, data) method, or nil to disable
+function Story:set_event_emitter(emitter)
+    self._event_emitter = emitter
+end
+
+-- Get the current event emitter
+function Story:get_event_emitter()
+    return self._event_emitter
+end
+
+-- Internal: emit an event if emitter is set
+local function emit_event(self, event_name, data)
+    if self._event_emitter and self._event_emitter.emit then
+        self._event_emitter:emit(event_name, data)
+    end
 end
 
 function Story:set_metadata(key, value)
@@ -87,7 +116,14 @@ function Story:add_passage(passage)
         error("Invalid passage: missing id")
     end
 
+    local is_new = self.passages[passage.id] == nil
     self.passages[passage.id] = passage
+
+    emit_event(self, "story:passage_added", {
+        story = self,
+        passage = passage,
+        is_new = is_new
+    })
 end
 
 function Story:get_passage(passage_id)
@@ -95,7 +131,15 @@ function Story:get_passage(passage_id)
 end
 
 function Story:remove_passage(passage_id)
-    self.passages[passage_id] = nil
+    local passage = self.passages[passage_id]
+    if passage then
+        self.passages[passage_id] = nil
+        emit_event(self, "story:passage_removed", {
+            story = self,
+            passage_id = passage_id,
+            passage = passage
+        })
+    end
 end
 
 function Story:get_all_passages()
@@ -110,7 +154,14 @@ function Story:set_start_passage(passage_id)
     if not self.passages[passage_id] then
         error("Cannot set start passage: passage '" .. passage_id .. "' does not exist")
     end
+    local old_start = self.start_passage
     self.start_passage = passage_id
+
+    emit_event(self, "story:start_changed", {
+        story = self,
+        old_start = old_start,
+        new_start = passage_id
+    })
 end
 
 function Story:get_start_passage()
@@ -127,7 +178,15 @@ function Story:get_start_passage()
 end
 
 function Story:set_variable(key, value)
+    local old_value = self.variables[key]
     self.variables[key] = value
+
+    emit_event(self, "story:variable_changed", {
+        story = self,
+        key = key,
+        old_value = old_value,
+        new_value = value
+    })
 end
 
 function Story:get_variable(key)
@@ -422,7 +481,10 @@ function Story:serialize()
     }
 end
 
-function Story:deserialize(data)
+-- Deserialization - restores from plain table
+-- @param data table - Plain data table
+-- @param passage_restorer function|nil - Optional function to restore passage metatables
+function Story:deserialize(data, passage_restorer)
     self.metadata = data.metadata or self.metadata
     self.variables = data.variables or {}
     self.passages = data.passages or {}
@@ -434,18 +496,19 @@ function Story:deserialize(data)
     self.settings = data.settings or {}
 
     -- Restore metatables for passage objects if needed
-    if self.passages then
-        local Passage = require("whisker.core.passage")
+    if self.passages and passage_restorer then
         for id, passage in pairs(self.passages) do
             if type(passage) == "table" and not getmetatable(passage) then
-                setmetatable(passage, Passage)
+                self.passages[id] = passage_restorer(passage)
             end
         end
     end
 end
 
 -- Static method to restore metatable to a table
-function Story.restore_metatable(data)
+-- @param data table - Plain data table
+-- @param passage_restorer function|nil - Optional function to restore passage metatables
+function Story.restore_metatable(data, passage_restorer)
     if not data or type(data) ~= "table" then
         return nil
     end
@@ -459,16 +522,10 @@ function Story.restore_metatable(data)
     setmetatable(data, Story)
 
     -- Restore metatables for nested objects (passages)
-    if data.passages then
-        local Passage = require("whisker.core.passage")
+    if data.passages and passage_restorer then
         for id, passage in pairs(data.passages) do
             if type(passage) == "table" and not getmetatable(passage) then
-                -- Use Passage's restore method if available, otherwise set metatable directly
-                if Passage.restore_metatable then
-                    data.passages[id] = Passage.restore_metatable(passage)
-                else
-                    setmetatable(passage, Passage)
-                end
+                data.passages[id] = passage_restorer(passage)
             end
         end
     end
@@ -477,7 +534,9 @@ function Story.restore_metatable(data)
 end
 
 -- Static method to create from plain table (useful for deserialization)
-function Story.from_table(data)
+-- @param data table - Plain data table
+-- @param passage_restorer function|nil - Optional function to restore passage metatables
+function Story.from_table(data, passage_restorer)
     if not data then
         return nil
     end
@@ -505,21 +564,16 @@ function Story.from_table(data)
     instance.settings = data.settings or {}
 
     -- Restore passages with proper metatables
-    if data.passages then
-        local Passage = require("whisker.core.passage")
+    if data.passages and passage_restorer then
         for id, passage_data in pairs(data.passages) do
             if type(passage_data) == "table" then
-                local passage
-                if Passage.from_table then
-                    passage = Passage.from_table(passage_data)
-                elseif Passage.restore_metatable then
-                    passage = Passage.restore_metatable(passage_data)
-                else
-                    passage = passage_data
-                    setmetatable(passage, Passage)
-                end
-                instance.passages[id] = passage
+                instance.passages[id] = passage_restorer(passage_data)
             end
+        end
+    elseif data.passages then
+        -- Just copy passages without restoration
+        for id, passage_data in pairs(data.passages) do
+            instance.passages[id] = passage_data
         end
     end
 
