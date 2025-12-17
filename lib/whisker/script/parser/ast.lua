@@ -70,7 +70,13 @@ local function create_node(node_type, fields)
 
   -- Make node immutable using proxy pattern
   return setmetatable(node, {
-    __index = data,
+    __index = function(_, key)
+      -- Special key to access raw data (for Lua 5.1/5.2/LuaJIT compatibility)
+      if key == "_get_data" then
+        return function() return data end
+      end
+      return data[key]
+    end,
     __newindex = function()
       error("AST nodes are immutable")
     end,
@@ -514,7 +520,10 @@ function M.with_position(node, pos)
     error("with_position requires an AST node")
   end
   local fields = {}
-  for k, v in pairs(node) do
+  -- Use _get_data for Lua 5.1/5.2/LuaJIT compatibility
+  -- (pairs() doesn't work with __pairs metamethod on older Lua)
+  local data = node._get_data()
+  for k, v in pairs(data) do
     if k ~= "type" then
       fields[k] = v
     end
