@@ -22,6 +22,7 @@ ink.Engine = lazy_require("engine")
 ink.ChoiceAdapter = lazy_require("choice_adapter")
 ink.State = lazy_require("state")
 ink.Events = lazy_require("events")
+ink.Externals = lazy_require("externals")
 
 -- Get the format handler instance
 function ink.get_format()
