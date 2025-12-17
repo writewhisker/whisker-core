@@ -1,5 +1,6 @@
-# whisker-core 🎮
+# whisker-core
 
+[![Tests](https://github.com/writewhisker/whisker-core/actions/workflows/test.yml/badge.svg)](https://github.com/writewhisker/whisker-core/actions/workflows/test.yml)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Lua](https://img.shields.io/badge/lua-5.1%2B-purple.svg)](https://www.lua.org/)
 [![Version](https://img.shields.io/badge/version-0.0.1--dev-orange.svg)]()
@@ -183,19 +184,60 @@ end)
 - **Content Tools** - Build custom authoring tools
 - **Prototyping** - Rapid dialogue system prototyping
 
-## 🏗️ Library Structure
+## Architecture
+
+whisker-core uses a **microkernel architecture** with dependency injection for maximum modularity and testability.
+
+### Key Components
+
+- **Kernel** - Core infrastructure (~200 lines total)
+  - `Container` - Dependency injection and lifecycle management
+  - `Events` - Pub/sub event bus for loose coupling
+  - `Registry` - Module registration and discovery
+
+- **Interfaces** - Contracts for pluggable components
+  - `IState` - State management
+  - `IEngine` - Story execution
+  - `IFormat` - Import/export handlers
+  - `IConditionEvaluator` - Condition evaluation
+
+- **Services** - Interface implementations
+  - `State` - Key-value state with snapshots
+  - `History` - Navigation history with undo
+  - `ConditionEvaluator` - String and table conditions
+
+### Design Principles
+
+- **Zero Dependencies** - Pure Lua, no external requirements
+- **Loose Coupling** - Modules communicate via events and interfaces
+- **Testable** - All components can be tested in isolation with mocks
+- **Optional Loading** - System works even if components are absent
+
+## Library Structure
 
 ```
 lib/whisker/
-├── core/          # Core story primitives
+├── kernel/        # Microkernel infrastructure
+│   ├── container.lua   # DI container
+│   ├── events.lua      # Event bus
+│   ├── registry.lua    # Module registry
+│   └── loader.lua      # Module loader
+├── interfaces/    # Interface definitions
+│   ├── state.lua       # IState
+│   ├── engine.lua      # IEngine
+│   ├── format.lua      # IFormat
+│   └── condition.lua   # IConditionEvaluator
+├── core/          # Core data structures
 │   ├── story.lua
 │   ├── passage.lua
 │   ├── choice.lua
 │   └── variable.lua
-├── runtime/       # Story execution
-│   ├── engine.lua
-│   ├── state.lua
-│   └── history.lua
+├── services/      # Service implementations
+│   ├── state/          # IState implementation
+│   ├── history/        # Navigation history
+│   └── conditions/     # IConditionEvaluator impl
+├── engines/       # Engine implementations
+│   └── default.lua     # Default IEngine
 ├── format/        # Import/Export
 │   ├── twine/
 │   ├── json.lua

@@ -4,15 +4,443 @@ Complete API documentation for the whisker Interactive Fiction Engine.
 
 ## Table of Contents
 
+- [Architecture](#architecture)
+  - [Kernel](#kernel)
+  - [Interfaces](#interfaces)
+  - [Services](#services)
 - [Core Classes](#core-classes)
   - [Story](#story)
   - [Passage](#passage)
   - [Choice](#choice)
+  - [Variable](#variable)
   - [GameState](#gamestate)
   - [Engine](#engine)
 - [UI and Platform](#ui-and-platform)
 - [Tools](#tools)
 - [Utilities](#utilities)
+
+---
+
+## Architecture
+
+whisker-core uses a microkernel architecture with dependency injection for maximum modularity and testability.
+
+### Kernel
+
+The kernel provides the core infrastructure for module management, dependency injection, and event-based communication.
+
+#### Container
+
+The dependency injection container manages component registration, lifecycle, and dependency resolution.
+
+```lua
+local Container = require("whisker.kernel.container")
+
+local container = Container.new(options)
+```
+
+**Options:**
+- `interfaces` (table, optional) - Interfaces module for validation
+- `capabilities` (table, optional) - Capabilities module
+
+##### `container:register(name, factory, options)`
+
+Registers a component with the container.
+
+**Parameters:**
+- `name` (string) - Component identifier
+- `factory` (function|table) - Factory function or module table
+- `options` (table) - Registration options:
+  - `singleton` (boolean) - Reuse single instance (default: false)
+  - `implements` (string) - Interface name to validate against
+  - `depends` (table) - Array of dependency names
+  - `capability` (string) - Register as capability when resolved
+  - `init` (string) - Method name to call after creation
+  - `destroy` (string) - Method name to call on container:destroy()
+
+**Returns:** `Container` - Self for chaining
+
+**Example:**
+```lua
+container:register("StateService", function(deps)
+  return State.new()
+end, {
+  singleton = true,
+  implements = "IState",
+  capability = "services.state"
+})
+```
+
+##### `container:resolve(name, args)`
+
+Resolves a component by name.
+
+**Parameters:**
+- `name` (string) - Component identifier
+- `args` (table, optional) - Arguments to pass to factory
+
+**Returns:** `any` - The resolved component instance
+
+**Example:**
+```lua
+local state = container:resolve("StateService")
+```
+
+##### `container:resolve_interface(interface_name)`
+
+Resolves the first component implementing an interface.
+
+**Parameters:**
+- `interface_name` (string) - Interface name
+
+**Returns:** `any` - The resolved component
+
+##### `container:resolve_all(interface_name)`
+
+Resolves all components implementing an interface.
+
+**Parameters:**
+- `interface_name` (string) - Interface name
+
+**Returns:** `table` - Array of resolved components
+
+##### `container:has(name)`
+
+Checks if a component is registered.
+
+**Parameters:**
+- `name` (string) - Component identifier
+
+**Returns:** `boolean` - True if registered
+
+##### `container:destroy()`
+
+Destroys the container and calls destroy methods on singletons.
+
+##### `container:clear()`
+
+Clears all registrations and instances.
+
+#### Events
+
+The event bus provides pub/sub messaging with namespaced events.
+
+```lua
+local Events = require("whisker.kernel.events")
+
+local events = Events.new(options)
+```
+
+**Options:**
+- `debug` (boolean) - Enable debug logging
+- `debug_handler` (function) - Custom debug handler
+
+##### `events:on(event, callback, options)`
+
+Subscribes to an event.
+
+**Parameters:**
+- `event` (string) - Event name (e.g., "passage:entered")
+- `callback` (function) - Handler function(data)
+- `options` (table) - Optional:
+  - `priority` (number) - Higher runs first (default: 0)
+  - `once` (boolean) - Unsubscribe after first call
+
+**Returns:** `function` - Unsubscribe function
+
+**Example:**
+```lua
+local unsubscribe = events:on("passage:entered", function(data)
+  print("Entered passage: " .. data.passage_id)
+end)
+
+-- Later:
+unsubscribe()
+```
+
+##### `events:once(event, callback, options)`
+
+Subscribes to an event for a single emission.
+
+##### `events:off(event, callback)`
+
+Unsubscribes from an event.
+
+**Parameters:**
+- `event` (string) - Event name
+- `callback` (function, optional) - Specific handler to remove (removes all if nil)
+
+##### `events:emit(event, data)`
+
+Emits an event to all subscribers.
+
+**Parameters:**
+- `event` (string) - Event name
+- `data` (any) - Data to pass to handlers
+
+**Example:**
+```lua
+events:emit("passage:entered", {
+  passage_id = "start",
+  timestamp = os.time()
+})
+```
+
+**Wildcard Support:**
+- `"passage:*"` - Matches all events in the "passage" namespace
+- `"*"` - Matches all events
+
+##### `events:has_listeners(event)`
+
+Checks if an event has any listeners.
+
+##### `events:listener_count(event)`
+
+Gets the count of listeners for an event.
+
+##### `events:list_events()`
+
+Lists all events with listeners.
+
+##### `events:clear()`
+
+Clears all listeners.
+
+---
+
+### Interfaces
+
+Interfaces define contracts that components must implement. They enable interface-based type checking and dependency injection.
+
+#### IState
+
+State management interface for game variables.
+
+```lua
+local IState = require("whisker.interfaces.state")
+```
+
+**Required Methods:**
+- `get(self, key) -> any` - Get a value by key
+- `set(self, key, value)` - Set a value by key
+- `has(self, key) -> boolean` - Check if a key exists
+- `clear(self)` - Clear all state
+- `snapshot(self) -> table` - Create a state snapshot
+- `restore(self, snapshot)` - Restore from a snapshot
+
+**Optional Methods:**
+- `delete(self, key)` - Delete a key
+- `keys(self)` - Get all keys
+- `values(self)` - Get all values
+
+#### IEngine
+
+Runtime engine interface for story execution.
+
+```lua
+local IEngine = require("whisker.interfaces.engine")
+```
+
+**Required Methods:**
+- `load(self, story)` - Load a story
+- `start(self)` - Start the story
+- `get_current_passage(self) -> Passage` - Get current passage
+- `get_available_choices(self) -> table` - Get available choices
+- `make_choice(self, index) -> Passage` - Make a choice
+- `can_continue(self) -> boolean` - Check if story can continue
+
+**Optional Methods:**
+- `reset(self)` - Reset the engine
+- `get_state(self)` - Get state service
+- `set_state(self, state)` - Set state service
+
+#### IConditionEvaluator
+
+Condition evaluation interface.
+
+```lua
+local IConditionEvaluator = require("whisker.interfaces.condition")
+```
+
+**Required Methods:**
+- `evaluate(self, condition, context) -> boolean` - Evaluate a condition
+
+**Optional Methods:**
+- `register_operator(self, name, fn)` - Register custom operator
+
+#### IFormat
+
+Story format handler interface.
+
+```lua
+local IFormat = require("whisker.interfaces.format")
+```
+
+**Required Methods:**
+- `can_import(self, source) -> boolean` - Check if can import
+- `import(self, source) -> Story` - Import to Story
+- `can_export(self, story) -> boolean` - Check if can export
+- `export(self, story) -> string` - Export story
+
+#### ISerializer
+
+Data serialization interface.
+
+```lua
+local ISerializer = require("whisker.interfaces.serializer")
+```
+
+**Required Methods:**
+- `serialize(self, data) -> string` - Serialize to string
+- `deserialize(self, str) -> table` - Deserialize to table
+
+#### IPlugin
+
+Plugin contract interface.
+
+```lua
+local IPlugin = require("whisker.interfaces.plugin")
+```
+
+**Required Members:**
+- `name` (string) - Plugin identifier
+- `version` (string) - Semantic version
+- `init(self, container)` - Initialize plugin
+
+**Optional Members:**
+- `description` (string) - Plugin description
+- `dependencies` (table) - Required plugins
+- `destroy(self)` - Cleanup function
+
+---
+
+### Services
+
+Services implement interfaces and provide reusable functionality.
+
+#### State Service
+
+Implements `IState` for game variable management.
+
+```lua
+local State = require("whisker.services.state")
+
+local state = State.new(options)
+```
+
+**Options:**
+- `initial` (table) - Initial state values
+
+**Example:**
+```lua
+local state = State.new({
+  initial = { health = 100, gold = 0 }
+})
+
+state:set("health", 80)
+local health = state:get("health")  -- 80
+
+local snapshot = state:snapshot()
+state:set("health", 0)
+state:restore(snapshot)
+local restored = state:get("health")  -- 80
+```
+
+#### History Service
+
+Tracks navigation history with undo support.
+
+```lua
+local History = require("whisker.services.history")
+
+local history = History.new(options)
+```
+
+**Options:**
+- `state` (IState) - State service for snapshots
+- `max_entries` (number) - Maximum history entries (default: 100)
+
+**Methods:**
+- `push(passage_id, state_snapshot)` - Add entry
+- `pop() -> entry` - Remove and return last entry
+- `peek() -> entry` - Get last entry without removing
+- `back() -> entry` - Go back one entry (pops current, returns previous)
+- `can_go_back() -> boolean` - Check if back is possible
+- `clear()` - Clear all history
+- `get_all() -> table` - Get all entries
+- `on_passage_entered(passage_id)` - Convenience method
+
+#### Condition Evaluator
+
+Implements `IConditionEvaluator` for condition evaluation.
+
+```lua
+local ConditionEvaluator = require("whisker.services.conditions")
+
+local evaluator = ConditionEvaluator.new(options)
+```
+
+**Options:**
+- `state` (IState) - State service for variable resolution
+
+**String Conditions:**
+```lua
+evaluator:evaluate("health > 50", { health = 100 })  -- true
+evaluator:evaluate("has_key and has_sword", { has_key = true, has_sword = false })  -- false
+evaluator:evaluate("not is_dead", { is_dead = false })  -- true
+evaluator:evaluate("name == 'Alice'", { name = "Alice" })  -- true
+```
+
+**Table Conditions:**
+```lua
+evaluator:evaluate({ var = "health", op = ">", value = 50 }, context)
+evaluator:evaluate({ all = { cond1, cond2 } }, context)  -- AND
+evaluator:evaluate({ any = { cond1, cond2 } }, context)  -- OR
+evaluator:evaluate({ ["not"] = condition }, context)     -- NOT
+```
+
+**Supported Operators:**
+- `==`, `!=`, `~=` (equality)
+- `<`, `>`, `<=`, `>=` (comparison)
+- `and`, `or`, `not` (logical)
+
+**Custom Operators:**
+```lua
+evaluator:register_operator("contains", function(a, b)
+  return type(a) == "string" and a:find(b, 1, true) ~= nil
+end)
+```
+
+#### Default Engine
+
+Implements `IEngine` for story execution.
+
+```lua
+local DefaultEngine = require("whisker.engines.default")
+
+local engine = DefaultEngine.new(options)
+```
+
+**Options:**
+- `state` (IState) - State service
+- `condition_evaluator` (IConditionEvaluator) - Condition evaluator
+- `code_executor` (function) - Code execution function
+- `event_emitter` (Events) - Event bus
+
+**Example:**
+```lua
+local engine = DefaultEngine.new({
+  state = State.new(),
+  condition_evaluator = ConditionEvaluator.new()
+})
+
+engine:load(story)
+engine:start()
+
+local passage = engine:get_current_passage()
+local choices = engine:get_available_choices()
+engine:make_choice(1)
+```
 
 ---
 
@@ -790,6 +1218,111 @@ end
 - `choice.visible` (boolean) - Visibility flag
 - `choice.enabled` (boolean) - Enabled flag
 - `choice.metadata` (table) - Custom metadata key-value pairs
+
+---
+
+### Variable
+
+Represents a typed story variable with metadata.
+
+#### Constructor
+
+```lua
+local Variable = require("whisker.core.variable")
+
+local variable = Variable.new(config)
+```
+
+**Parameters:**
+- `config` (table) - Variable configuration
+  - `name` (string) - Variable name
+  - `value` (any) - Initial value
+  - `type` (string, optional) - Type hint ("string", "number", "boolean", "table")
+  - `description` (string, optional) - Variable description
+  - `default` (any, optional) - Default value for reset
+
+**Example:**
+```lua
+local health = Variable.new({
+    name = "health",
+    value = 100,
+    type = "number",
+    description = "Player health points",
+    default = 100
+})
+
+local has_key = Variable.new({
+    name = "has_key",
+    value = false,
+    type = "boolean"
+})
+```
+
+#### Methods
+
+##### `variable:get_name()`
+
+Gets the variable name.
+
+**Returns:** `string` - The variable name
+
+##### `variable:get_value()`
+
+Gets the current value.
+
+**Returns:** `any` - The current value
+
+##### `variable:set_value(value)`
+
+Sets the current value.
+
+**Parameters:**
+- `value` (any) - New value
+
+##### `variable:get_type()`
+
+Gets the type hint.
+
+**Returns:** `string` or `nil` - The type hint
+
+##### `variable:get_description()`
+
+Gets the description.
+
+**Returns:** `string` or `nil` - The description
+
+##### `variable:get_default()`
+
+Gets the default value.
+
+**Returns:** `any` - The default value
+
+##### `variable:reset()`
+
+Resets the value to the default.
+
+##### `variable:serialize()`
+
+Serializes the variable to a table.
+
+**Returns:** `table` - Serializable representation
+
+##### `Variable.from_table(data)`
+
+Creates a Variable from a serialized table.
+
+**Parameters:**
+- `data` (table) - Serialized variable data
+
+**Returns:** `Variable` - New Variable instance
+
+#### Properties
+
+- `variable.name` (string) - Variable name
+- `variable.value` (any) - Current value
+- `variable.type` (string) - Type hint
+- `variable.description` (string) - Description
+- `variable.default` (any) - Default value
 
 ---
 

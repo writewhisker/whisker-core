@@ -42,6 +42,30 @@ jobs:
       if: matrix.lua-version == '5.4' && matrix.os == 'ubuntu-latest'
       run: luacov
 
+    - name: Check coverage threshold
+      if: matrix.lua-version == '5.4' && matrix.os == 'ubuntu-latest'
+      run: |
+        # Extract total coverage percentage from luacov report
+        COVERAGE=$(grep -E "^Total" luacov.report.out | awk '{print $2}' | tr -d '%')
+        echo "Total coverage: ${COVERAGE}%"
+
+        # Minimum overall coverage threshold (80%)
+        MIN_COVERAGE=80
+
+        if [ -z "$COVERAGE" ]; then
+          echo "Warning: Could not parse coverage percentage"
+          exit 0
+        fi
+
+        # Compare as integers
+        COVERAGE_INT=${COVERAGE%.*}
+        if [ "$COVERAGE_INT" -lt "$MIN_COVERAGE" ]; then
+          echo "Coverage ${COVERAGE}% is below minimum threshold of ${MIN_COVERAGE}%"
+          exit 1
+        fi
+
+        echo "Coverage ${COVERAGE}% meets minimum threshold of ${MIN_COVERAGE}%"
+
     - name: Upload coverage
       if: matrix.lua-version == '5.4' && matrix.os == 'ubuntu-latest'
       uses: codecov/codecov-action@v5
