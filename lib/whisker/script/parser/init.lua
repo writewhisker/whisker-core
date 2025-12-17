@@ -342,15 +342,14 @@ function Parser:get_nesting_depth()
 end
 
 -- ============================================
--- Main Parse Method (Stub for later stages)
+-- Main Parse Method
 -- ============================================
 
 --- Parse token stream to AST
 -- @return table ScriptNode AST
 function Parser:parse()
-  -- Will be implemented in Stage 12
-  -- For now, return empty script
-  return Node.script({}, {}, {})
+  local grammar = require("whisker.script.parser.grammar")
+  return grammar.parse_script(self)
 end
 
 M.Parser = Parser
@@ -391,6 +390,7 @@ M._whisker = {
     "script.lexer.tokens",
     "script.parser.ast",
     "script.parser.recovery",
+    "script.parser.grammar",
     "script.errors.codes"
   },
   capability = "script.parser"
