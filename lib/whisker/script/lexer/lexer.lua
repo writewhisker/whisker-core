@@ -5,12 +5,17 @@ local tokens_module = require("whisker.script.lexer.tokens")
 local scanner_module = require("whisker.script.lexer.scanner")
 local stream_module = require("whisker.script.lexer.stream")
 local source_module = require("whisker.script.source")
+local errors_module = require("whisker.script.lexer.errors")
+local codes_module = require("whisker.script.errors.codes")
 
 local TokenType = tokens_module.TokenType
 local Token = tokens_module.Token
 local Scanner = scanner_module.Scanner
 local TokenStream = stream_module.TokenStream
 local SourceSpan = source_module.SourceSpan
+local SourceFile = source_module.SourceFile
+local ErrorCollector = errors_module.ErrorCollector
+local ErrorCodes = codes_module.Lexer
 
 local M = {}
 
@@ -21,13 +26,22 @@ Lexer.__index = Lexer
 
 --- Create a new lexer
 -- @param source string Source text to tokenize
+-- @param options table Optional: { max_errors, file_path }
 -- @return Lexer
-function Lexer.new(source)
+function Lexer.new(source, options)
+  options = options or {}
+
+  local source_file = SourceFile.new(options.file_path or "<source>", source or "")
+
   local self = setmetatable({
     scanner = Scanner.new(source),
     source = source or "",
+    source_file = source_file,
     tokens = {},
-    errors = {},
+    error_collector = ErrorCollector.new({
+      max_errors = options.max_errors or 100,
+      source_file = source_file,
+    }),
     indent_stack = { 0 },  -- Stack of indentation levels
     at_line_start = true,  -- Track if we're at start of line
     pending_tokens = {},   -- Tokens to emit before next scan
@@ -39,9 +53,16 @@ end
 -- @return TokenStream
 function Lexer:tokenize()
   self.tokens = {}
-  self.errors = {}
+  self.error_collector:clear()
 
   while true do
+    -- Check error limit before continuing
+    if self.error_collector:limit_reached() then
+      -- Add EOF and stop
+      table.insert(self.tokens, self:make_token(TokenType.EOF))
+      break
+    end
+
     local token = self:next_token()
     table.insert(self.tokens, token)
     if token.type == TokenType.EOF then
@@ -624,31 +645,91 @@ function Lexer:make_token_with_span(token_type, start_pos)
   return Token.new(token_type, lexeme, nil, start_pos)
 end
 
---- Create an error token
--- @param message string
--- @param start_pos SourcePosition
+--- Create an error token with enhanced diagnostics
+-- @param code string Error code (from ErrorCodes)
+-- @param message string Human-readable message
+-- @param start_pos SourcePosition Position where error occurred
+-- @param options table Optional: { suggestion, lexeme, end_pos }
 -- @return Token
-function Lexer:error_token(message, start_pos)
+function Lexer:error_token_enhanced(code, message, start_pos, options)
   start_pos = start_pos or self.scanner:get_position()
-  local token = Token.new(TokenType.ERROR, message, { message = message }, start_pos)
-  table.insert(self.errors, {
-    message = message,
-    position = start_pos
+  options = options or {}
+
+  local lexer_error = errors_module.LexerError.new(code, message, start_pos, {
+    suggestion = options.suggestion,
+    lexeme = options.lexeme,
+    end_pos = options.end_pos,
   })
+
+  self.error_collector:add(lexer_error)
+
+  local token = Token.new(TokenType.ERROR, options.lexeme or "", {
+    code = code,
+    message = message,
+    error = lexer_error,
+  }, start_pos)
+
   return token
 end
 
+--- Create an error token (simplified, for backwards compatibility)
+-- @param message string Error message
+-- @param start_pos SourcePosition Position where error occurred
+-- @return Token
+function Lexer:error_token(message, start_pos)
+  start_pos = start_pos or self.scanner:get_position()
+
+  -- Detect error type from message
+  local code = ErrorCodes.UNEXPECTED_CHARACTER
+  local lexeme = ""
+
+  if message:match("Unterminated string") then
+    code = ErrorCodes.UNTERMINATED_STRING
+  elseif message:match("Expected identifier after") then
+    code = ErrorCodes.INVALID_VARIABLE_NAME
+  elseif message:match("Unexpected character") then
+    code = ErrorCodes.UNEXPECTED_CHARACTER
+    lexeme = message:match("Unexpected character: (.+)") or ""
+  end
+
+  -- Get suggestion from error codes
+  local suggestion = codes_module.get_suggestion(code)
+
+  return self:error_token_enhanced(code, message, start_pos, {
+    lexeme = lexeme,
+    suggestion = suggestion
+  })
+end
+
 --- Get accumulated errors
--- @return table Array of error objects
+-- @return table Array of LexerError objects
 function Lexer:get_errors()
-  return self.errors
+  return self.error_collector:get_errors()
+end
+
+--- Check if lexer has errors
+-- @return boolean
+function Lexer:has_errors()
+  return self.error_collector:has_errors()
+end
+
+--- Get error count
+-- @return number
+function Lexer:error_count()
+  return self.error_collector:count()
+end
+
+--- Format all errors with source context
+-- @return string Formatted error report
+function Lexer:format_errors()
+  return self.error_collector:format_all()
 end
 
 --- Reset lexer state
 function Lexer:reset()
   self.scanner = Scanner.new(self.source)
   self.tokens = {}
-  self.errors = {}
+  self.error_collector:clear()
   self.indent_stack = { 0 }
   self.at_line_start = true
   self.pending_tokens = {}
@@ -661,7 +742,13 @@ M._whisker = {
   name = "script.lexer.lexer",
   version = "0.1.0",
   description = "Core lexer for Whisker Script",
-  depends = { "script.lexer.tokens", "script.lexer.scanner", "script.lexer.stream" },
+  depends = {
+    "script.lexer.tokens",
+    "script.lexer.scanner",
+    "script.lexer.stream",
+    "script.lexer.errors",
+    "script.errors.codes"
+  },
   capability = "script.lexer.lexer"
 }
 
