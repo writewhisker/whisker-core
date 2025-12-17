@@ -1,0 +1,12 @@
+# Story with uninitialized variable usage
+@@ title: Uninitialized Vars
+
+:: Start
+# Using $gold before it's set
+You have {$gold} gold.
+
+# Now we set it
+~ $gold = 100
+
+# This is fine now
+Updated gold: {$gold}

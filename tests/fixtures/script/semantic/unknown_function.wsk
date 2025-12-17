@@ -1,0 +1,8 @@
+# Story with unknown function call
+@@ title: Bad Functions
+
+:: Start
+The result is: {badFunction()}
+Also: {abss(-5)}
+
++ [Continue] -> Start
