@@ -1,0 +1,10 @@
+@@ title: Simple Story
+@@ author: Test
+
+:: Start
+Welcome to the story!
+
++ [Go to ending] -> End
+
+:: End
+The end.
