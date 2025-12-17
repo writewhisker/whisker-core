@@ -199,15 +199,30 @@ function InkEngine:get_available_choices()
 
   local ts = self:_get_tinta_story()
   local ink_choices = ts:currentChoices()
+
+  -- Use choice adapter if available
+  if not self._choice_adapter then
+    local ChoiceAdapter = require("whisker.formats.ink.choice_adapter")
+    self._choice_adapter = ChoiceAdapter.new()
+  end
+
+  return self._choice_adapter:adapt_all(ink_choices)
+end
+
+-- Get choices as whisker-core Choice objects
+-- @return table - Array of Choice objects
+function InkEngine:get_choices_as_objects()
+  local adapted = self:get_available_choices()
+  local Choice = require("whisker.core.choice")
   local choices = {}
 
-  for i, choice in ipairs(ink_choices) do
-    table.insert(choices, {
-      index = choice.index or i,
-      text = choice.text,
-      id = choice.pathStringOnChoice,
-      tags = choice.tags or {}
-    })
+  for _, c in ipairs(adapted) do
+    table.insert(choices, Choice.new({
+      id = c.id,
+      text = c.text,
+      target = c.target,
+      metadata = c.metadata
+    }))
   end
 
   return choices

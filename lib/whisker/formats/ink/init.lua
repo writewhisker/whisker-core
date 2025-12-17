@@ -19,6 +19,7 @@ ink.JsonLoader = lazy_require("json_loader")
 ink.Format = lazy_require("format")
 ink.Story = lazy_require("story")
 ink.Engine = lazy_require("engine")
+ink.ChoiceAdapter = lazy_require("choice_adapter")
 
 -- Get the format handler instance
 function ink.get_format()
