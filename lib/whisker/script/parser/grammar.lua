@@ -94,8 +94,9 @@ end
 
 --- Parse metadata value
 -- @param parser Parser Parser instance
+-- @param in_list boolean Whether parsing inside a list (restrict tokens)
 -- @return any Parsed value
-function M.parse_metadata_value(parser)
+function M.parse_metadata_value(parser, in_list)
   if parser:check(TokenType.STRING) then
     return parser:advance().literal
   elseif parser:check(TokenType.NUMBER) then
@@ -106,10 +107,23 @@ function M.parse_metadata_value(parser)
   elseif parser:check(TokenType.FALSE) then
     parser:advance()
     return false
-  elseif parser:check(TokenType.IDENTIFIER) then
-    return parser:advance().literal
   elseif parser:check(TokenType.LBRACKET) then
     return M.parse_metadata_list(parser)
+  elseif parser:check(TokenType.IDENTIFIER) then
+    if in_list then
+      -- In a list, just return a single identifier
+      return parser:advance().literal
+    else
+      -- Collect all tokens until end of line as the value
+      local parts = {}
+      while not parser:check_any(TokenType.NEWLINE, TokenType.EOF) do
+        local token = parser:advance()
+        if token.lexeme and #token.lexeme > 0 then
+          table.insert(parts, token.lexeme)
+        end
+      end
+      return table.concat(parts, " ")
+    end
   else
     parser:error_at_current("Expected metadata value", ErrorCodes.EXPECTED_EXPRESSION)
     return nil
@@ -130,15 +144,15 @@ function M.parse_metadata_list(parser)
     return items
   end
 
-  -- Parse first item
-  local item = M.parse_metadata_value(parser)
+  -- Parse first item (in_list = true)
+  local item = M.parse_metadata_value(parser, true)
   if item ~= nil then
     table.insert(items, item)
   end
 
-  -- Parse remaining items
+  -- Parse remaining items (in_list = true)
   while parser:match(TokenType.COMMA) do
-    item = M.parse_metadata_value(parser)
+    item = M.parse_metadata_value(parser, true)
     if item ~= nil then
       table.insert(items, item)
     end
@@ -277,7 +291,7 @@ function M.parse_tag(parser)
   return Node.tag(name_token.literal, value, start_pos)
 end
 
---- Parse passage body (indented statements)
+--- Parse passage body (statements until next passage or EOF)
 -- @param parser Parser Parser instance
 -- @return table Array of statement nodes
 function M.parse_passage_body(parser)
@@ -285,35 +299,36 @@ function M.parse_passage_body(parser)
 
   parser:enter_context("in_passage")
 
-  -- Check for INDENT to start body
-  if not parser:check(TokenType.INDENT) then
-    parser:leave_context("in_passage")
-    return body
-  end
+  -- Consume INDENT if present (for indented style)
+  local has_indent = parser:match(TokenType.INDENT)
 
-  parser:advance()  -- Consume INDENT
+  -- Parse statements until DEDENT, next passage declaration, or EOF
+  while not parser:check_any(TokenType.EOF, TokenType.PASSAGE_DECL) do
+    -- Check for DEDENT if we had an INDENT
+    if has_indent and parser:check(TokenType.DEDENT) then
+      parser:advance()
+      break
+    end
 
-  -- Parse statements until DEDENT or EOF
-  while not parser:check_any(TokenType.DEDENT, TokenType.EOF, TokenType.PASSAGE_DECL) do
     -- Skip blank lines
     if parser:check(TokenType.NEWLINE) then
       parser:advance()
     elseif parser:check(TokenType.COMMENT) then
       parser:advance()
     else
-      -- Parse statement (placeholder - full implementation in later stages)
+      -- Parse statement
       local stmt = M.parse_statement(parser)
       if stmt then
         table.insert(body, stmt)
       else
-        -- Error recovery
+        -- Error recovery - advance at least one token to avoid infinite loop
+        if not parser:check_any(TokenType.NEWLINE, TokenType.EOF, TokenType.PASSAGE_DECL) then
+          parser:advance()
+        end
         parser:synchronize_statement()
       end
     end
   end
-
-  -- Consume DEDENT if present
-  parser:match(TokenType.DEDENT)
 
   parser:leave_context("in_passage")
 
@@ -392,17 +407,63 @@ function M.parse_thread(parser)
   return Node.thread_start(target_token.literal, start_pos)
 end
 
---- Parse choice statement (placeholder for Stage 14)
+--- Parse choice statement
+-- Syntax: + [choice text] -> target
 -- @param parser Parser Parser instance
 -- @return table ChoiceNode or nil
 function M.parse_choice(parser)
   local start_pos = parser:peek().pos
   parser:advance()  -- Consume +
 
-  -- Parse choice text
-  local text = M.parse_text_line(parser)
+  local condition = nil
+  local text = nil
+  local target = nil
 
-  return Node.choice(text, nil, nil, {}, false, start_pos)
+  -- Check for optional condition { expr }
+  if parser:check(TokenType.LBRACE) then
+    parser:advance()  -- Consume {
+    condition = M.parse_expression(parser)
+    parser:expect(TokenType.RBRACE, "Expected '}' after condition")
+  end
+
+  -- Parse choice text in brackets [text]
+  if parser:check(TokenType.LBRACKET) then
+    parser:advance()  -- Consume [
+    local text_parts = {}
+    while not parser:check_any(TokenType.RBRACKET, TokenType.NEWLINE, TokenType.EOF) do
+      local token = parser:advance()
+      if token.lexeme and #token.lexeme > 0 then
+        table.insert(text_parts, token.lexeme)
+      end
+    end
+    parser:match(TokenType.RBRACKET)  -- Consume ]
+    text = Node.text({ table.concat(text_parts, " ") }, start_pos)
+  else
+    -- No brackets - just parse as text until divert or newline
+    local text_parts = {}
+    while not parser:check_any(TokenType.DIVERT, TokenType.NEWLINE, TokenType.EOF) do
+      local token = parser:advance()
+      if token.lexeme and #token.lexeme > 0 then
+        table.insert(text_parts, token.lexeme)
+      end
+    end
+    if #text_parts > 0 then
+      text = Node.text({ table.concat(text_parts, " ") }, start_pos)
+    end
+  end
+
+  -- Check for optional divert -> target
+  if parser:check(TokenType.DIVERT) then
+    parser:advance()  -- Consume ->
+    local target_token = parser:expect(TokenType.IDENTIFIER, "Expected passage name after '->'")
+    if target_token then
+      target = Node.divert(target_token.literal, {}, target_token.pos)
+    end
+  end
+
+  parser:match(TokenType.NEWLINE)
+
+  return Node.choice(text, condition, target, {}, false, start_pos)
 end
 
 --- Parse assignment statement (placeholder for Stage 18)

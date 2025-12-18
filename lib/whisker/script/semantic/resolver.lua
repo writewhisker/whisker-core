@@ -173,12 +173,12 @@ function Resolver:visit_Divert(node)
   local passage = self.symbols:lookup_global(node.target)
 
   if not passage then
-    -- Undefined passage reference
+    -- Undefined passage reference - treat as warning (story is still playable)
     local suggestion = self:_suggest_passage(node.target)
     self:_add_diagnostic({
       code = codes.Semantic.UNDEFINED_PASSAGE,
       message = codes.format_message(codes.Semantic.UNDEFINED_PASSAGE, node.target),
-      severity = codes.Severity.ERROR,
+      severity = codes.Severity.WARNING,
       position = node.pos,
       suggestion = suggestion,
     })
@@ -204,7 +204,7 @@ function Resolver:visit_TunnelCall(node)
     self:_add_diagnostic({
       code = codes.Semantic.UNDEFINED_PASSAGE,
       message = codes.format_message(codes.Semantic.UNDEFINED_PASSAGE, node.target),
-      severity = codes.Severity.ERROR,
+      severity = codes.Severity.WARNING,
       position = node.pos,
       suggestion = suggestion,
     })
@@ -228,7 +228,7 @@ function Resolver:visit_ThreadStart(node)
     self:_add_diagnostic({
       code = codes.Semantic.UNDEFINED_PASSAGE,
       message = codes.format_message(codes.Semantic.UNDEFINED_PASSAGE, node.target),
-      severity = codes.Severity.ERROR,
+      severity = codes.Severity.WARNING,
       position = node.pos,
       suggestion = suggestion,
     })
