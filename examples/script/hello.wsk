@@ -1,0 +1,17 @@
+# hello.wsk - A minimal Whisker Script story
+# This is the simplest possible interactive fiction story
+
+@@ title: Hello World
+@@ author: Whisker Team
+
+:: Start
+Welcome to your first Whisker Script story!
+
+This is a simple demonstration of the basics.
+
++ [Continue] -> End
+
+:: End
+Thank you for reading!
+
+The End.

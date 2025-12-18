@@ -129,11 +129,11 @@ describe("Expression Tokens", function()
       assert.are.equal('say "hi"', token.literal)
     end)
 
-    it("should parse single-quoted string", function()
+    it("should treat single quotes as unknown characters (allowing apostrophes in text)", function()
+      -- Single quotes are NOT string delimiters - they allow "you'll", "it's" in narrative
       local stream = lexer_module.tokenize("'hello'")
       local token = stream:advance()
-      assert.are.equal("STRING", token.type)
-      assert.are.equal("hello", token.literal)
+      assert.are.equal("ERROR", token.type)  -- Single quote is unexpected
     end)
 
     it("should preserve lexeme with quotes", function()

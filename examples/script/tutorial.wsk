@@ -1,0 +1,175 @@
+# tutorial.wsk - A tutorial story demonstrating Whisker Script features
+# Learn the basics of interactive fiction with Whisker Script
+
+@@ title: The Whisker Script Tutorial
+@@ author: Whisker Team
+@@ version: "1.0.0"
+
+:: Start
+Welcome to the Whisker Script tutorial!
+
+In this interactive story, you will learn the basics of writing
+interactive fiction with Whisker Script.
+
++ [Begin the tutorial] -> Basics
+
+:: Basics
+# LESSON 1: Passages and Text
+
+In Whisker Script, stories are divided into passages. Each passage
+starts with :: followed by its name.
+
+This passage is called "Basics". You arrived here by choosing
+a choice that diverted to this passage.
+
+Text in a passage is displayed to the reader exactly as written.
+
++ [Learn about choices] -> Choices
+
+:: Choices
+# LESSON 2: Choices
+
+Choices let readers make decisions. They start with + and have
+text in [brackets].
+
+Here is an example:
+
++ [Go north] -> North
++ [Go south] -> South
++ [Learn about variables] -> Variables
+
+:: North
+You went north!
+
+Northern lands are cold but beautiful.
+
++ [Go back] -> Choices
+
+:: South
+You went south!
+
+The southern regions are warm and welcoming.
+
++ [Go back] -> Choices
+
+:: Variables
+# LESSON 3: Variables
+
+Variables store information. They start with the dollar sign and are set with tilde.
+
+Let me set your gold to 100:
+
+~ $gold = 100
+
+Your gold: {$gold}
+
+Now let me give you 50 more gold:
+
+~ $gold += 50
+
+Your gold is now: {$gold}
+
++ [Learn about conditions] -> Conditions
+
+:: Conditions
+# LESSON 4: Conditionals
+
+You can show different content based on conditions.
+
+~ $has_key = false
+
+{ $gold > 100:
+    You are wealthy with {$gold} gold!
+- $gold > 50:
+    You have a decent amount of gold.
+- else:
+    You do not have much gold.
+}
+
++ [Find a key] -> FindKey
++ [Try the locked door] -> Door
++ [Continue to expressions] -> Expressions
+
+:: FindKey
+You search around and find an old rusty key!
+
+~ $has_key = true
+
++ [Try the door now] -> Door
++ [Go back] -> Conditions
+
+:: Door
+You approach the locked door.
+
+{ $has_key:
+    You use your key to unlock the door!
+
+    The door creaks open, revealing a treasure room!
+
+    ~ $gold += 500
+
+    You found 500 gold! You now have {$gold} gold total.
+- else:
+    The door is locked. You need a key to open it.
+}
+
++ [Go back] -> Conditions
+
+:: Expressions
+# LESSON 5: Inline Expressions
+
+You can embed expressions directly in text using {curly braces}.
+
+Variables: {$gold} gold
+Math: 2 + 2 = {2 + 2}
+Comparisons: { $gold > 100: rich | not rich }
+
+~ $player_name = "Adventurer"
+
+Hello, {$player_name}!
+
++ [Learn about functions] -> Functions
+
+:: Functions
+# LESSON 6: Built-in Functions
+
+Whisker Script has many built-in functions.
+
+~ $numbers = [1, 2, 3, 4, 5]
+
+List count: {count($numbers)}
+Random number (1-10): {random(1, 10)}
+Minimum: {min(5, 3)}
+Maximum: {max(5, 3)}
+
+~ $message = "Hello, World!"
+
+String length: {len($message)}
+Uppercase: {upper($message)}
+
++ [Finish the tutorial] -> Finish
+
+:: Finish
+# Congratulations!
+
+You have completed the Whisker Script tutorial!
+
+You learned about:
+- Passages and text
+- Choices and navigation
+- Variables and assignment
+- Conditional content
+- Inline expressions
+- Built-in functions
+
+Summary of your adventure:
+- Gold collected: {$gold}
+- Key found: { $has_key: Yes | No }
+
++ [Start over] -> Start
++ [The End] -> TheEnd
+
+:: TheEnd
+Thank you for learning Whisker Script!
+
+Happy writing!

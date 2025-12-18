@@ -200,8 +200,8 @@ function Lexer:next_token()
     return self:number()
   end
 
-  -- String literal
-  if char == '"' or char == "'" then
+  -- String literal (only double quotes - single quotes are apostrophes in narrative text)
+  if char == '"' then
     return self:string()
   end
 

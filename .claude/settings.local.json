@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh pr merge:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh run view:*)",
+      "Bash(gh label list:*)",
+      "Bash(cat:*)",
+      "Bash(gh pr list:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nStage 02: Refactoring Plan and Architecture Design\n\n- Created docs/architecture/REFACTORING_PLAN.md with phased migration approach\n- Created docs/architecture/FILE_STRUCTURE.md documenting target organization\n- Created docs/architecture/ADR-001-microkernel.md for microkernel decision\n- Created docs/architecture/ADR-002-di-container.md for DI approach\n- Created docs/architecture/ADR-003-event-bus.md for event system design\n- Created docs/architecture/MIGRATION_CHECKLIST.md for tracking module migrations\n\nKey decisions:\n- Microkernel < 200 lines, zero external dependencies\n- DI container for all component lifecycle management\n- Event bus for decoupled cross-module communication\n- Three-wave migration: Infrastructure, Contracts, Modules\n\nAcceptance criteria:\n- [x] Refactoring plan covers all modules identified in audit\n- [x] File structure matches roadmap Section 0.5 specification\n- [x] Each ADR follows standard format: Context, Decision, Consequences\n- [x] Migration checklist includes all existing modules\n- [x] Plan specifies backward compatibility approach\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git push:*)",
+      "Bash(gh pr create:*)",
+      "Bash(git commit:*)",
+      "Bash(lua -e:*)",
+      "Bash(luarocks show:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(git branch:*)",
+      "Bash(tee:*)",
+      "Bash(git fetch:*)",
+      "Bash(git merge:*)",
+      "Bash(git rebase:*)",
+      "Bash(busted:*)",
+      "Bash(luacheck:*)",
+      "Bash(git add:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh run list:*)",
+      "Bash(git checkout:*)",
+      "Bash(git pull:*)",
+      "Bash(timeout 5 lua:*)",
+      "Bash(gtimeout 5 lua:*)",
+      "Bash(/usr/bin/grep:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

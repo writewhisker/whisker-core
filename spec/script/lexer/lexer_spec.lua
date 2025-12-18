@@ -134,11 +134,12 @@ describe("Lexer", function()
       assert.are.equal("hello", token.literal)
     end)
 
-    it("should tokenize single-quoted string", function()
+    it("should treat single quotes as unexpected characters (allowing apostrophes in text)", function()
+      -- Single quotes are NOT string delimiters in Whisker Script
+      -- This allows contractions like "you'll" and "it's" in narrative text
       local stream = lexer_module.tokenize("'world'")
       local token = stream:advance()
-      assert.are.equal("STRING", token.type)
-      assert.are.equal("world", token.literal)
+      assert.are.equal("ERROR", token.type)  -- Single quote is unexpected
     end)
 
     it("should handle escape sequences", function()

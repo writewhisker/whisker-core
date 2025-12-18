@@ -1,0 +1,358 @@
+# advanced.wsk - Advanced Whisker Script features
+# Demonstrates tunnels, threads, complex conditionals, and more
+
+@@ title: Advanced Whisker Script
+@@ author: Whisker Team
+@@ version: "1.0.0"
+@@ tags: [advanced, demo, tutorial]
+
+:: Start
+# The Mysterious Mansion
+
+You stand before an ancient mansion, its windows dark and foreboding.
+
+~ $health = 100
+~ $sanity = 100
+~ $visited_rooms = 0
+
+Your stats:
+- Health: {$health}
+- Sanity: {$sanity}
+- Items: various
+
++ [Enter through the front door] -> Foyer
++ [Search the garden first] -> Garden
+
+:: Garden
+The overgrown garden hides many secrets.
+
+~ $visited_rooms += 1
+
+{ visited("Garden") > 1:
+    You have been here before. The garden is just as eerie.
+- else:
+    Moonlight filters through twisted branches.
+}
+
++ { not $searched_bushes } [Search the bushes] -> FindItem
++ [Return to the entrance] -> Start
++ [Go around to the back] -> BackDoor
+
+:: FindItem
+# This passage finds a random item
+
+~ $searched_bushes = true
+You search carefully...
+
+~ $found = random(1, 3)
+
+{ $found == 1:
+    You find an old brass key!
+    ~ $has_brass_key = true
+- $found == 2:
+    You find a dusty lantern!
+    ~ $has_lantern = true
+- else:
+    You find a faded map!
+    ~ $has_map = true
+}
+
+Item added to inventory!
+
+-> Garden
+
+:: BackDoor
+The back of the mansion is even more decrepit.
+
+{ $has_brass_key:
+    You try your brass key... it fits!
+    + [Enter through the back] -> Kitchen
+- else:
+    The back door is locked. Perhaps you need a key.
+}
+
++ [Go back to the garden] -> Garden
+
+:: Foyer
+# The Grand Foyer
+
+~ $visited_rooms += 1
+
+Dust motes dance in pale moonlight streaming through cracked windows.
+A grand staircase leads up. Doorways lead east and west.
+
+{ $has_lantern:
+    Your lantern illuminates hidden details:
+    - Faded portraits line the walls
+    - Cobwebs drape like funeral shrouds
+    - Something skitters in the shadows...
+
+    ~ $sanity -= 5
+}
+
+Current stats: Health {$health} | Sanity {$sanity}
+
++ [Go upstairs] -> Upstairs
++ [Go east to the library] -> Library
++ [Go west to the dining room] -> DiningRoom
++ [Leave the mansion] -> Escape
+
+:: Library
+The library is vast, filled with ancient tomes.
+
+~ $visited_rooms += 1
+
+{ $sanity < 80:
+    The books seem to whisper your name...
+    ~ $sanity -= 10
+}
+
+->-> ReadBook
+
+{ $learned_secret:
+    You recall what you learned: "The treasure lies where shadows meet."
+}
+
++ [Search for hidden passages] -> SecretPassage
++ [Return to the foyer] -> Foyer
+
+:: ReadBook
+# Tunnel: Reading a book
+
+You pick up a random book and read...
+
+~ $book_type = random(1, 4)
+
+{ $book_type == 1:
+    A history of the mansion. The Blackwood family built it in 1823.
+- $book_type == 2:
+    A book of dark rituals. You feel your sanity slipping.
+    ~ $sanity -= 15
+- $book_type == 3:
+    A journal revealing a secret treasure!
+    ~ $learned_secret = true
+- else:
+    A cookbook. How mundane.
+}
+
+-> Library
+
+:: SecretPassage
+{ $learned_secret:
+    Following the clue, you find a hidden lever behind a book!
+
+    The bookshelf swings open, revealing a dark passage.
+
+    + [Enter the secret passage] -> TreasureRoom
+    + [Not yet, go back] -> Library
+- else:
+    You search but find nothing. Perhaps more research is needed.
+
+    + [Return to the library] -> Library
+}
+
+:: TreasureRoom
+# The Hidden Treasury
+
+Gold and jewels glitter in the darkness!
+
+~ $gold = 1000
+~ $has_ancient_artifact = true
+
+You found:
+- 1000 gold pieces
+- An ancient artifact of unknown power
+
+Your inventory now has amazing treasures!
+
++ [Take everything and leave] -> Escape
+
+:: DiningRoom
+A long table dominates the room. Place settings for twelve,
+covered in decades of dust.
+
+~ $visited_rooms += 1
+
+{ random(1, 10) > 7:
+    <- GhostlyPresence
+}
+
+The chandelier sways despite the still air.
+
++ [Examine the table] -> ExamineTable
++ [Return to the foyer] -> Foyer
+
+:: ExamineTable
+Under one of the plates, you find a small silver key.
+
+~ $has_silver_key = true
+
++ [Return to the dining room] -> DiningRoom
+
+:: GhostlyPresence
+# Thread: Background atmosphere
+
+A cold chill runs down your spine...
+
+You sense you are not alone.
+
+~ $sanity -= 5
+
+:: Upstairs
+The upstairs hallway stretches into darkness.
+
+~ $visited_rooms += 1
+
+{ $health < 50:
+    You feel weak. Perhaps you should leave soon.
+}
+
+Doors line both sides. Most are locked.
+
+{ $has_silver_key:
+    + [Use the silver key on the master bedroom] -> MasterBedroom
+}
+
++ [Try a random door] -> RandomRoom
++ [Go back downstairs] -> Foyer
+
+:: RandomRoom
+~ $room_event = random(1, 5)
+
+{ $room_event == 1:
+    An empty room. Dust and silence.
+- $room_event == 2:
+    A bathroom with a broken mirror. Bad luck.
+    ~ $sanity -= 5
+- $room_event == 3:
+    A childs room. Toys are arranged in a circle.
+    ~ $sanity -= 10
+- $room_event == 4:
+    Something lunges from the shadows!
+    ~ $health -= 20
+    You barely escape!
+- else:
+    A storage closet. You find a health potion!
+    ~ $health = min($health + 30, 100)
+}
+
+Health: {$health} | Sanity: {$sanity}
+
++ [Return to the hallway] -> Upstairs
+
+:: MasterBedroom
+The master bedroom is ornate but decayed.
+
+A portrait of the Blackwood patriarch hangs above the fireplace.
+His eyes seem to follow you.
+
+{ $sanity < 50:
+    The portrait speaks: "Why have you come here?"
+
+    ~ $sanity -= 20
+
+    { $sanity <= 0:
+        -> MadnessEnding
+    }
+}
+
++ [Search the room] -> SearchBedroom
++ [Leave quickly] -> Upstairs
+
+:: SearchBedroom
+Behind the portrait, you find a safe!
+
+{ $has_ancient_artifact:
+    The artifact glows and the safe opens!
+
+    Inside: A deed to the mansion and 5000 gold!
+
+    ~ $gold += 5000
+
+    You are now the rightful owner of Blackwood Manor!
+
+    + [Claim your inheritance] -> GoodEnding
+- else:
+    The safe is sealed with an arcane lock.
+    Perhaps you need something special to open it.
+
+    + [Go back] -> MasterBedroom
+}
+
+:: Escape
+You flee the mansion!
+
+~ $rooms_explored = $visited_rooms
+
+{ $gold > 0:
+    You made it out with {$gold} gold!
+- else:
+    You made it out... but empty-handed.
+}
+
+Rooms explored: {$rooms_explored}
+Final health: {$health}
+Final sanity: {$sanity}
+
+{ $health > 50 and $sanity > 50:
+    -> NeutralEnding
+- $health <= 0:
+    -> DeathEnding
+- $sanity <= 0:
+    -> MadnessEnding
+- else:
+    -> ScarredEnding
+}
+
+:: GoodEnding
+# The Good Ending
+
+You emerge from the mansion as its new owner!
+
+With the deed in hand and pockets full of gold, you plan
+to restore Blackwood Manor to its former glory.
+
+Perhaps some secrets are better left buried...
+but the treasure was worth the risk.
+
+**THE END - GOOD ENDING**
+
+Artifact found: { $has_ancient_artifact: Yes | No }
+Gold: {$gold}
+Rooms explored: {$visited_rooms}
+
+:: NeutralEnding
+# The Neutral Ending
+
+You escape with your life and sanity mostly intact.
+
+The mysteries of Blackwood Manor will haunt your dreams,
+but you lived to tell the tale.
+
+**THE END - NEUTRAL ENDING**
+
+:: ScarredEnding
+# The Scarred Ending
+
+You escape... but changed.
+
+The horrors you witnessed have left their mark.
+Some nights, you still hear the whispers.
+
+**THE END - SCARRED ENDING**
+
+:: DeathEnding
+# Death
+
+Your injuries were too severe. As darkness claims you,
+the mansion claims another victim.
+
+**THE END - DEATH**
+
+:: MadnessEnding
+# Madness
+
+Your mind shatters under the weight of eldritch knowledge.
+You now wander the halls, another ghost in the Blackwood legacy.
+
+**THE END - MADNESS**
