@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Basic Snowman Test</title>
+</head>
+<body>
+<tw-storydata name="Basic Snowman Test" startnode="1" creator="Twine" creator-version="2.6.0" ifid="42345678-4234-4234-8234-423456789ABC" zoom="1" format="Snowman" format-version="2.0.3" options="" hidden>
+
+  <style role="stylesheet" id="twine-user-stylesheet" type="text/twine-css">
+  </style>
+
+  <script role="script" id="twine-user-script" type="text/twine-javascript">
+  </script>
+
+  <tw-passagedata pid="1" name="Start" tags="" position="100,100" size="100,100">&lt;% s.playerName = s.playerName || &quot;Hero&quot;; %&gt;
+&lt;% s.gold = s.gold || 100; %&gt;
+&lt;% s.health = s.health || 50; %&gt;
+
+Welcome, &lt;%= s.playerName %&gt;!
+
+You have &lt;%= s.gold %&gt; gold and &lt;%= s.health %&gt; health.
+
+&lt;% if (s.gold &gt; 50) { %&gt;
+You are wealthy.
+&lt;% } else { %&gt;
+You are poor.
+&lt;% } %&gt;
+
+&lt;a data-passage=&quot;Shop&quot;&gt;Go to the shop&lt;/a&gt;
+&lt;a data-passage=&quot;Forest&quot;&gt;Go to the forest&lt;/a&gt;</tw-passagedata>
+
+  <tw-passagedata pid="2" name="Shop" tags="" position="300,100" size="100,100">You enter the shop.
+
+&lt;% if (s.gold &gt;= 50) { %&gt;
+  The shopkeeper greets you warmly.
+  &lt;a data-passage=&quot;BuySword&quot;&gt;Buy a sword for 50 gold&lt;/a&gt;
+&lt;% } else { %&gt;
+  The shopkeeper looks at you suspiciously.
+&lt;% } %&gt;
+
+&lt;a data-passage=&quot;Start&quot;&gt;Leave&lt;/a&gt;</tw-passagedata>
+
+  <tw-passagedata pid="3" name="Forest" tags="" position="300,250" size="100,100">&lt;% s.health -= 10; %&gt;
+
+You walk into the dark forest.
+
+Your health is now &lt;%= s.health %&gt;.
+
+&lt;% if (s.health &lt;= 0) { %&gt;
+  &lt;a data-passage=&quot;GameOver&quot;&gt;You collapse from exhaustion&lt;/a&gt;
+&lt;% } else { %&gt;
+  &lt;a data-passage=&quot;DeepForest&quot;&gt;Continue deeper&lt;/a&gt;
+  &lt;a data-passage=&quot;Start&quot;&gt;Return to town&lt;/a&gt;
+&lt;% } %&gt;</tw-passagedata>
+
+  <tw-passagedata pid="4" name="BuySword" tags="" position="500,100" size="100,100">&lt;% s.gold -= 50; %&gt;
+&lt;% s.hasSword = true; %&gt;
+
+You bought a sword!
+
+Gold remaining: &lt;%= s.gold %&gt;
+
+&lt;a data-passage=&quot;Shop&quot;&gt;Return to shop&lt;/a&gt;</tw-passagedata>
+
+  <tw-passagedata pid="5" name="DeepForest" tags="" position="500,250" size="100,100">You venture deeper into the forest.
+
+&lt;% if (s.hasSword) { %&gt;
+  Your sword glints in the moonlight.
+  &lt;a data-passage=&quot;Victory&quot;&gt;Fight the monster&lt;/a&gt;
+&lt;% } else { %&gt;
+  You feel unprepared without a weapon.
+  &lt;a data-passage=&quot;Forest&quot;&gt;Run away&lt;/a&gt;
+&lt;% } %&gt;</tw-passagedata>
+
+  <tw-passagedata pid="6" name="Victory" tags="" position="700,250" size="100,100">You defeated the monster!
+
+**The End**
+
+&lt;a data-passage=&quot;Start&quot;&gt;Play again&lt;/a&gt;</tw-passagedata>
+
+  <tw-passagedata pid="7" name="GameOver" tags="" position="700,400" size="100,100">**Game Over**
+
+Your adventure has ended.
+
+&lt;a data-passage=&quot;Start&quot;&gt;Try again&lt;/a&gt;</tw-passagedata>
+
+</tw-storydata>
+</body>
+</html>

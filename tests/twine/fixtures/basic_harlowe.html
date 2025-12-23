@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Basic Harlowe Test</title>
+</head>
+<body>
+<tw-storydata name="Basic Harlowe Test" startnode="1" creator="Twine" creator-version="2.6.0" ifid="12345678-1234-4234-8234-123456789ABC" zoom="1" format="Harlowe" format-version="3.3.8" options="" hidden>
+
+  <style role="stylesheet" id="twine-user-stylesheet" type="text/twine-css">
+  </style>
+
+  <script role="script" id="twine-user-script" type="text/twine-javascript">
+  </script>
+
+  <tw-passagedata pid="1" name="Start" tags="" position="100,100" size="100,100">(set: $playerName to &quot;Hero&quot;)
+(set: $gold to 100)
+(set: $health to 50)
+
+Welcome, $playerName!
+
+You have $gold gold and $health health.
+
+(if: $gold &gt; 50)[You are wealthy.]
+(else:)[You are poor.]
+
+[[Go to the shop-&gt;Shop]]
+[[Go to the forest-&gt;Forest]]</tw-passagedata>
+
+  <tw-passagedata pid="2" name="Shop" tags="" position="300,100" size="100,100">You enter the shop.
+
+(if: $gold &gt;= 50)[
+  The shopkeeper greets you warmly.
+  [[Buy a sword for 50 gold-&gt;BuySword]]
+]
+(else:)[
+  The shopkeeper looks at you suspiciously.
+]
+
+[[Leave-&gt;Start]]</tw-passagedata>
+
+  <tw-passagedata pid="3" name="Forest" tags="" position="300,250" size="100,100">You walk into the dark forest.
+
+(set: $health to it - 10)
+
+Your health is now $health.
+
+(if: $health &lt;= 0)[
+  [[You collapse from exhaustion-&gt;GameOver]]
+]
+(else:)[
+  [[Continue deeper-&gt;DeepForest]]
+  [[Return to town-&gt;Start]]
+]</tw-passagedata>
+
+  <tw-passagedata pid="4" name="BuySword" tags="" position="500,100" size="100,100">(set: $gold to it - 50)
+(set: $hasSword to true)
+
+You bought a sword!
+
+Gold remaining: $gold
+
+[[Return to shop-&gt;Shop]]</tw-passagedata>
+
+  <tw-passagedata pid="5" name="DeepForest" tags="" position="500,250" size="100,100">You venture deeper into the forest.
+
+(if: $hasSword)[
+  Your sword glints in the moonlight.
+  [[Fight the monster-&gt;Victory]]
+]
+(else:)[
+  You feel unprepared without a weapon.
+  [[Run away-&gt;Forest]]
+]</tw-passagedata>
+
+  <tw-passagedata pid="6" name="Victory" tags="" position="700,250" size="100,100">You defeated the monster!
+
+**The End**
+
+[[Play again-&gt;Start]]</tw-passagedata>
+
+  <tw-passagedata pid="7" name="GameOver" tags="" position="700,400" size="100,100">**Game Over**
+
+Your adventure has ended.
+
+[[Try again-&gt;Start]]</tw-passagedata>
+
+</tw-storydata>
+</body>
+</html>
