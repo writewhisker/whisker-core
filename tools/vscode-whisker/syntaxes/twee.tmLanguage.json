@@ -1,0 +1,201 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Twee",
+  "scopeName": "source.twee",
+  "patterns": [
+    { "include": "#passage-header" },
+    { "include": "#macro" },
+    { "include": "#link" },
+    { "include": "#variable" },
+    { "include": "#special-passage" },
+    { "include": "#comment" }
+  ],
+  "repository": {
+    "passage-header": {
+      "name": "meta.passage.header.twee",
+      "match": "^(::)\\s*([^\\[\\{]+)(?:\\s*\\[([^\\]]+)\\])?(?:\\s*\\{([^\\}]+)\\})?\\s*$",
+      "captures": {
+        "1": { "name": "punctuation.definition.passage.twee" },
+        "2": { "name": "entity.name.passage.twee" },
+        "3": { "name": "entity.name.tag.twee" },
+        "4": { "name": "storage.modifier.metadata.twee" }
+      }
+    },
+    "macro": {
+      "patterns": [
+        {
+          "name": "meta.macro.twee",
+          "begin": "(<<)(set|unset|run|print|display|include|nobr|silently|type|stop|goto|back|return)",
+          "end": "(>>)",
+          "beginCaptures": {
+            "1": { "name": "punctuation.definition.macro.begin.twee" },
+            "2": { "name": "keyword.control.macro.twee" }
+          },
+          "endCaptures": {
+            "1": { "name": "punctuation.definition.macro.end.twee" }
+          },
+          "patterns": [
+            { "include": "#expression" }
+          ]
+        },
+        {
+          "name": "meta.macro.conditional.twee",
+          "begin": "(<<)(if|elseif|else|endif|switch|case|default|endswitch)",
+          "end": "(>>)",
+          "beginCaptures": {
+            "1": { "name": "punctuation.definition.macro.begin.twee" },
+            "2": { "name": "keyword.control.conditional.twee" }
+          },
+          "endCaptures": {
+            "1": { "name": "punctuation.definition.macro.end.twee" }
+          },
+          "patterns": [
+            { "include": "#expression" }
+          ]
+        },
+        {
+          "name": "meta.macro.loop.twee",
+          "begin": "(<<)(for|break|continue|endfor|while|endwhile)",
+          "end": "(>>)",
+          "beginCaptures": {
+            "1": { "name": "punctuation.definition.macro.begin.twee" },
+            "2": { "name": "keyword.control.loop.twee" }
+          },
+          "endCaptures": {
+            "1": { "name": "punctuation.definition.macro.end.twee" }
+          },
+          "patterns": [
+            { "include": "#expression" }
+          ]
+        },
+        {
+          "name": "meta.macro.custom.twee",
+          "begin": "(<<)(\\w+)",
+          "end": "(>>)",
+          "beginCaptures": {
+            "1": { "name": "punctuation.definition.macro.begin.twee" },
+            "2": { "name": "entity.name.function.macro.twee" }
+          },
+          "endCaptures": {
+            "1": { "name": "punctuation.definition.macro.end.twee" }
+          },
+          "patterns": [
+            { "include": "#expression" }
+          ]
+        },
+        {
+          "name": "meta.macro.close.twee",
+          "match": "(<</)([\\w-]+)(>>)",
+          "captures": {
+            "1": { "name": "punctuation.definition.macro.begin.twee" },
+            "2": { "name": "entity.name.function.macro.twee" },
+            "3": { "name": "punctuation.definition.macro.end.twee" }
+          }
+        }
+      ]
+    },
+    "link": {
+      "patterns": [
+        {
+          "name": "meta.link.twee",
+          "match": "(\\[\\[)([^\\|\\]]+)(\\|)?([^\\]]*)(\\]\\])",
+          "captures": {
+            "1": { "name": "punctuation.definition.link.begin.twee" },
+            "2": { "name": "string.link.text.twee" },
+            "3": { "name": "punctuation.separator.link.twee" },
+            "4": { "name": "entity.name.passage.reference.twee" },
+            "5": { "name": "punctuation.definition.link.end.twee" }
+          }
+        },
+        {
+          "name": "meta.link.arrow.twee",
+          "match": "(\\[\\[)([^\\]<>]+)(->|<-)([^\\]]+)(\\]\\])",
+          "captures": {
+            "1": { "name": "punctuation.definition.link.begin.twee" },
+            "2": { "name": "string.link.text.twee" },
+            "3": { "name": "keyword.control.link.arrow.twee" },
+            "4": { "name": "entity.name.passage.reference.twee" },
+            "5": { "name": "punctuation.definition.link.end.twee" }
+          }
+        }
+      ]
+    },
+    "variable": {
+      "patterns": [
+        {
+          "name": "variable.story.twee",
+          "match": "(\\$)([\\w_]+)",
+          "captures": {
+            "1": { "name": "punctuation.definition.variable.twee" },
+            "2": { "name": "variable.other.story.twee" }
+          }
+        },
+        {
+          "name": "variable.temporary.twee",
+          "match": "(_)([\\w_]+)",
+          "captures": {
+            "1": { "name": "punctuation.definition.variable.twee" },
+            "2": { "name": "variable.other.temporary.twee" }
+          }
+        }
+      ]
+    },
+    "special-passage": {
+      "name": "entity.name.passage.special.twee",
+      "match": "^::\\s*(StoryTitle|StoryData|StoryAuthor|StorySubtitle|StoryBanner|StoryCaption|StoryMenu|StoryInit|PassageDone|PassageReady|PassageHeader|PassageFooter)\\b"
+    },
+    "comment": {
+      "patterns": [
+        {
+          "name": "comment.block.html.twee",
+          "begin": "<!--",
+          "end": "-->"
+        },
+        {
+          "name": "comment.block.twee",
+          "begin": "/\\%",
+          "end": "\\%/"
+        }
+      ]
+    },
+    "expression": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.twee",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.twee",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.twee",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.twee",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "constant.numeric.twee",
+          "match": "\\b\\d+(\\.\\d+)?\\b"
+        },
+        {
+          "name": "constant.language.boolean.twee",
+          "match": "\\b(true|false|null|undefined)\\b"
+        },
+        {
+          "name": "keyword.operator.twee",
+          "match": "(===|!==|==|!=|<=|>=|<|>|\\+|-|\\*|/|%|&&|\\|\\||!|is|isnot|and|or|not|to|eq|neq|gt|gte|lt|lte)"
+        },
+        { "include": "#variable" }
+      ]
+    }
+  }
+}

@@ -1,0 +1,197 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Ink",
+  "scopeName": "source.ink",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#passage-header" },
+    { "include": "#choice" },
+    { "include": "#sticky-choice" },
+    { "include": "#divert" },
+    { "include": "#variable-assignment" },
+    { "include": "#variable-interpolation" },
+    { "include": "#conditional" },
+    { "include": "#tag" },
+    { "include": "#macro" },
+    { "include": "#string" }
+  ],
+  "repository": {
+    "comment": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.ink",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block.ink",
+          "begin": "/\\*",
+          "end": "\\*/",
+          "patterns": [
+            {
+              "name": "comment.block.ink",
+              "match": "."
+            }
+          ]
+        }
+      ]
+    },
+    "passage-header": {
+      "name": "meta.passage.header.ink",
+      "match": "^(===+)\\s*([\\w_]+)\\s*(===+)(.*)?$",
+      "captures": {
+        "1": { "name": "punctuation.definition.passage.begin.ink" },
+        "2": { "name": "entity.name.passage.ink" },
+        "3": { "name": "punctuation.definition.passage.end.ink" },
+        "4": { "name": "storage.modifier.tags.ink" }
+      }
+    },
+    "choice": {
+      "name": "meta.choice.ink",
+      "begin": "^(\\s*)(\\*)(\\s*)",
+      "end": "$",
+      "beginCaptures": {
+        "2": { "name": "keyword.control.choice.ink" }
+      },
+      "patterns": [
+        { "include": "#choice-text" },
+        { "include": "#divert-inline" },
+        { "include": "#variable-interpolation" }
+      ]
+    },
+    "sticky-choice": {
+      "name": "meta.choice.sticky.ink",
+      "begin": "^(\\s*)(\\+)(\\s*)",
+      "end": "$",
+      "beginCaptures": {
+        "2": { "name": "keyword.control.choice.sticky.ink" }
+      },
+      "patterns": [
+        { "include": "#choice-text" },
+        { "include": "#divert-inline" },
+        { "include": "#variable-interpolation" }
+      ]
+    },
+    "choice-text": {
+      "name": "meta.choice.text.ink",
+      "begin": "\\[",
+      "end": "\\]",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.choice.begin.ink" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.choice.end.ink" }
+      },
+      "patterns": [
+        { "include": "#variable-interpolation" }
+      ],
+      "contentName": "string.choice.text.ink"
+    },
+    "divert": {
+      "name": "meta.divert.ink",
+      "match": "^\\s*(->)\\s*([\\w_]+|END|DONE)\\s*$",
+      "captures": {
+        "1": { "name": "keyword.control.divert.ink" },
+        "2": { "name": "entity.name.passage.reference.ink" }
+      }
+    },
+    "divert-inline": {
+      "name": "meta.divert.inline.ink",
+      "match": "(->)\\s*([\\w_]+|END|DONE)",
+      "captures": {
+        "1": { "name": "keyword.control.divert.ink" },
+        "2": { "name": "entity.name.passage.reference.ink" }
+      }
+    },
+    "variable-assignment": {
+      "name": "meta.variable.assignment.ink",
+      "match": "^\\s*(~)\\s*([\\w_]+)\\s*(=)(.*)$",
+      "captures": {
+        "1": { "name": "keyword.operator.assignment.ink" },
+        "2": { "name": "variable.other.ink" },
+        "3": { "name": "keyword.operator.assignment.ink" },
+        "4": { "patterns": [{ "include": "#expression" }] }
+      }
+    },
+    "variable-interpolation": {
+      "name": "meta.interpolation.ink",
+      "begin": "\\{",
+      "end": "\\}",
+      "beginCaptures": {
+        "0": { "name": "punctuation.section.interpolation.begin.ink" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.section.interpolation.end.ink" }
+      },
+      "patterns": [
+        { "include": "#expression" }
+      ],
+      "contentName": "meta.embedded.expression.ink"
+    },
+    "conditional": {
+      "name": "meta.conditional.ink",
+      "begin": "\\{\\s*(\\?|!|&|\\|)",
+      "end": "\\}",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.conditional.ink" }
+      },
+      "patterns": [
+        { "include": "#expression" }
+      ]
+    },
+    "tag": {
+      "name": "meta.tag.ink",
+      "match": "(#)([\\w_]+)",
+      "captures": {
+        "1": { "name": "punctuation.definition.tag.ink" },
+        "2": { "name": "entity.name.tag.ink" }
+      }
+    },
+    "macro": {
+      "name": "meta.macro.ink",
+      "begin": "(<<)(\\w+)",
+      "end": "(>>)",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.macro.begin.ink" },
+        "2": { "name": "entity.name.function.macro.ink" }
+      },
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.macro.end.ink" }
+      },
+      "patterns": [
+        { "include": "#expression" }
+      ]
+    },
+    "string": {
+      "name": "string.quoted.double.ink",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.ink",
+          "match": "\\\\."
+        }
+      ]
+    },
+    "expression": {
+      "patterns": [
+        {
+          "name": "constant.numeric.ink",
+          "match": "\\b\\d+(\\.\\d+)?\\b"
+        },
+        {
+          "name": "constant.language.boolean.ink",
+          "match": "\\b(true|false)\\b"
+        },
+        {
+          "name": "keyword.operator.ink",
+          "match": "(==|!=|<=|>=|<|>|\\+|-|\\*|/|%|and|or|not|&&|\\|\\|)"
+        },
+        {
+          "name": "variable.other.ink",
+          "match": "\\b[\\w_]+\\b"
+        },
+        { "include": "#string" }
+      ]
+    }
+  }
+}

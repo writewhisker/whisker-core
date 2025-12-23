@@ -1,0 +1,147 @@
+{
+  "Passage": {
+    "prefix": "passage",
+    "body": [
+      "passage \"${1:PassageName}\" {",
+      "  ${2:Content here}",
+      "",
+      "  -> ${3:END}",
+      "}"
+    ],
+    "description": "Create a new passage"
+  },
+  "Choice": {
+    "prefix": "choice",
+    "body": [
+      "* [${1:Choice text}] -> ${2:TargetPassage}"
+    ],
+    "description": "Create a choice option"
+  },
+  "Sticky Choice": {
+    "prefix": "sticky",
+    "body": [
+      "+ [${1:Choice text}] -> ${2:TargetPassage}"
+    ],
+    "description": "Create a sticky choice"
+  },
+  "Variable Declaration": {
+    "prefix": "var",
+    "body": [
+      "var ${1:name} = ${2:value}"
+    ],
+    "description": "Declare a variable"
+  },
+  "Let Declaration": {
+    "prefix": "let",
+    "body": [
+      "let ${1:name} = ${2:value}"
+    ],
+    "description": "Declare a local variable"
+  },
+  "Const Declaration": {
+    "prefix": "const",
+    "body": [
+      "const ${1:NAME} = ${2:value}"
+    ],
+    "description": "Declare a constant"
+  },
+  "If Statement": {
+    "prefix": "if",
+    "body": [
+      "if ${1:condition} then",
+      "  ${2:content}",
+      "endif"
+    ],
+    "description": "If statement"
+  },
+  "If Else Statement": {
+    "prefix": "ifelse",
+    "body": [
+      "if ${1:condition} then",
+      "  ${2:true_content}",
+      "else",
+      "  ${3:false_content}",
+      "endif"
+    ],
+    "description": "If-else statement"
+  },
+  "Elseif": {
+    "prefix": "elseif",
+    "body": [
+      "elseif ${1:condition} then",
+      "  ${2:content}"
+    ],
+    "description": "Elseif clause"
+  },
+  "Divert": {
+    "prefix": "divert",
+    "body": [
+      "-> ${1:PassageName}"
+    ],
+    "description": "Divert to passage"
+  },
+  "Macro": {
+    "prefix": "macro",
+    "body": [
+      "<<${1:macro_name} ${2:arguments}>>"
+    ],
+    "description": "Call a macro"
+  },
+  "Interpolation": {
+    "prefix": "interp",
+    "body": [
+      "{${1:expression}}"
+    ],
+    "description": "Interpolate expression"
+  },
+  "Function Call": {
+    "prefix": "func",
+    "body": [
+      "${1:function_name}(${2:arguments})"
+    ],
+    "description": "Call a function"
+  },
+  "Comment Line": {
+    "prefix": "comment",
+    "body": [
+      "// ${1:comment}"
+    ],
+    "description": "Line comment"
+  },
+  "Comment Block": {
+    "prefix": "blockcomment",
+    "body": [
+      "/*",
+      " * ${1:comment}",
+      " */"
+    ],
+    "description": "Block comment"
+  },
+  "Story Template": {
+    "prefix": "story",
+    "body": [
+      "// ${1:Story Title}",
+      "// Author: ${2:Author Name}",
+      "",
+      "passage \"Start\" {",
+      "  ${3:Opening text}",
+      "",
+      "  * [${4:First choice}] -> ${5:FirstPassage}",
+      "  * [${6:Second choice}] -> ${7:SecondPassage}",
+      "}",
+      "",
+      "passage \"${5:FirstPassage}\" {",
+      "  ${8:Content}",
+      "",
+      "  -> END",
+      "}",
+      "",
+      "passage \"${7:SecondPassage}\" {",
+      "  ${9:Content}",
+      "",
+      "  -> END",
+      "}"
+    ],
+    "description": "Create a basic story template"
+  }
+}

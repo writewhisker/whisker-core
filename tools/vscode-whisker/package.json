@@ -1,0 +1,231 @@
+{
+  "name": "whisker",
+  "displayName": "Whisker Interactive Fiction",
+  "description": "Language support for whisker-core interactive fiction framework",
+  "version": "0.1.0",
+  "publisher": "whisker",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/writewhisker/vscode-whisker"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Formatters",
+    "Debuggers"
+  ],
+  "keywords": [
+    "interactive fiction",
+    "ink",
+    "twee",
+    "storytelling",
+    "narrative",
+    "whisker"
+  ],
+  "activationEvents": [
+    "onLanguage:ink",
+    "onLanguage:wscript",
+    "onLanguage:twee"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "ink",
+        "aliases": ["Ink", "ink"],
+        "extensions": [".ink"],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "wscript",
+        "aliases": ["WhiskerScript", "wscript"],
+        "extensions": [".wscript"],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "twee",
+        "aliases": ["Twee", "twee"],
+        "extensions": [".twee", ".tw"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "ink",
+        "scopeName": "source.ink",
+        "path": "./syntaxes/ink.tmLanguage.json"
+      },
+      {
+        "language": "wscript",
+        "scopeName": "source.wscript",
+        "path": "./syntaxes/wscript.tmLanguage.json"
+      },
+      {
+        "language": "twee",
+        "scopeName": "source.twee",
+        "path": "./syntaxes/twee.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "Whisker",
+      "properties": {
+        "whisker.lsp.serverPath": {
+          "type": "string",
+          "default": "whisker-lsp",
+          "description": "Path to whisker-lsp executable"
+        },
+        "whisker.lsp.logLevel": {
+          "type": "string",
+          "enum": ["error", "warn", "info", "debug"],
+          "default": "info",
+          "description": "Log level for language server"
+        },
+        "whisker.lsp.trace": {
+          "type": "string",
+          "enum": ["off", "messages", "verbose"],
+          "default": "off",
+          "description": "Trace LSP communication"
+        },
+        "whisker.preview.liveUpdate": {
+          "type": "boolean",
+          "default": false,
+          "description": "Update preview on every keystroke (may impact performance)"
+        },
+        "whisker.preview.theme": {
+          "type": "string",
+          "enum": ["auto", "light", "dark"],
+          "default": "auto",
+          "description": "Preview panel theme"
+        },
+        "whisker.graph.layout": {
+          "type": "string",
+          "enum": ["TD", "LR", "BT", "RL"],
+          "default": "TD",
+          "description": "Graph layout direction (Top-Down, Left-Right, Bottom-Top, Right-Left)"
+        },
+        "whisker.debug.adapterPath": {
+          "type": "string",
+          "default": "whisker-debug",
+          "description": "Path to whisker-debug executable"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "whisker.restartServer",
+        "title": "Whisker: Restart Language Server",
+        "category": "Whisker"
+      },
+      {
+        "command": "whisker.newStory",
+        "title": "Whisker: New Story",
+        "category": "Whisker"
+      },
+      {
+        "command": "whisker.previewStory",
+        "title": "Whisker: Preview Story",
+        "category": "Whisker",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "whisker.viewGraph",
+        "title": "Whisker: View Story Graph",
+        "category": "Whisker",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "whisker.formatDocument",
+        "title": "Whisker: Format Document",
+        "category": "Whisker"
+      },
+      {
+        "command": "whisker.debugStory",
+        "title": "Whisker: Debug Story",
+        "category": "Whisker"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "when": "resourceLangId == ink || resourceLangId == wscript || resourceLangId == twee",
+          "command": "whisker.previewStory",
+          "group": "navigation"
+        },
+        {
+          "when": "resourceLangId == ink || resourceLangId == wscript || resourceLangId == twee",
+          "command": "whisker.viewGraph",
+          "group": "navigation"
+        }
+      ]
+    },
+    "snippets": [
+      {
+        "language": "ink",
+        "path": "./snippets/ink.json"
+      },
+      {
+        "language": "wscript",
+        "path": "./snippets/wscript.json"
+      },
+      {
+        "language": "twee",
+        "path": "./snippets/twee.json"
+      }
+    ],
+    "debuggers": [
+      {
+        "type": "whisker",
+        "label": "Whisker Debugger",
+        "languages": ["ink", "wscript", "twee"],
+        "configurationAttributes": {
+          "launch": {
+            "required": ["program"],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "Path to story file",
+                "default": "${file}"
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "description": "Stop at entry point",
+                "default": false
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "whisker",
+            "request": "launch",
+            "name": "Debug Story",
+            "program": "${file}"
+          }
+        ]
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.75.0",
+    "@typescript-eslint/eslint-plugin": "^5.0.0",
+    "@typescript-eslint/parser": "^5.0.0",
+    "eslint": "^8.0.0",
+    "typescript": "^5.0.0",
+    "@vscode/vsce": "^2.19.0"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^8.1.0"
+  }
+}

@@ -1,0 +1,171 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "WhiskerScript",
+  "scopeName": "source.wscript",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#passage-definition" },
+    { "include": "#choice" },
+    { "include": "#divert" },
+    { "include": "#variable-assignment" },
+    { "include": "#variable-interpolation" },
+    { "include": "#conditional-block" },
+    { "include": "#macro" },
+    { "include": "#function-call" },
+    { "include": "#string" },
+    { "include": "#number" }
+  ],
+  "repository": {
+    "comment": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.wscript",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.line.double-dash.wscript",
+          "match": "--.*$"
+        },
+        {
+          "name": "comment.block.wscript",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "passage-definition": {
+      "name": "meta.passage.wscript",
+      "begin": "\\b(passage)\\s+",
+      "end": "\\{",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.passage.wscript" }
+      },
+      "patterns": [
+        {
+          "name": "string.quoted.double.passage-name.wscript",
+          "begin": "\"",
+          "end": "\"",
+          "contentName": "entity.name.passage.wscript"
+        }
+      ]
+    },
+    "choice": {
+      "name": "meta.choice.wscript",
+      "match": "(\\*|\\+)\\s*\\[(.*)\\]\\s*(->)?\\s*([\\w_]+)?",
+      "captures": {
+        "1": { "name": "keyword.control.choice.wscript" },
+        "2": { "name": "string.choice.text.wscript" },
+        "3": { "name": "keyword.control.divert.wscript" },
+        "4": { "name": "entity.name.passage.reference.wscript" }
+      }
+    },
+    "divert": {
+      "name": "meta.divert.wscript",
+      "match": "(->)\\s*([\\w_]+|END|DONE)",
+      "captures": {
+        "1": { "name": "keyword.control.divert.wscript" },
+        "2": { "name": "entity.name.passage.reference.wscript" }
+      }
+    },
+    "variable-assignment": {
+      "name": "meta.variable.wscript",
+      "match": "\\b(var|let|const)\\s+([\\w_]+)\\s*(=)?",
+      "captures": {
+        "1": { "name": "storage.type.wscript" },
+        "2": { "name": "variable.other.wscript" },
+        "3": { "name": "keyword.operator.assignment.wscript" }
+      }
+    },
+    "variable-interpolation": {
+      "name": "meta.interpolation.wscript",
+      "begin": "\\{",
+      "end": "\\}",
+      "beginCaptures": {
+        "0": { "name": "punctuation.section.interpolation.begin.wscript" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.section.interpolation.end.wscript" }
+      },
+      "patterns": [
+        { "include": "#expression" }
+      ]
+    },
+    "conditional-block": {
+      "name": "meta.conditional.wscript",
+      "match": "\\b(if|else|elseif|endif|then|end)\\b",
+      "captures": {
+        "1": { "name": "keyword.control.conditional.wscript" }
+      }
+    },
+    "macro": {
+      "name": "meta.macro.wscript",
+      "begin": "(<<)(\\w+)",
+      "end": "(>>)",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.macro.begin.wscript" },
+        "2": { "name": "entity.name.function.macro.wscript" }
+      },
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.macro.end.wscript" }
+      },
+      "patterns": [
+        { "include": "#expression" }
+      ]
+    },
+    "function-call": {
+      "name": "meta.function-call.wscript",
+      "match": "\\b([\\w_]+)\\s*\\(",
+      "captures": {
+        "1": { "name": "entity.name.function.wscript" }
+      }
+    },
+    "string": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.wscript",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.wscript",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.wscript",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.wscript",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "number": {
+      "name": "constant.numeric.wscript",
+      "match": "\\b\\d+(\\.\\d+)?\\b"
+    },
+    "expression": {
+      "patterns": [
+        { "include": "#string" },
+        { "include": "#number" },
+        {
+          "name": "constant.language.boolean.wscript",
+          "match": "\\b(true|false|nil)\\b"
+        },
+        {
+          "name": "keyword.operator.wscript",
+          "match": "(==|~=|!=|<=|>=|<|>|\\+|-|\\*|/|%|and|or|not|\\.\\.|#)"
+        },
+        {
+          "name": "variable.other.wscript",
+          "match": "\\b[\\w_]+\\b"
+        }
+      ]
+    }
+  }
+}
