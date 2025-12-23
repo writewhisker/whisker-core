@@ -1,0 +1,19 @@
+#!/usr/bin/env lua
+-- Whisker Script Compiler
+-- bin/whiskerc
+
+-- Set up package path to find whisker modules
+local script_dir = debug.getinfo(1, "S").source:match("@(.*/)")
+if script_dir then
+  package.path = script_dir .. "../lib/?.lua;" ..
+                 script_dir .. "../lib/?/init.lua;" ..
+                 package.path
+else
+  package.path = "./lib/?.lua;./lib/?/init.lua;" .. package.path
+end
+
+-- Load and run CLI
+local CLI = require("whisker.tools.whiskerc")
+local success = CLI.main(arg)
+
+os.exit(success and 0 or 1)
