@@ -558,6 +558,28 @@ function Lexer:scan_token()
   if char == "[" then
     self:advance()
     self:emit_token("LBRACKET", nil)
+    -- Now consume text content until ]
+    self:skip_whitespace()
+    if not self:is_at_end() and self:peek() ~= "]" then
+      self:mark_start()
+      local text_chars = {}
+      while not self:is_at_end() and self:peek() ~= "]" do
+        table.insert(text_chars, self:peek())
+        self:advance()
+      end
+      local text = table.concat(text_chars)
+      -- Trim trailing whitespace
+      text = text:gsub("%s+$", "")
+      if #text > 0 then
+        self:emit_token("TEXT", text)
+      end
+    end
+    -- Now emit the close bracket
+    if self:peek() == "]" then
+      self:mark_start()
+      self:advance()
+      self:emit_token("RBRACKET", nil)
+    end
     return
   end
 

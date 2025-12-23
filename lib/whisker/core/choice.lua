@@ -129,6 +129,7 @@ function Choice:serialize()
         id = self.id,  -- NEW: Include ID in serialization
         text = self.text,
         target_passage = self.target_passage,
+        target = self.target_passage,  -- Alias for backwards compatibility
         condition = self.condition,
         action = self.action,
         metadata = self.metadata
@@ -138,10 +139,18 @@ end
 function Choice:deserialize(data)
     self.id = data.id or generate_choice_id()  -- NEW: Restore or generate ID
     self.text = data.text or ""
-    self.target_passage = data.target_passage
+    self.target_passage = data.target_passage or data.target  -- Accept both field names
     self.condition = data.condition
     self.action = data.action
     self.metadata = data.metadata or {}
+end
+
+-- Provide target as an alias for target_passage for backwards compatibility
+Choice.__index = function(self, key)
+    if key == "target" then
+        return rawget(self, "target_passage")
+    end
+    return Choice[key]
 end
 
 -- Static method to restore metatable to a table

@@ -47,6 +47,10 @@ function Passage:get_choices()
     return self.choices
 end
 
+function Passage:get_choice(index)
+    return self.choices[index]
+end
+
 function Passage:remove_choice(index)
     table.remove(self.choices, index)
 end
@@ -62,6 +66,20 @@ function Passage:has_tag(tag)
         end
     end
     return false
+end
+
+function Passage:remove_tag(tag)
+    for i, t in ipairs(self.tags) do
+        if t == tag then
+            table.remove(self.tags, i)
+            return true
+        end
+    end
+    return false
+end
+
+function Passage:get_tags()
+    return self.tags
 end
 
 function Passage:set_position(x, y)
