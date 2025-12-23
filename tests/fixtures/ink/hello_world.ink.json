@@ -1,0 +1,34 @@
+{
+  "inkVersion": 21,
+  "root": [
+    "^Hello, world!",
+    "\n",
+    [
+      "ev",
+      "str",
+      "^Continue...",
+      "/str",
+      "/ev",
+      {
+        "*": ".^.c-0",
+        "flg": 20
+      },
+      {
+        "c-0": [
+          "\n",
+          "^You continued!",
+          "\n",
+          "done",
+          {
+            "#n": "c-0"
+          }
+        ]
+      }
+    ],
+    "done",
+    {
+      "#n": "g-0"
+    }
+  ],
+  "listDefs": {}
+}

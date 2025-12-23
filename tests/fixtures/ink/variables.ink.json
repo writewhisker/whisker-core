@@ -1,0 +1,69 @@
+{
+  "inkVersion": 21,
+  "root": [
+    [
+      "ev",
+      100,
+      "out",
+      "/ev",
+      {
+        "VAR=": "health",
+        "re": true
+      },
+      "ev",
+      "str",
+      "^Player",
+      "/str",
+      "out",
+      "/ev",
+      {
+        "VAR=": "player_name",
+        "re": true
+      },
+      "ev",
+      50,
+      "out",
+      "/ev",
+      {
+        "VAR=": "gold",
+        "re": true
+      }
+    ],
+    "^You have ",
+    {
+      "VAR?": "health"
+    },
+    "^ health and ",
+    {
+      "VAR?": "gold"
+    },
+    "^ gold.",
+    "\n",
+    "done",
+    {
+      "global decl": [
+        "ev",
+        100,
+        {
+          "VAR=": "health"
+        },
+        "str",
+        "^Player",
+        "/str",
+        {
+          "VAR=": "player_name"
+        },
+        50,
+        {
+          "VAR=": "gold"
+        },
+        "/ev",
+        "end",
+        {
+          "#n": "global decl"
+        }
+      ]
+    }
+  ],
+  "listDefs": {}
+}

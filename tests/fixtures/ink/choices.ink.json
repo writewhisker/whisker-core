@@ -1,0 +1,70 @@
+{
+  "inkVersion": 21,
+  "root": [
+    "^What would you like to do?",
+    "\n",
+    [
+      "ev",
+      "str",
+      "^Go north",
+      "/str",
+      "/ev",
+      {
+        "*": ".^.c-0",
+        "flg": 20
+      },
+      "ev",
+      "str",
+      "^Go south",
+      "/str",
+      "/ev",
+      {
+        "*": ".^.c-1",
+        "flg": 20
+      },
+      "ev",
+      "str",
+      "^Stay here",
+      "/str",
+      "/ev",
+      {
+        "*": ".^.c-2",
+        "flg": 20
+      },
+      {
+        "c-0": [
+          "\n",
+          "^You head north into the forest.",
+          "\n",
+          "done",
+          {
+            "#n": "c-0"
+          }
+        ],
+        "c-1": [
+          "\n",
+          "^You travel south to the village.",
+          "\n",
+          "done",
+          {
+            "#n": "c-1"
+          }
+        ],
+        "c-2": [
+          "\n",
+          "^You decide to stay put.",
+          "\n",
+          "done",
+          {
+            "#n": "c-2"
+          }
+        ]
+      }
+    ],
+    "done",
+    {
+      "#n": "g-0"
+    }
+  ],
+  "listDefs": {}
+}
