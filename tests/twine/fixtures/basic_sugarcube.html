@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Basic SugarCube Test</title>
+</head>
+<body>
+<tw-storydata name="Basic SugarCube Test" startnode="1" creator="Twine" creator-version="2.6.0" ifid="22345678-2234-4234-8234-223456789ABC" zoom="1" format="SugarCube" format-version="2.36.1" options="" hidden>
+
+  <style role="stylesheet" id="twine-user-stylesheet" type="text/twine-css">
+  </style>
+
+  <script role="script" id="twine-user-script" type="text/twine-javascript">
+  </script>
+
+  <tw-passagedata pid="1" name="Start" tags="" position="100,100" size="100,100">&lt;&lt;set $playerName to &quot;Hero&quot;&gt;&gt;
+&lt;&lt;set $gold to 100&gt;&gt;
+&lt;&lt;set $health to 50&gt;&gt;
+
+Welcome, $playerName!
+
+You have $gold gold and $health health.
+
+&lt;&lt;if $gold &gt; 50&gt;&gt;You are wealthy.&lt;&lt;else&gt;&gt;You are poor.&lt;&lt;/if&gt;&gt;
+
+[[Go to the shop|Shop]]
+[[Go to the forest|Forest]]</tw-passagedata>
+
+  <tw-passagedata pid="2" name="Shop" tags="" position="300,100" size="100,100">You enter the shop.
+
+&lt;&lt;if $gold &gt;= 50&gt;&gt;
+  The shopkeeper greets you warmly.
+  [[Buy a sword for 50 gold|BuySword]]
+&lt;&lt;else&gt;&gt;
+  The shopkeeper looks at you suspiciously.
+&lt;&lt;/if&gt;&gt;
+
+[[Leave|Start]]</tw-passagedata>
+
+  <tw-passagedata pid="3" name="Forest" tags="" position="300,250" size="100,100">You walk into the dark forest.
+
+&lt;&lt;set $health -= 10&gt;&gt;
+
+Your health is now $health.
+
+&lt;&lt;if $health &lt;= 0&gt;&gt;
+  [[You collapse from exhaustion|GameOver]]
+&lt;&lt;else&gt;&gt;
+  [[Continue deeper|DeepForest]]
+  [[Return to town|Start]]
+&lt;&lt;/if&gt;&gt;</tw-passagedata>
+
+  <tw-passagedata pid="4" name="BuySword" tags="" position="500,100" size="100,100">&lt;&lt;set $gold -= 50&gt;&gt;
+&lt;&lt;set $hasSword to true&gt;&gt;
+
+You bought a sword!
+
+Gold remaining: $gold
+
+[[Return to shop|Shop]]</tw-passagedata>
+
+  <tw-passagedata pid="5" name="DeepForest" tags="" position="500,250" size="100,100">You venture deeper into the forest.
+
+&lt;&lt;if $hasSword&gt;&gt;
+  Your sword glints in the moonlight.
+  [[Fight the monster|Victory]]
+&lt;&lt;else&gt;&gt;
+  You feel unprepared without a weapon.
+  [[Run away|Forest]]
+&lt;&lt;/if&gt;&gt;</tw-passagedata>
+
+  <tw-passagedata pid="6" name="Victory" tags="" position="700,250" size="100,100">You defeated the monster!
+
+**The End**
+
+[[Play again|Start]]</tw-passagedata>
+
+  <tw-passagedata pid="7" name="GameOver" tags="" position="700,400" size="100,100">**Game Over**
+
+Your adventure has ended.
+
+[[Try again|Start]]</tw-passagedata>
+
+</tw-storydata>
+</body>
+</html>
