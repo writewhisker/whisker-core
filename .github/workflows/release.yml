@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -34,7 +34,7 @@ jobs:
           awk "/## \[$VERSION\]/,/## \[/" CHANGELOG.md | sed '1d;$d' > release_notes.md || echo "See CHANGELOG.md for details." > release_notes.md
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           name: whisker-core ${{ steps.version.outputs.tag }}
           body_path: release_notes.md
@@ -50,7 +50,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Lua
         uses: leafo/gh-actions-lua@v12
@@ -58,7 +58,7 @@ jobs:
           luaVersion: "5.4"
 
       - name: Install LuaRocks
-        uses: leafo/gh-actions-luarocks@v4
+        uses: leafo/gh-actions-luarocks@v6
 
       - name: Extract version
         id: version
@@ -99,7 +99,7 @@ jobs:
           luaVersion: ${{ matrix.lua-version }}
 
       - name: Install LuaRocks
-        uses: leafo/gh-actions-luarocks@v4
+        uses: leafo/gh-actions-luarocks@v6
 
       - name: Wait for LuaRocks propagation
         run: sleep 60

@@ -19,7 +19,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Setup Lua
       uses: leafo/gh-actions-lua@v12
@@ -27,13 +27,16 @@ jobs:
         luaVersion: ${{ matrix.lua-version }}
 
     - name: Setup LuaRocks
-      uses: leafo/gh-actions-luarocks@v4
+      uses: leafo/gh-actions-luarocks@v6
 
     - name: Install busted
-      run: luarocks install busted
+      run: |
+        # Use --only-server to avoid LuaJIT manifest size limit issue
+        luarocks install busted --only-server=https://luarocks.org || luarocks install busted
 
     - name: Install luacov (coverage)
-      run: luarocks install luacov
+      run: |
+        luarocks install luacov --only-server=https://luarocks.org || luarocks install luacov
 
     - name: Run tests
       run: busted --verbose --coverage
@@ -44,7 +47,7 @@ jobs:
 
     - name: Upload coverage
       if: matrix.lua-version == '5.4' && matrix.os == 'ubuntu-latest'
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@v5
       with:
         files: ./luacov.report.out
         flags: unittests
@@ -56,7 +59,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Setup Lua
       uses: leafo/gh-actions-lua@v12
@@ -64,10 +67,11 @@ jobs:
         luaVersion: '5.4'
 
     - name: Setup LuaRocks
-      uses: leafo/gh-actions-luarocks@v4
+      uses: leafo/gh-actions-luarocks@v6
 
     - name: Install luacheck
-      run: luarocks install luacheck
+      run: |
+        luarocks install luacheck --only-server=https://luarocks.org || luarocks install luacheck
 
     - name: Run luacheck
       run: luacheck lib/ bin/ --config .luacheckrc
@@ -78,7 +82,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Setup Lua
       uses: leafo/gh-actions-lua@v12

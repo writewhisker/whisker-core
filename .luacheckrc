@@ -27,11 +27,16 @@ ignore = {
     "211",  -- Unused variable
     "212",  -- Unused argument
     "213",  -- Unused loop variable
+    "231",  -- Variable never accessed
+    "241",  -- Variable mutated but never accessed
+    "311",  -- Value assigned is unused
+    "312",  -- Value of argument is unused
     "411",  -- Redefining variable
     "421",  -- Shadowing definition
     "431",  -- Shadowing upvalue
     "512",  -- Loop executed at most once
     "542",  -- Empty if branch
+    "611",  -- Line contains only whitespace
     "612",  -- Trailing whitespace
     "613",  -- Trailing whitespace in string
     "631",  -- Line too long
@@ -43,4 +48,6 @@ exclude_files = {
     "dist/",
     "vendor/",
     ".luarocks/",
+    "**/vendor/**",  -- Vendor code anywhere in tree
+    "lib/whisker/vendor/**",  -- Specifically the tinta vendor
 }
