@@ -1,0 +1,108 @@
+{
+  "Passage": {
+    "prefix": "passage",
+    "body": [
+      "=== ${1:PassageName} ===",
+      "${2:Content here}",
+      "",
+      "-> ${3:END}"
+    ],
+    "description": "Create a new passage"
+  },
+  "Choice": {
+    "prefix": "choice",
+    "body": [
+      "* [${1:Choice text}] -> ${2:TargetPassage}"
+    ],
+    "description": "Create a choice option"
+  },
+  "Sticky Choice": {
+    "prefix": "sticky",
+    "body": [
+      "+ [${1:Choice text}] -> ${2:TargetPassage}"
+    ],
+    "description": "Create a sticky choice that doesn't disappear after selection"
+  },
+  "Variable": {
+    "prefix": "var",
+    "body": [
+      "~ ${1:varName} = ${2:value}"
+    ],
+    "description": "Assign a variable"
+  },
+  "Conditional": {
+    "prefix": "if",
+    "body": [
+      "{${1:condition}:",
+      "  ${2:content}",
+      "}"
+    ],
+    "description": "Create a conditional block"
+  },
+  "Inline Conditional": {
+    "prefix": "iif",
+    "body": [
+      "{${1:condition}: ${2:content}}"
+    ],
+    "description": "Create an inline conditional"
+  },
+  "Divert": {
+    "prefix": "divert",
+    "body": [
+      "-> ${1:PassageName}"
+    ],
+    "description": "Divert to another passage"
+  },
+  "End": {
+    "prefix": "end",
+    "body": [
+      "-> END"
+    ],
+    "description": "End the story"
+  },
+  "Done": {
+    "prefix": "done",
+    "body": [
+      "-> DONE"
+    ],
+    "description": "Mark section as done (for multi-flow)"
+  },
+  "Tag": {
+    "prefix": "tag",
+    "body": [
+      "#${1:tagName}"
+    ],
+    "description": "Add a tag"
+  },
+  "Interpolation": {
+    "prefix": "interp",
+    "body": [
+      "{${1:expression}}"
+    ],
+    "description": "Interpolate a variable or expression"
+  },
+  "Story Start": {
+    "prefix": "story",
+    "body": [
+      "// ${1:Story Title}",
+      "// Author: ${2:Author Name}",
+      "",
+      "=== Start ===",
+      "${3:Opening text}",
+      "",
+      "* [${4:First choice}] -> ${5:FirstPassage}",
+      "* [${6:Second choice}] -> ${7:SecondPassage}",
+      "",
+      "=== ${5:FirstPassage} ===",
+      "${8:Content}",
+      "",
+      "-> END",
+      "",
+      "=== ${7:SecondPassage} ===",
+      "${9:Content}",
+      "",
+      "-> END"
+    ],
+    "description": "Create a basic story template"
+  }
+}

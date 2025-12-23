@@ -1,0 +1,43 @@
+:: Start [start]
+Welcome to the Twee adventure!
+
+You are standing in a small room.
+
+[[Go through the door|Hallway]]
+[[Look around|LookAround]]
+
+:: Hallway
+You step into a long hallway.
+
+<<set $visited_hallway = true>>
+
+[[Continue down the hall|EndOfHall]]
+[[Go back|Start]]
+
+:: LookAround
+You notice:
+- A dusty bookshelf
+- An old painting
+- A strange symbol on the floor
+
+<<if $has_key>>
+You see a locked chest!
+<<endif>>
+
+[[Return|Start]]
+
+:: EndOfHall
+You reach the end of the hallway.
+
+<<if $visited_hallway>>
+This is your second time here.
+<<else>>
+Everything looks new.
+<<endif>>
+
+[[Open the final door|Ending]]
+
+:: Ending
+Congratulations! You've completed the adventure.
+
+<<set $game_complete = true>>

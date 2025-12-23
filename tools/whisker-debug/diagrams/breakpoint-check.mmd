@@ -1,0 +1,43 @@
+flowchart TD
+    A[Runtime: goto_passage] --> B{Has Breakpoint?}
+    B -->|No| C[Continue Execution]
+    B -->|Yes| D{Breakpoint Enabled?}
+
+    D -->|No| C
+    D -->|Yes| E{Has Condition?}
+
+    E -->|No| G{Check Hit Count}
+    E -->|Yes| F[Evaluate Condition]
+
+    F -->|False| C
+    F -->|True| G
+
+    G -->|Not Met| C
+    G -->|Met| H[Pause Execution]
+
+    H --> I[Send stopped event]
+    I --> J[Wait for Command]
+
+    J --> K{Command Type}
+    K -->|continue| L[Release Pause]
+    K -->|stepInto| M[Set Step Mode: Into]
+    K -->|stepOut| N[Set Step Mode: Out]
+    K -->|stepOver| O[Set Step Mode: Over]
+
+    L --> P[Resume Execution]
+    M --> P
+    N --> P
+    O --> P
+
+    P --> Q[Execute Passage]
+    Q --> R{Step Mode Active?}
+
+    R -->|No| S{More Passages?}
+    R -->|Yes| T[Check Step Conditions]
+
+    T -->|Should Stop| H
+    T -->|Continue| S
+
+    S -->|Yes| A
+    S -->|No| U[Story End]
+    U --> V[Send terminated event]

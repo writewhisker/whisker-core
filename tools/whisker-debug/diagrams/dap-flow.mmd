@@ -1,0 +1,69 @@
+sequenceDiagram
+    participant C as VSCode Client
+    participant A as whisker-debug Adapter
+    participant R as Runtime Wrapper
+    participant W as whisker.runtime
+
+    Note over C,W: Initialization Phase
+    C->>A: initialize request
+    A->>C: initialize response (capabilities)
+    A->>C: initialized event
+
+    C->>A: launch request {program: "story.ink"}
+    A->>R: load_story("story.ink")
+    R->>W: parse and load
+    W-->>R: story loaded
+    R-->>A: ready
+    A->>C: launch response
+
+    C->>A: setBreakpoints {source, breakpoints}
+    A->>A: verify breakpoint lines
+    A->>C: setBreakpoints response {verified breakpoints}
+
+    C->>A: configurationDone
+    A->>C: configurationDone response
+    A->>R: start_execution()
+
+    Note over C,W: Execution Phase
+    R->>W: goto_passage("Start")
+    W-->>R: passage content
+
+    loop Story Execution
+        R->>R: check breakpoint
+        alt Breakpoint Hit
+            R->>A: pause(reason, data)
+            A->>C: stopped event {reason: "breakpoint"}
+
+            C->>A: threads request
+            A->>C: threads response
+
+            C->>A: stackTrace request
+            A->>R: get_stack_trace()
+            R-->>A: stack frames
+            A->>C: stackTrace response
+
+            C->>A: scopes request {frameId}
+            A->>C: scopes response
+
+            C->>A: variables request {variablesReference}
+            A->>R: get_variables(scope)
+            R->>W: get_state()
+            W-->>R: state
+            R-->>A: serialized variables
+            A->>C: variables response
+
+            C->>A: continue request
+            A->>R: continue()
+            A->>C: continued event
+        end
+
+        R->>W: next step
+        W-->>R: result
+    end
+
+    Note over C,W: Termination Phase
+    R->>A: story_ended
+    A->>C: terminated event
+
+    C->>A: disconnect request
+    A->>C: disconnect response

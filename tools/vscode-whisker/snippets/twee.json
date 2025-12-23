@@ -1,0 +1,206 @@
+{
+  "Passage": {
+    "prefix": "passage",
+    "body": [
+      ":: ${1:PassageName}",
+      "${2:Content here}",
+      "",
+      "[[${3:Continue}|${4:NextPassage}]]"
+    ],
+    "description": "Create a new passage"
+  },
+  "Passage with Tags": {
+    "prefix": "passagetag",
+    "body": [
+      ":: ${1:PassageName} [${2:tags}]",
+      "${3:Content here}"
+    ],
+    "description": "Create a passage with tags"
+  },
+  "Link": {
+    "prefix": "link",
+    "body": [
+      "[[${1:Link text}|${2:TargetPassage}]]"
+    ],
+    "description": "Create a passage link"
+  },
+  "Link Arrow": {
+    "prefix": "linkarrow",
+    "body": [
+      "[[${1:Link text}->${2:TargetPassage}]]"
+    ],
+    "description": "Create a passage link with arrow syntax"
+  },
+  "Simple Link": {
+    "prefix": "simplelink",
+    "body": [
+      "[[${1:PassageName}]]"
+    ],
+    "description": "Create a simple passage link"
+  },
+  "Set Variable": {
+    "prefix": "set",
+    "body": [
+      "<<set \\$${1:variable} = ${2:value}>>"
+    ],
+    "description": "Set a story variable"
+  },
+  "Set Temporary": {
+    "prefix": "settemp",
+    "body": [
+      "<<set _${1:variable} = ${2:value}>>"
+    ],
+    "description": "Set a temporary variable"
+  },
+  "If Macro": {
+    "prefix": "if",
+    "body": [
+      "<<if \\$${1:variable}>>",
+      "  ${2:content}",
+      "<<endif>>"
+    ],
+    "description": "If conditional block"
+  },
+  "If Else Macro": {
+    "prefix": "ifelse",
+    "body": [
+      "<<if \\$${1:variable}>>",
+      "  ${2:true_content}",
+      "<<else>>",
+      "  ${3:false_content}",
+      "<<endif>>"
+    ],
+    "description": "If-else conditional block"
+  },
+  "Elseif": {
+    "prefix": "elseif",
+    "body": [
+      "<<elseif \\$${1:condition}>>",
+      "  ${2:content}"
+    ],
+    "description": "Elseif clause"
+  },
+  "For Loop": {
+    "prefix": "for",
+    "body": [
+      "<<for _${1:i} = ${2:0}; _${1:i} < ${3:10}; _${1:i}++>>",
+      "  ${4:content}",
+      "<<endfor>>"
+    ],
+    "description": "For loop"
+  },
+  "Print Variable": {
+    "prefix": "print",
+    "body": [
+      "<<print \\$${1:variable}>>"
+    ],
+    "description": "Print a variable"
+  },
+  "Include Passage": {
+    "prefix": "include",
+    "body": [
+      "<<include \"${1:PassageName}\">>"
+    ],
+    "description": "Include another passage"
+  },
+  "Display Passage": {
+    "prefix": "display",
+    "body": [
+      "<<display \"${1:PassageName}\">>"
+    ],
+    "description": "Display another passage"
+  },
+  "Goto": {
+    "prefix": "goto",
+    "body": [
+      "<<goto \"${1:PassageName}\">>"
+    ],
+    "description": "Go to another passage"
+  },
+  "Story Variable": {
+    "prefix": "var",
+    "body": [
+      "\\$${1:variable}"
+    ],
+    "description": "Reference a story variable"
+  },
+  "Temp Variable": {
+    "prefix": "temp",
+    "body": [
+      "_${1:variable}"
+    ],
+    "description": "Reference a temporary variable"
+  },
+  "Comment": {
+    "prefix": "comment",
+    "body": [
+      "/%",
+      "  ${1:comment}",
+      "%/"
+    ],
+    "description": "Block comment"
+  },
+  "HTML Comment": {
+    "prefix": "htmlcomment",
+    "body": [
+      "<!-- ${1:comment} -->"
+    ],
+    "description": "HTML comment"
+  },
+  "StoryTitle": {
+    "prefix": "storytitle",
+    "body": [
+      ":: StoryTitle",
+      "${1:My Story}"
+    ],
+    "description": "Story title passage"
+  },
+  "StoryData": {
+    "prefix": "storydata",
+    "body": [
+      ":: StoryData",
+      "{",
+      "  \"ifid\": \"${1:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}\",",
+      "  \"format\": \"${2:Whisker}\",",
+      "  \"format-version\": \"${3:1.0.0}\"",
+      "}"
+    ],
+    "description": "Story data passage"
+  },
+  "StoryInit": {
+    "prefix": "storyinit",
+    "body": [
+      ":: StoryInit",
+      "<<set \\$${1:variable} = ${2:value}>>"
+    ],
+    "description": "Story initialization passage"
+  },
+  "Story Template": {
+    "prefix": "story",
+    "body": [
+      ":: StoryTitle",
+      "${1:My Story}",
+      "",
+      ":: StoryData",
+      "{",
+      "  \"ifid\": \"${2:xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx}\",",
+      "  \"format\": \"Whisker\",",
+      "  \"format-version\": \"1.0.0\"",
+      "}",
+      "",
+      ":: Start [start]",
+      "${3:Welcome to the story!}",
+      "",
+      "[[${4:Begin}|${5:Chapter1}]]",
+      "",
+      ":: ${5:Chapter1}",
+      "${6:Chapter content here}",
+      "",
+      "[[${7:Continue}|${8:Ending}]]",
+      "",
+      ":: ${8:Ending}",
+      "The End."
+    ],
+    "description": "Complete story template"
+  }
+}
