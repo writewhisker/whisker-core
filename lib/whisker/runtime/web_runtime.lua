@@ -4,10 +4,53 @@
 local WebRuntime = {}
 WebRuntime.__index = WebRuntime
 
--- Dependencies
-local Engine = require('whisker')
-local json = require('json') -- Assuming JSON library available
-local template_processor = require('whisker.utils.template_processor')
+--------------------------------------------------------------------------------
+-- Dependencies (lazily loaded)
+--------------------------------------------------------------------------------
+
+local _engine_class = nil
+local _json_codec = nil
+local _template_processor = nil
+
+local function get_engine_class()
+  if not _engine_class then
+    local ok, mod = pcall(require, 'whisker')
+    if ok then _engine_class = mod end
+  end
+  return _engine_class
+end
+
+local function get_json_codec()
+  if not _json_codec then
+    -- Try local json first, then whisker.utils.json
+    local ok, mod = pcall(require, 'json')
+    if ok then
+      _json_codec = mod
+    else
+      ok, mod = pcall(require, 'whisker.utils.json')
+      if ok then _json_codec = mod end
+    end
+  end
+  return _json_codec
+end
+
+local function get_template_processor()
+  if not _template_processor then
+    local ok, mod = pcall(require, 'whisker.utils.template_processor')
+    if ok then _template_processor = mod end
+  end
+  return _template_processor
+end
+
+--- Set dependencies via DI (optional)
+-- @param deps table {engine_class, json_codec, template_processor}
+function WebRuntime.set_dependencies(deps)
+  if deps.engine_class then _engine_class = deps.engine_class end
+  if deps.json_codec then _json_codec = deps.json_codec end
+  if deps.template_processor then _template_processor = deps.template_processor end
+end
+
+--------------------------------------------------------------------------------
 
 -- Constructor
 function WebRuntime.new(container_id, config)
@@ -35,6 +78,12 @@ end
 
 -- Initialization
 function WebRuntime:initialize()
+    local Engine = get_engine_class()
+    if not Engine then
+        self:show_error("Engine not available")
+        return false
+    end
+
     -- Initialize engine
     self.engine = Engine.new()
     local success, err = self.engine:initialize({
@@ -430,11 +479,15 @@ function WebRuntime:render_choices(choices)
 end
 
 function WebRuntime:process_content(content)
+    local template_processor = get_template_processor()
+
     -- Get all variables from the engine
     local variables = self.engine:get_all_variables() or {}
 
     -- Process template with conditionals and variables
-    content = template_processor.process(content, variables)
+    if template_processor then
+        content = template_processor.process(content, variables)
+    end
 
     -- Process markdown-style formatting
     content = content:gsub("%*%*(.-)%*%*", "<strong>%1</strong>")
@@ -453,11 +506,15 @@ function WebRuntime:process_content(content)
 end
 
 function WebRuntime:process_inline(content)
+    local template_processor = get_template_processor()
+
     -- Same as process_content but without paragraph wrapping
     local variables = self.engine:get_all_variables() or {}
 
     -- Process template with conditionals and variables
-    content = template_processor.process(content, variables)
+    if template_processor then
+        content = template_processor.process(content, variables)
+    end
 
     -- Process markdown-style formatting
     content = content:gsub("%*%*(.-)%*%*", "<strong>%1</strong>")
@@ -631,6 +688,12 @@ function WebRuntime:render_load_slots()
 end
 
 function WebRuntime:save_game(slot)
+    local json = get_json_codec()
+    if not json then
+        self:show_error("JSON codec not available")
+        return
+    end
+
     local save_data = self.engine:save_game()
 
     if save_data then
@@ -651,6 +714,12 @@ function WebRuntime:save_game(slot)
 end
 
 function WebRuntime:load_game(slot)
+    local json = get_json_codec()
+    if not json then
+        self:show_error("JSON codec not available")
+        return
+    end
+
     local save_json = js.global.localStorage:getItem("whisker_save_" .. slot)
 
     if not save_json then
@@ -672,6 +741,11 @@ function WebRuntime:load_game(slot)
 end
 
 function WebRuntime:get_save_data(slot)
+    local json = get_json_codec()
+    if not json then
+        return nil
+    end
+
     local save_json = js.global.localStorage:getItem("whisker_save_" .. slot)
 
     if save_json then
@@ -687,9 +761,10 @@ function WebRuntime:start_auto_save()
         return
     end
 
+    local json = get_json_codec()
     self.auto_save_timer = js.global:setInterval(function()
         local save_data = self.engine:save_game()
-        if save_data then
+        if save_data and json then
             js.global.localStorage:setItem("whisker_autosave", json.encode(save_data))
         end
     end, self.auto_save_interval)
@@ -744,6 +819,9 @@ function WebRuntime:set_font_size(size)
 end
 
 function WebRuntime:save_settings()
+    local json = get_json_codec()
+    if not json then return end
+
     local settings = {
         theme = self.current_theme,
         font_size = self.ui_state.font_size,
@@ -755,6 +833,9 @@ function WebRuntime:save_settings()
 end
 
 function WebRuntime:load_settings()
+    local json = get_json_codec()
+    if not json then return end
+
     local settings_json = js.global.localStorage:getItem("whisker_settings")
 
     if settings_json then
