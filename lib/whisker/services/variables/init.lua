@@ -8,23 +8,72 @@ local VariableService = {}
 VariableService.__index = VariableService
 
 VariableService.name = "variable_service"
-VariableService.version = "2.1.0"
+VariableService.version = "2.2.0"
 
 -- Prefix for variable keys in state
 local VAR_PREFIX = "var:"
 
+-- Dependencies for DI pattern
+VariableService._dependencies = {"state", "event_bus", "condition_evaluator", "logger"}
+
+--- Create a new VariableService instance via DI container
+-- @param deps table Dependencies from container
+-- @return function Factory function that creates VariableService instances
+function VariableService.create(deps)
+  return function(config)
+    return VariableService.new(config, deps)
+  end
+end
+
 --- Create a new variable service instance
--- @param container Container The DI container
+-- @param config_or_container table|nil Configuration options or legacy container
+-- @param deps table|nil Dependencies from container
 -- @return VariableService
-function VariableService.new(container)
+function VariableService.new(config_or_container, deps)
   local self = {
-    _state = container and container:has("state") and container:resolve("state") or nil,
-    _events = container and container:has("events") and container:resolve("events") or nil,
-    _evaluator = container and container:has("condition_evaluator") and container:resolve("condition_evaluator") or nil,
+    _state = nil,
+    _events = nil,
+    _evaluator = nil,
+    _logger = nil,
     _local_vars = {},  -- Fallback when state service not available
+    _initialized = false
   }
 
+  -- Handle backward compatibility with container parameter
+  if config_or_container and type(config_or_container.has) == "function" then
+    -- Legacy container-based initialization
+    local container = config_or_container
+    self._state = container:has("state") and container:resolve("state") or nil
+    self._events = container:has("events") and container:resolve("events") or nil
+    self._evaluator = container:has("condition_evaluator") and container:resolve("condition_evaluator") or nil
+    self._logger = container:has("logger") and container:resolve("logger") or nil
+  elseif deps then
+    -- New DI pattern
+    self._state = deps.state
+    self._events = deps.event_bus
+    self._evaluator = deps.condition_evaluator
+    self._logger = deps.logger
+  end
+
+  self._initialized = true
+
+  if self._logger then
+    self._logger:debug("VariableService initialized")
+  end
+
   return setmetatable(self, { __index = VariableService })
+end
+
+--- Get the service name
+-- @return string The service name
+function VariableService:getName()
+  return "variables"
+end
+
+--- Check if the service is initialized
+-- @return boolean True if initialized
+function VariableService:isInitialized()
+  return self._initialized == true
 end
 
 --- Set a variable value
@@ -38,6 +87,10 @@ function VariableService:set(name, value)
     self._state:set(key, value)
   else
     self._local_vars[name] = value
+  end
+
+  if self._logger then
+    self._logger:debug("Variable set: " .. tostring(name))
   end
 
   if self._events then
@@ -87,11 +140,17 @@ function VariableService:delete(name)
     self._local_vars[name] = nil
   end
 
-  if existed and self._events then
-    self._events:emit("variable:deleted", {
-      name = name,
-      timestamp = os.time()
-    })
+  if existed then
+    if self._logger then
+      self._logger:debug("Variable deleted: " .. tostring(name))
+    end
+
+    if self._events then
+      self._events:emit("variable:deleted", {
+        name = name,
+        timestamp = os.time()
+      })
+    end
   end
 
   return existed
@@ -141,6 +200,10 @@ function VariableService:clear()
     self._local_vars = {}
   end
 
+  if self._logger then
+    self._logger:debug("Variables cleared")
+  end
+
   if self._events then
     self._events:emit("variables:cleared", {
       timestamp = os.time()
@@ -154,6 +217,10 @@ end
 function VariableService:evaluate(condition)
   if not self._evaluator then
     error("No condition evaluator available")
+  end
+
+  if self._logger then
+    self._logger:debug("Evaluating condition: " .. tostring(condition))
   end
 
   -- Build context from all variables
@@ -170,6 +237,11 @@ function VariableService:increment(name, amount)
   local current = self:get(name) or 0
   local new_value = current + amount
   self:set(name, new_value)
+
+  if self._logger then
+    self._logger:debug("Variable incremented: " .. tostring(name) .. " by " .. tostring(amount))
+  end
+
   return new_value
 end
 
@@ -189,15 +261,26 @@ function VariableService:toggle(name)
   local current = self:get(name)
   local new_value = not current
   self:set(name, new_value)
+
+  if self._logger then
+    self._logger:debug("Variable toggled: " .. tostring(name) .. " to " .. tostring(new_value))
+  end
+
   return new_value
 end
 
 --- Destroy the service and cleanup
 function VariableService:destroy()
+  if self._logger then
+    self._logger:debug("VariableService destroying")
+  end
+
   self._local_vars = {}
   self._state = nil
   self._events = nil
   self._evaluator = nil
+  self._logger = nil
+  self._initialized = false
 end
 
 return VariableService
