@@ -38,6 +38,7 @@ ignore = {
     "411",  -- Redefining variable
     "421",  -- Shadowing definition
     "431",  -- Shadowing upvalue
+    "432",  -- Shadowing upvalue argument
     "512",  -- Loop executed at most once
     "542",  -- Empty if branch
     "581",  -- Negation simplification
