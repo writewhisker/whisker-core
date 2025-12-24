@@ -3,11 +3,6 @@
 --
 -- lib/whisker/tools/whiskerc/init.lua
 
-local Lexer = require("whisker.script.lexer").Lexer
-local Parser = require("whisker.script.parser")
-local Compiler = require("whisker.script.compiler")
-local Errors = require("whisker.script.errors")
-
 --------------------------------------------------------------------------------
 -- CLI Module
 --------------------------------------------------------------------------------
@@ -17,6 +12,103 @@ local CLI = {}
 --- Version information
 CLI.VERSION = "1.0.0"
 CLI.NAME = "whiskerc"
+
+--------------------------------------------------------------------------------
+-- Dependencies (lazily loaded)
+--------------------------------------------------------------------------------
+
+local _lexer_module = nil
+local _parser_module = nil
+local _compiler_module = nil
+local _errors_module = nil
+
+--- Get lexer module (lazy load)
+local function get_lexer_module()
+  if not _lexer_module then
+    local ok, mod = pcall(require, "whisker.script.lexer")
+    if ok then _lexer_module = mod end
+  end
+  return _lexer_module
+end
+
+--- Get parser module (lazy load)
+local function get_parser_module()
+  if not _parser_module then
+    local ok, mod = pcall(require, "whisker.script.parser")
+    if ok then _parser_module = mod end
+  end
+  return _parser_module
+end
+
+--- Get compiler module (lazy load)
+local function get_compiler_module()
+  if not _compiler_module then
+    local ok, mod = pcall(require, "whisker.script.compiler")
+    if ok then _compiler_module = mod end
+  end
+  return _compiler_module
+end
+
+--- Get errors module (lazy load)
+local function get_errors_module()
+  if not _errors_module then
+    local ok, mod = pcall(require, "whisker.script.errors")
+    if ok then _errors_module = mod end
+  end
+  return _errors_module
+end
+
+--- Create a new CLI instance with optional container
+-- @param container table|nil DI container for resolving dependencies
+-- @return table CLI instance
+function CLI.new(container)
+  local instance = {
+    _container = container,
+    _lexer_module = nil,
+    _parser_module = nil,
+    _compiler_module = nil,
+    _errors_module = nil,
+  }
+  setmetatable(instance, { __index = CLI })
+
+  -- If container provided, try to resolve dependencies
+  if container then
+    if container:has("lexer") then
+      instance._lexer_module = container:resolve("lexer")
+    end
+    if container:has("parser") then
+      instance._parser_module = container:resolve("parser")
+    end
+    if container:has("compiler") then
+      instance._compiler_module = container:resolve("compiler")
+    end
+    if container:has("script_errors") then
+      instance._errors_module = container:resolve("script_errors")
+    end
+  end
+
+  return instance
+end
+
+--- Get or lazy load lexer module
+function CLI:get_lexer_module()
+  return self._lexer_module or get_lexer_module()
+end
+
+--- Get or lazy load parser module
+function CLI:get_parser_module()
+  return self._parser_module or get_parser_module()
+end
+
+--- Get or lazy load compiler module
+function CLI:get_compiler_module()
+  return self._compiler_module or get_compiler_module()
+end
+
+--- Get or lazy load errors module
+function CLI:get_errors_module()
+  return self._errors_module or get_errors_module()
+end
 
 --------------------------------------------------------------------------------
 -- File I/O
@@ -67,12 +159,24 @@ end
 -- Compilation
 --------------------------------------------------------------------------------
 
---- Compile a single file
+--- Compile a single file (static method for backward compatibility)
 ---@param input_path string Input file path
 ---@param output_path string|nil Output file path (nil = stdout)
 ---@param options table Options {verbose, quiet, force, optimize}
 ---@return boolean success
 function CLI.compile_file(input_path, output_path, options)
+  -- Use static lazy loading for backward compatibility
+  local LexerModule = get_lexer_module()
+  local Parser = get_parser_module()
+  local Compiler = get_compiler_module()
+  local Errors = get_errors_module()
+
+  if not LexerModule or not Parser or not Compiler or not Errors then
+    print("Error: Script modules not available")
+    return false
+  end
+
+  local Lexer = LexerModule.Lexer
   options = options or {}
 
   -- Read source
@@ -260,11 +364,22 @@ end
 -- Check Mode
 --------------------------------------------------------------------------------
 
---- Check syntax without generating output
+--- Check syntax without generating output (static method for backward compatibility)
 ---@param input_path string Input file path
 ---@param options table Options
 ---@return boolean valid
 function CLI.check(input_path, options)
+  -- Use static lazy loading for backward compatibility
+  local LexerModule = get_lexer_module()
+  local Parser = get_parser_module()
+  local Errors = get_errors_module()
+
+  if not LexerModule or not Parser or not Errors then
+    print("Error: Script modules not available")
+    return false
+  end
+
+  local Lexer = LexerModule.Lexer
   options = options or {}
 
   local source, err = read_file(input_path)
