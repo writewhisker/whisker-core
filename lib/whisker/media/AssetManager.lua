@@ -3,30 +3,123 @@
 
 local Types = require("whisker.media.types")
 local Schemas = require("whisker.media.schemas")
-local AssetCache = require("whisker.media.AssetCache")
-local AssetLoader = require("whisker.media.AssetLoader")
 
 local AssetManager = {
-  _VERSION = "1.0.0",
-
-  _registry = {},
-  _states = {},
-  _cache = nil,
-  _loader = nil,
-  _initialized = false
+  _VERSION = "1.0.0"
 }
+AssetManager.__index = AssetManager
 
+-- Dependencies for DI pattern
+AssetManager._dependencies = {"asset_cache", "asset_loader", "event_bus"}
+
+-- Cached factories for backward compatibility (lazy loaded)
+local _asset_cache_cache = nil
+local _asset_loader_cache = nil
+
+--- Get the asset cache (supports both DI and backward compatibility)
+-- @param deps table|nil Dependencies from container
+-- @return table The asset cache
+local function get_asset_cache(deps)
+  if deps and deps.asset_cache then
+    return deps.asset_cache
+  end
+  -- Fallback: lazy load the default cache for backward compatibility
+  if not _asset_cache_cache then
+    local AssetCache = require("whisker.media.AssetCache")
+    _asset_cache_cache = AssetCache
+  end
+  return _asset_cache_cache
+end
+
+--- Get the asset loader (supports both DI and backward compatibility)
+-- @param deps table|nil Dependencies from container
+-- @return table The asset loader
+local function get_asset_loader(deps)
+  if deps and deps.asset_loader then
+    return deps.asset_loader
+  end
+  -- Fallback: lazy load the default loader for backward compatibility
+  if not _asset_loader_cache then
+    local AssetLoader = require("whisker.media.AssetLoader")
+    _asset_loader_cache = AssetLoader
+  end
+  return _asset_loader_cache
+end
+
+--- Create a new AssetManager instance via DI container
+-- @param deps table Dependencies from container (asset_cache, asset_loader, event_bus)
+-- @return function Factory function that creates AssetManager instances
+function AssetManager.create(deps)
+  -- Return a factory function that creates managers
+  return function(config)
+    return AssetManager.new(config, deps)
+  end
+end
+
+--- Create a new AssetManager instance
+-- @param config table|nil Configuration options
+-- @param deps table|nil Dependencies from container
+-- @return AssetManager The new manager instance
+function AssetManager.new(config, deps)
+  local self = setmetatable({}, AssetManager)
+
+  config = config or {}
+  deps = deps or {}
+
+  -- Store dependencies
+  self._event_bus = deps.event_bus
+
+  -- Get cache and loader (use injected or create new)
+  local CacheClass = get_asset_cache(deps)
+  local LoaderClass = get_asset_loader(deps)
+
+  -- If deps provided cache/loader instances directly, use them
+  -- Otherwise, create new instances from the classes
+  if deps.asset_cache and type(deps.asset_cache) ~= "table" then
+    self._cache = deps.asset_cache
+  elseif deps.asset_cache and deps.asset_cache.get then
+    -- It's an instance
+    self._cache = deps.asset_cache
+  else
+    -- Create new instance
+    self._cache = CacheClass.new({
+      bytesLimit = config.memoryBudget or (100 * 1024 * 1024)
+    })
+  end
+
+  if deps.asset_loader and deps.asset_loader.load then
+    -- It's an instance
+    self._loader = deps.asset_loader
+  else
+    -- Create new instance
+    self._loader = LoaderClass.new({
+      basePath = config.basePath or ""
+    })
+  end
+
+  self._registry = {}
+  self._states = {}
+  self._initialized = true
+
+  return self
+end
+
+-- Legacy singleton-style initialize (for backward compatibility)
 function AssetManager:initialize(config)
   config = config or {}
 
   self._registry = {}
   self._states = {}
 
-  self._cache = AssetCache.new({
+  -- Use helper functions for lazy loading
+  local CacheClass = get_asset_cache()
+  local LoaderClass = get_asset_loader()
+
+  self._cache = CacheClass.new({
     bytesLimit = config.memoryBudget or (100 * 1024 * 1024)
   })
 
-  self._loader = AssetLoader.new({
+  self._loader = LoaderClass.new({
     basePath = config.basePath or ""
   })
 
@@ -64,6 +157,14 @@ function AssetManager:register(config)
   self._registry[assetId] = config
   self._states[assetId] = Types.AssetState.UNLOADED
 
+  -- Emit event
+  if self._event_bus then
+    self._event_bus:emit("asset:registered", {
+      assetId = assetId,
+      assetType = config.type
+    })
+  end
+
   return true, nil
 end
 
@@ -77,6 +178,13 @@ function AssetManager:unregister(assetId)
 
   self._registry[assetId] = nil
   self._states[assetId] = nil
+
+  -- Emit event
+  if self._event_bus then
+    self._event_bus:emit("asset:unregistered", {
+      assetId = assetId
+    })
+  end
 
   return true
 end
@@ -111,13 +219,39 @@ function AssetManager:load(assetId, callback)
   -- Mark as loading
   self._states[assetId] = Types.AssetState.LOADING
 
+  -- Emit loading event
+  if self._event_bus then
+    self._event_bus:emit("asset:loading", {
+      assetId = assetId,
+      assetType = config.type
+    })
+  end
+
   -- Load the asset
+  local event_bus = self._event_bus
   self._loader:load(config, function(asset, error)
     if asset then
       self._cache:set(assetId, asset, asset.sizeBytes or 0)
       self._states[assetId] = Types.AssetState.LOADED
+
+      -- Emit loaded event
+      if event_bus then
+        event_bus:emit("asset:loaded", {
+          assetId = assetId,
+          assetType = config.type,
+          sizeBytes = asset.sizeBytes
+        })
+      end
     else
       self._states[assetId] = Types.AssetState.FAILED
+
+      -- Emit failed event
+      if event_bus then
+        event_bus:emit("asset:failed", {
+          assetId = assetId,
+          error = error
+        })
+      end
     end
 
     if callback then
@@ -214,6 +348,16 @@ function AssetManager:getAllAssets()
     table.insert(assets, assetId)
   end
   return assets
+end
+
+-- Alias for interface compatibility
+AssetManager.getAllIds = AssetManager.getAllAssets
+
+--- Check if an asset is registered
+-- @param id string Asset identifier
+-- @return boolean True if registered
+function AssetManager:isRegistered(id)
+  return self._registry[id] ~= nil
 end
 
 function AssetManager:pin(assetId)
