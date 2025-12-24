@@ -6,9 +6,6 @@
 -- @license MIT
 
 local IFormat = require("whisker.interfaces.format")
-local Story = require("whisker.core.story")
-local Passage = require("whisker.core.passage")
-local Choice = require("whisker.core.choice")
 
 local TwineFormat = {}
 setmetatable(TwineFormat, { __index = IFormat })
@@ -25,12 +22,33 @@ function TwineFormat.new(container)
     _events = container and container:has("events") and container:resolve("events") or nil,
     _parser = nil,
     _exporter = nil,
+    -- Factories from container (dependency injection)
+    _story_factory = container and container:has("story_factory") and container:resolve("story_factory") or nil,
+    _passage_factory = container and container:has("passage_factory") and container:resolve("passage_factory") or nil,
+    _choice_factory = container and container:has("choice_factory") and container:resolve("choice_factory") or nil,
   }
 
   local instance = setmetatable(self, { __index = TwineFormat })
   instance:_init_parser()
+  instance:_init_factories()
 
   return instance
+end
+
+--- Initialize factories (lazy load if not injected)
+function TwineFormat:_init_factories()
+  if not self._story_factory then
+    local StoryFactory = require("whisker.core.factories.story_factory")
+    self._story_factory = StoryFactory.new()
+  end
+  if not self._passage_factory then
+    local PassageFactory = require("whisker.core.factories.passage_factory")
+    self._passage_factory = PassageFactory.new()
+  end
+  if not self._choice_factory then
+    local ChoiceFactory = require("whisker.core.factories.choice_factory")
+    self._choice_factory = ChoiceFactory.new()
+  end
 end
 
 --- Initialize the Twine parser and exporter
@@ -94,7 +112,7 @@ function TwineFormat:import(source)
 
   -- Convert parsed result to Story if needed
   local story
-  if getmetatable(result) == Story or (result.passages and result.metadata) then
+  if result.passages and result.metadata then
     -- Already a Story-like object, convert to proper Story
     story = self:_convert_to_story(result)
   else
@@ -117,7 +135,7 @@ end
 -- @param parsed table The parsed result from the Twine parser
 -- @return Story The converted story
 function TwineFormat:_convert_to_story(parsed)
-  local story = Story.create({
+  local story = self._story_factory:create({
     title = parsed.metadata and parsed.metadata.name or parsed.name or "Untitled",
     author = parsed.metadata and parsed.metadata.creator,
     ifid = parsed.metadata and parsed.metadata.ifid,
@@ -167,7 +185,7 @@ end
 function TwineFormat:_convert_passage(data, default_id)
   local id = data.id or data.name or tostring(default_id)
 
-  local passage = Passage.create({
+  local passage = self._passage_factory:create({
     id = id,
     name = data.name or id,
     content = data.content or data.text or "",
@@ -179,7 +197,7 @@ function TwineFormat:_convert_passage(data, default_id)
   -- Convert links to choices if present
   if data.links then
     for _, link in ipairs(data.links) do
-      local choice = Choice.create({
+      local choice = self._choice_factory:create({
         text = link.text or link.label or link.target,
         target = link.target or link.passage,
         condition = link.condition,
@@ -191,7 +209,7 @@ function TwineFormat:_convert_passage(data, default_id)
   -- Also check for choices field
   if data.choices then
     for _, choice_data in ipairs(data.choices) do
-      local choice = Choice.create({
+      local choice = self._choice_factory:create({
         id = choice_data.id,
         text = choice_data.text,
         target = choice_data.target or choice_data.target_passage,

@@ -5,9 +5,6 @@
 -- @license MIT
 
 local IFormat = require("whisker.interfaces.format")
-local Story = require("whisker.core.story")
-local Passage = require("whisker.core.passage")
-local Choice = require("whisker.core.choice")
 
 local JsonFormat = {}
 setmetatable(JsonFormat, { __index = IFormat })
@@ -23,12 +20,33 @@ function JsonFormat.new(container)
   local self = {
     _events = container and container:has("events") and container:resolve("events") or nil,
     _json = nil,  -- Will be set in _init_json
+    -- Factories from container (dependency injection)
+    _story_factory = container and container:has("story_factory") and container:resolve("story_factory") or nil,
+    _passage_factory = container and container:has("passage_factory") and container:resolve("passage_factory") or nil,
+    _choice_factory = container and container:has("choice_factory") and container:resolve("choice_factory") or nil,
   }
 
   local instance = setmetatable(self, { __index = JsonFormat })
   instance:_init_json()
+  instance:_init_factories()
 
   return instance
+end
+
+--- Initialize factories (lazy load if not injected)
+function JsonFormat:_init_factories()
+  if not self._story_factory then
+    local StoryFactory = require("whisker.core.factories.story_factory")
+    self._story_factory = StoryFactory.new()
+  end
+  if not self._passage_factory then
+    local PassageFactory = require("whisker.core.factories.passage_factory")
+    self._passage_factory = PassageFactory.new()
+  end
+  if not self._choice_factory then
+    local ChoiceFactory = require("whisker.core.factories.choice_factory")
+    self._choice_factory = ChoiceFactory.new()
+  end
 end
 
 --- Initialize JSON library (try cjson, dkjson, or fallback)
@@ -103,8 +121,8 @@ function JsonFormat:import(source)
     data = source
   end
 
-  -- Create story
-  local story = Story.create({
+  -- Create story using factory
+  local story = self._story_factory:create({
     title = data.name or (data.metadata and data.metadata.name) or "Untitled",
     author = data.author or (data.metadata and data.metadata.author),
     version = data.version or (data.metadata and data.metadata.version),
@@ -179,7 +197,7 @@ end
 -- @param data table Passage data
 -- @return Passage The imported passage
 function JsonFormat:_import_passage(data)
-  local passage = Passage.create({
+  local passage = self._passage_factory:create({
     id = data.id,
     name = data.name or data.id,
     content = data.content or data.text or "",
@@ -191,10 +209,10 @@ function JsonFormat:_import_passage(data)
     on_exit_script = data.on_exit_script,
   })
 
-  -- Import choices
+  -- Import choices using factory
   if data.choices then
     for _, choice_data in ipairs(data.choices) do
-      local choice = Choice.create({
+      local choice = self._choice_factory:create({
         id = choice_data.id,
         text = choice_data.text,
         target = choice_data.target or choice_data.target_passage,
