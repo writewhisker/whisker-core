@@ -76,6 +76,44 @@ jobs:
     - name: Run luacheck
       run: luacheck lib/ bin/ --config .luacheckrc
 
+  modularity:
+    name: Modularity Validation
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+
+    - name: Setup Lua
+      uses: leafo/gh-actions-lua@v12
+      with:
+        luaVersion: '5.4'
+
+    - name: Check for bypass
+      id: bypass
+      run: |
+        # Check commit message for bypass pattern
+        if git log -1 --pretty=%B | grep -q '\[skip-modularity\]'; then
+          echo "skip=true" >> $GITHUB_OUTPUT
+          echo "Modularity check bypassed via commit message"
+        else
+          echo "skip=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Run modularity validation
+      if: steps.bypass.outputs.skip != 'true'
+      run: |
+        lua tools/validate_modularity.lua --errors-only --format=ci lib/
+        exit_code=$?
+        if [ $exit_code -eq 1 ]; then
+          echo ""
+          echo "::error::Modularity violations detected. Fix the issues above or use [skip-modularity] in commit message to bypass."
+          exit 1
+        elif [ $exit_code -eq 2 ]; then
+          echo "::error::Modularity validator encountered an error"
+          exit 1
+        fi
+
   validate:
     name: Validate story examples
     runs-on: ubuntu-latest
