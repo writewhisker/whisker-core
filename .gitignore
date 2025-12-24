@@ -72,3 +72,8 @@ yarn-error.log*
 
 # Busted test framework
 /.busted_*
+
+# TypeScript web player (extracted to whisker-web-player)
+/src/
+/.vite/
+/.whisker/
