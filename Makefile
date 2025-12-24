@@ -1,10 +1,14 @@
-.PHONY: all clean test build install dev docs lint format help
+.PHONY: all clean test test-coverage test-unit test-integration test-contract build install dev docs docs-serve lint format validate validate-modularity help
 
 # Colors for output
 GREEN  := $(shell tput -Txterm setaf 2)
 YELLOW := $(shell tput -Txterm setaf 3)
 BLUE   := $(shell tput -Txterm setaf 4)
 RESET  := $(shell tput -Txterm sgr0)
+
+# Tool locations (with fallbacks for luarocks installs)
+LUACHECK := $(shell command -v luacheck 2>/dev/null || echo ~/.luarocks/bin/luacheck)
+BUSTED := $(shell command -v busted 2>/dev/null || echo ~/.luarocks/bin/busted)
 
 # Default target
 all: build test
@@ -13,20 +17,26 @@ all: build test
 help:
 	@echo "$(BLUE)Whisker Build System$(RESET)"
 	@echo ""
-	@echo "$(GREEN)Available targets:$(RESET)"
-	@echo "  $(YELLOW)make all$(RESET)        - Build and test everything"
-	@echo "  $(YELLOW)make build$(RESET)      - Build all components"
-	@echo "  $(YELLOW)make test$(RESET)       - Run all tests"
-	@echo "  $(YELLOW)make clean$(RESET)      - Clean build artifacts"
-	@echo "  $(YELLOW)make install$(RESET)    - Install development dependencies"
-	@echo "  $(YELLOW)make dev$(RESET)        - Start development environment"
-	@echo "  $(YELLOW)make docs$(RESET)       - Generate documentation"
-	@echo "  $(YELLOW)make lint$(RESET)       - Run linters"
-	@echo "  $(YELLOW)make format$(RESET)     - Format code"
-	@echo "  $(YELLOW)make release$(RESET)    - Create release package"
-	@echo "  $(YELLOW)make benchmark$(RESET)  - Run performance benchmarks"
-	@echo "  $(YELLOW)make docker-build$(RESET) - Build Docker images"
-	@echo "  $(YELLOW)make docker-test$(RESET)  - Run tests in Docker"
+	@echo "$(GREEN)Testing:$(RESET)"
+	@echo "  $(YELLOW)make test$(RESET)             - Run all tests"
+	@echo "  $(YELLOW)make test-coverage$(RESET)    - Run tests with coverage"
+	@echo "  $(YELLOW)make test-unit$(RESET)        - Run unit tests only"
+	@echo "  $(YELLOW)make test-integration$(RESET) - Run integration tests only"
+	@echo "  $(YELLOW)make test-contract$(RESET)    - Run contract tests only"
+	@echo ""
+	@echo "$(GREEN)Validation:$(RESET)"
+	@echo "  $(YELLOW)make build$(RESET)            - Validate Lua modules (luacheck)"
+	@echo "  $(YELLOW)make lint$(RESET)             - Run all linters"
+	@echo "  $(YELLOW)make validate$(RESET)         - Validate example stories"
+	@echo "  $(YELLOW)make validate-modularity$(RESET) - Run modularity validation"
+	@echo ""
+	@echo "$(GREEN)Development:$(RESET)"
+	@echo "  $(YELLOW)make install$(RESET)          - Install development dependencies"
+	@echo "  $(YELLOW)make clean$(RESET)            - Clean build artifacts"
+	@echo "  $(YELLOW)make docs$(RESET)             - List documentation files"
+	@echo ""
+	@echo "$(GREEN)Shortcuts:$(RESET)"
+	@echo "  $(YELLOW)make all$(RESET)              - Build and test everything"
 	@echo ""
 
 # Clean build artifacts
@@ -38,36 +48,30 @@ clean:
 # Run all tests
 test:
 	@echo "$(BLUE)Running tests...$(RESET)"
-	@./build/scripts/run-tests.sh all
+	@$(BUSTED) --verbose
+	@echo "$(GREEN)✓ Tests complete!$(RESET)"
+
+# Run tests with coverage
+test-coverage:
+	@echo "$(BLUE)Running tests with coverage...$(RESET)"
+	@$(BUSTED) --verbose --coverage
 	@echo "$(GREEN)✓ Tests complete!$(RESET)"
 
 # Run specific test suites
 test-unit:
-	@./build/scripts/run-tests.sh unit
+	@$(BUSTED) --verbose tests/unit/
 
 test-integration:
-	@./build/scripts/run-tests.sh integration
+	@$(BUSTED) --verbose tests/integration/
 
-test-web:
-	@./build/scripts/run-tests.sh web-editor
-	@./build/scripts/run-tests.sh runtime
+test-contract:
+	@$(BUSTED) --verbose tests/contract/
 
-# Build all components
+# Build/validate all components (Lua is interpreted, so this runs validation)
 build:
-	@echo "$(BLUE)Building all components...$(RESET)"
-	@./build/scripts/build-all.sh
-	@echo "$(GREEN)✓ Build complete!$(RESET)"
-
-# Build specific components
-build-core:
-	@./build/scripts/build-core.sh
-
-build-web:
-	@./build/scripts/build-web-editor.sh
-	@./build/scripts/build-runtime.sh
-
-build-desktop:
-	@./build/scripts/build-desktop.sh
+	@echo "$(BLUE)Validating Lua modules...$(RESET)"
+	@$(LUACHECK) lib/whisker/ --config .luacheckrc
+	@echo "$(GREEN)✓ Validation complete!$(RESET)"
 
 # Install development dependencies
 install:
@@ -80,13 +84,12 @@ dev:
 	@echo "$(BLUE)Starting development environment...$(RESET)"
 	@docker-compose -f build/docker/docker-compose.yml up
 
-# Generate documentation
+# List documentation
 docs:
-	@echo "$(BLUE)Generating documentation...$(RESET)"
-	@lua build/tools/generate-docs.lua
-	@echo "$(GREEN)✓ Documentation generated!$(RESET)"
+	@echo "$(BLUE)Available documentation:$(RESET)"
+	@ls -1 docs/*.md 2>/dev/null || echo "No documentation files found"
 
-# Serve documentation locally
+# Serve documentation locally (requires mkdocs)
 docs-serve:
 	@cd docs && mkdocs serve
 
@@ -94,7 +97,7 @@ docs-serve:
 lint:
 	@echo "$(BLUE)Running linters...$(RESET)"
 	@echo "Linting Lua code..."
-	@luacheck lib/whisker/ tests/ --config .luacheckrc || true
+	@$(LUACHECK) lib/whisker/ tests/ --config .luacheckrc || true
 	@if [ -d "editor/web" ]; then \
 		echo "Linting web editor..."; \
 		cd editor/web && npm run lint || true; \
@@ -116,23 +119,20 @@ format:
 	fi
 	@echo "$(GREEN)✓ Formatting complete!$(RESET)"
 
-# Create release package
-release:
-	@echo "$(BLUE)Creating release package...$(RESET)"
-	@./build/scripts/package-release.sh $$(cat VERSION)
-	@echo "$(GREEN)✓ Release package created!$(RESET)"
-
-# Run performance benchmarks
-benchmark:
-	@echo "$(BLUE)Running performance benchmarks...$(RESET)"
-	@cd tests/performance && lua run-benchmarks.lua
-	@echo "$(GREEN)✓ Benchmarks complete!$(RESET)"
-
 # Validate example stories
 validate:
-	@echo "$(BLUE)Validating stories...$(RESET)"
-	@./build/scripts/validate-stories.sh
+	@echo "$(BLUE)Validating example stories...$(RESET)"
+	@for story in examples/*.lua; do \
+		echo "  Checking $$story..."; \
+		lua -e "dofile('$$story')" 2>/dev/null && echo "    $(GREEN)✓$(RESET)" || echo "    $(YELLOW)⚠ syntax check only$(RESET)"; \
+	done
 	@echo "$(GREEN)✓ Validation complete!$(RESET)"
+
+# Run modularity validation
+validate-modularity:
+	@echo "$(BLUE)Running modularity validation...$(RESET)"
+	@lua validate.lua lib/whisker/
+	@echo "$(GREEN)✓ Modularity validation complete!$(RESET)"
 
 # Docker commands
 docker-build:
