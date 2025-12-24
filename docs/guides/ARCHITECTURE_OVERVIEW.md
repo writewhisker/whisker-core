@@ -296,5 +296,6 @@ lib/whisker/
 ## Further Reading
 
 - [Getting Started Guide](GETTING_STARTED.md)
+- [Modularity Guide](../MODULARITY_GUIDE.md) - DI patterns and tools
 - [API Reference](../api/index.html)
 - [Testing Guide](../testing/TESTING_GUIDE.md)

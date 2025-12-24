@@ -1,4 +1,5 @@
 -- Luacheck configuration for Whisker
+-- See docs/MODULARITY_GUIDE.md for modularity patterns
 std = "lua54"
 
 -- Ignore warnings about line length
@@ -56,5 +57,51 @@ exclude_files = {
     "vendor/",
     ".luarocks/",
     "**/vendor/**",  -- Vendor code anywhere in tree
-    "lib/whisker/vendor/**",  -- Specifically the tinta vendor
+    "lib/whisker/vendor/tinta/**",  -- Tinta vendor source
+}
+
+-- =============================================================================
+-- Modularity Configuration
+-- =============================================================================
+-- These settings help enforce the DI (Dependency Injection) pattern.
+-- See tools/validate_modularity.lua for full modularity validation.
+
+-- File-specific overrides for modularity
+files = {
+    -- Kernel files can access more globals during bootstrap
+    ["lib/whisker/kernel/*.lua"] = {
+        ignore = { "111", "112", "113" },
+    },
+
+    -- Test files have relaxed rules
+    ["tests/**/*.lua"] = {
+        std = "+busted",
+        globals = {
+            "describe",
+            "it",
+            "before_each",
+            "after_each",
+            "setup",
+            "teardown",
+            "pending",
+            "spy",
+            "stub",
+            "mock",
+            "match",
+            "assert",
+            "finally",
+            "lazy_setup",
+            "lazy_teardown",
+        },
+    },
+
+    -- Tools have relaxed rules
+    ["tools/*.lua"] = {
+        ignore = { "113" },  -- Tools may use os, io, arg globals
+    },
+
+    -- Bin scripts can use globals
+    ["bin/*.lua"] = {
+        ignore = { "111", "112", "113" },
+    },
 }
