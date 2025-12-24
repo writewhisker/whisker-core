@@ -3,7 +3,27 @@
 
 local story_to_whisker = {}
 
-local json = require("whisker.utils.json")
+--------------------------------------------------------------------------------
+-- Dependencies (lazily loaded)
+--------------------------------------------------------------------------------
+
+local _json_codec = nil
+
+local function get_json_codec()
+  if not _json_codec then
+    local ok, mod = pcall(require, "whisker.utils.json")
+    if ok then _json_codec = mod end
+  end
+  return _json_codec
+end
+
+--- Set dependencies via DI (optional)
+-- @param deps table {json_codec}
+function story_to_whisker.set_dependencies(deps)
+  if deps.json_codec then _json_codec = deps.json_codec end
+end
+
+--------------------------------------------------------------------------------
 
 -- Convert a Story object to Whisker JSON document structure
 function story_to_whisker.convert(story)
@@ -111,6 +131,11 @@ end
 
 -- Convert and serialize to JSON string
 function story_to_whisker.to_json(story)
+    local json = get_json_codec()
+    if not json then
+        return nil, "JSON codec not available"
+    end
+
     local document = story_to_whisker.convert(story)
     if not document then
         return nil, "Failed to convert story"

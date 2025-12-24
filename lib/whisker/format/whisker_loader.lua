@@ -5,6 +5,68 @@
 
 local whisker_loader = {}
 
+--------------------------------------------------------------------------------
+-- Dependencies (lazily loaded)
+--------------------------------------------------------------------------------
+
+local _story_class = nil
+local _passage_class = nil
+local _choice_class = nil
+local _json_codec = nil
+local _compact_converter = nil
+
+local function get_story_class()
+  if not _story_class then
+    local ok, mod = pcall(require, "whisker.core.story")
+    if ok then _story_class = mod end
+  end
+  return _story_class
+end
+
+local function get_passage_class()
+  if not _passage_class then
+    local ok, mod = pcall(require, "whisker.core.passage")
+    if ok then _passage_class = mod end
+  end
+  return _passage_class
+end
+
+local function get_choice_class()
+  if not _choice_class then
+    local ok, mod = pcall(require, "whisker.core.choice")
+    if ok then _choice_class = mod end
+  end
+  return _choice_class
+end
+
+local function get_json_codec()
+  if not _json_codec then
+    local ok, mod = pcall(require, "whisker.utils.json")
+    if ok then _json_codec = mod end
+  end
+  return _json_codec
+end
+
+local function get_compact_converter()
+  if not _compact_converter then
+    local ok, mod = pcall(require, "whisker.format.compact_converter")
+    if ok then _compact_converter = mod end
+  end
+  return _compact_converter
+end
+
+--- Set dependencies via DI (optional)
+-- @param deps table {story_class, passage_class, choice_class, json_codec, compact_converter}
+function whisker_loader.set_dependencies(deps)
+  if deps.story_class then _story_class = deps.story_class end
+  if deps.passage_class then _passage_class = deps.passage_class end
+  if deps.choice_class then _choice_class = deps.choice_class end
+  if deps.json_codec then _json_codec = deps.json_codec end
+  if deps.compact_converter then _compact_converter = deps.compact_converter end
+end
+
+--------------------------------------------------------------------------------
+
 -- Helper: Generate choice ID
 local function generate_choice_id()
     local template = "ch_xxxxxxxxxxxx"
@@ -62,17 +124,6 @@ function whisker_loader.migrate_v1_to_v2(data)
     return migrated
 end
 
--- Load Story, Passage, and Choice classes
-local Story = require("whisker.core.story")
-local Passage = require("whisker.core.passage")
-local Choice = require("whisker.core.choice")
-
--- Load JSON parser
-local json = require("whisker.utils.json")
-
--- Load compact format converter
-local CompactConverter = require("whisker.format.compact_converter")
-
 -- Load a .whisker file and convert to Story object
 function whisker_loader.load_from_file(filename)
     local file = io.open(filename, "r")
@@ -88,6 +139,13 @@ end
 
 -- Parse Whisker JSON string and convert to Story object
 function whisker_loader.load_from_string(json_text)
+    local json = get_json_codec()
+    local Story = get_story_class()
+
+    if not json or not Story then
+        return nil, "Required dependencies not available"
+    end
+
     -- Parse JSON
     local data, err = json.decode(json_text)
     if not data then
@@ -172,6 +230,13 @@ end
 
 -- Convert a Whisker passage to a Passage object
 function whisker_loader.convert_passage(passage_data)
+    local Passage = get_passage_class()
+    local Choice = get_choice_class()
+
+    if not Passage or not Choice then
+        return nil
+    end
+
     -- Support both formats: {id, text} and {name, content}
     -- Prefer id over name (id is the linking key, name is display name)
     local passage_id = passage_data.id or passage_data.name
@@ -229,6 +294,11 @@ end
 --   [[target]]
 --   {{#if condition}}[[text->target]]{{/if}}
 function whisker_loader.extract_choices(text)
+    local Choice = get_choice_class()
+    if not Choice then
+        return {}
+    end
+
     local choices = {}
     local seen_choices = {}  -- Track to avoid duplicates
 

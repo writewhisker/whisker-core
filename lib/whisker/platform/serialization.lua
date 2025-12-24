@@ -13,8 +13,27 @@
 
 local Serialization = {}
 
--- Use the existing JSON library
-local json = require("whisker.utils.json")
+--------------------------------------------------------------------------------
+-- Dependencies (lazily loaded)
+--------------------------------------------------------------------------------
+
+local _json_codec = nil
+
+local function get_json_codec()
+  if not _json_codec then
+    local ok, mod = pcall(require, "whisker.utils.json")
+    if ok then _json_codec = mod end
+  end
+  return _json_codec
+end
+
+--- Set dependencies via DI (optional)
+-- @param deps table {json_codec}
+function Serialization.set_dependencies(deps)
+  if deps.json_codec then _json_codec = deps.json_codec end
+end
+
+--------------------------------------------------------------------------------
 
 --- Serialize Lua table to JSON string
 --- Handles Lua-specific edge cases and ensures JSON compatibility.
@@ -23,6 +42,11 @@ local json = require("whisker.utils.json")
 --- @return string|nil JSON string on success, nil on error
 --- @return string|nil Error message if serialization failed
 function Serialization.serialize(data)
+  local json = get_json_codec()
+  if not json then
+    return nil, "JSON codec not available"
+  end
+
   if type(data) ~= "table" then
     return nil, "Data must be a table, got " .. type(data)
   end
@@ -48,6 +72,11 @@ end
 --- @return table|nil Parsed Lua table on success, nil on error
 --- @return string|nil Error message if deserialization failed
 function Serialization.deserialize(json_str)
+  local json = get_json_codec()
+  if not json then
+    return nil, "JSON codec not available"
+  end
+
   if type(json_str) ~= "string" then
     return nil, "Input must be a string, got " .. type(json_str)
   end
