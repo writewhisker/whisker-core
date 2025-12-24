@@ -8,19 +8,55 @@ local HistoryService = {}
 HistoryService.__index = HistoryService
 
 HistoryService.name = "history_service"
-HistoryService.version = "2.1.0"
+HistoryService.version = "2.2.0"
+
+-- Dependencies for DI pattern
+HistoryService._dependencies = {"event_bus", "state", "logger"}
+
+--- Create a new HistoryService instance via DI container
+-- @param deps table Dependencies from container (event_bus, state, logger)
+-- @return function Factory function that creates HistoryService instances
+function HistoryService.create(deps)
+  return function(config)
+    return HistoryService.new(config, deps)
+  end
+end
 
 --- Create a new history service instance
--- @param container Container The DI container
+-- @param config_or_container table|nil Configuration options or legacy container
+-- @param deps table|nil Dependencies from container
 -- @return HistoryService
-function HistoryService.new(container)
+function HistoryService.new(config_or_container, deps)
   local self = {
     _stack = {},
     _max_size = 100,
-    _events = container and container:has("events") and container:resolve("events") or nil,
-    _state = container and container:has("state") and container:resolve("state") or nil,
+    _events = nil,
+    _state = nil,
+    _logger = nil,
     _subscriptions = {},
+    _initialized = false
   }
+
+  -- Handle backward compatibility with container parameter
+  if config_or_container and type(config_or_container.has) == "function" then
+    -- Legacy container-based initialization
+    local container = config_or_container
+    self._events = container:has("events") and container:resolve("events") or nil
+    self._state = container:has("state") and container:resolve("state") or nil
+    self._logger = container:has("logger") and container:resolve("logger") or nil
+  elseif deps then
+    -- New DI pattern
+    self._events = deps.event_bus
+    self._state = deps.state
+    self._logger = deps.logger
+  end
+
+  -- Apply config
+  if type(config_or_container) == "table" and not config_or_container.has then
+    if config_or_container.max_size then
+      self._max_size = config_or_container.max_size
+    end
+  end
 
   local instance = setmetatable(self, { __index = HistoryService })
 
@@ -32,11 +68,33 @@ function HistoryService.new(container)
     table.insert(self._subscriptions, unsub)
   end
 
+  self._initialized = true
+
+  if self._logger then
+    self._logger:debug("HistoryService initialized")
+  end
+
   return instance
+end
+
+--- Get the service name
+-- @return string The service name
+function HistoryService:getName()
+  return "history"
+end
+
+--- Check if the service is initialized
+-- @return boolean True if initialized
+function HistoryService:isInitialized()
+  return self._initialized == true
 end
 
 --- Clean up event subscriptions
 function HistoryService:destroy()
+  if self._logger then
+    self._logger:debug("HistoryService destroying")
+  end
+
   for _, unsubscribe in ipairs(self._subscriptions) do
     if type(unsubscribe) == "function" then
       unsubscribe()
@@ -44,6 +102,10 @@ function HistoryService:destroy()
   end
   self._subscriptions = {}
   self._stack = {}
+  self._events = nil
+  self._state = nil
+  self._logger = nil
+  self._initialized = false
 end
 
 --- Push a passage ID to history
@@ -59,6 +121,10 @@ function HistoryService:push(passage_id)
     table.remove(self._stack, 1)
   end
 
+  if self._logger then
+    self._logger:debug("History push: " .. tostring(passage_id))
+  end
+
   if self._events then
     self._events:emit("history:updated", {
       passage_id = passage_id,
@@ -70,7 +136,13 @@ end
 --- Pop the most recent entry from history
 -- @return table|nil entry The popped entry, or nil if empty
 function HistoryService:pop()
-  return table.remove(self._stack)
+  local entry = table.remove(self._stack)
+
+  if entry and self._logger then
+    self._logger:debug("History pop: " .. tostring(entry.passage_id))
+  end
+
+  return entry
 end
 
 --- Peek at the most recent entry without removing it
@@ -96,6 +168,11 @@ function HistoryService:back(steps)
   end
 
   local entry = self._stack[#self._stack]
+
+  if self._logger then
+    self._logger:debug("History back " .. tostring(steps) .. " steps")
+  end
+
   return entry and entry.passage_id or nil
 end
 
@@ -124,6 +201,11 @@ end
 function HistoryService:go_back()
   if #self._stack > 1 then
     table.remove(self._stack)
+
+    if self._logger then
+      self._logger:debug("History go_back")
+    end
+
     return self._stack[#self._stack]
   end
   return nil
@@ -152,6 +234,10 @@ end
 function HistoryService:clear()
   self._stack = {}
 
+  if self._logger then
+    self._logger:debug("History cleared")
+  end
+
   if self._events then
     self._events:emit("history:cleared", {
       timestamp = os.time()
@@ -166,6 +252,10 @@ function HistoryService:set_max_size(size)
   -- Trim if necessary
   while #self._stack > self._max_size do
     table.remove(self._stack, 1)
+  end
+
+  if self._logger then
+    self._logger:debug("History max_size set to: " .. tostring(size))
   end
 end
 

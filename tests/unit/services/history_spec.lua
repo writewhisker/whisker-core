@@ -270,4 +270,170 @@ describe("HistoryService", function()
       assert.equals(0, history:depth())
     end)
   end)
+
+  describe("DI pattern", function()
+    it("declares dependencies", function()
+      assert.is_table(HistoryService._dependencies)
+      assert.same({"event_bus", "state", "logger"}, HistoryService._dependencies)
+    end)
+
+    it("provides create factory function", function()
+      assert.is_function(HistoryService.create)
+    end)
+
+    it("create returns a factory function", function()
+      local mock_event_bus = {
+        emit = function() end,
+        on = function() return function() end end
+      }
+      local mock_logger = { debug = function() end }
+
+      local factory = HistoryService.create({
+        event_bus = mock_event_bus,
+        logger = mock_logger
+      })
+
+      assert.is_function(factory)
+    end)
+
+    it("factory creates history instances with injected deps", function()
+      local mock_event_bus = {
+        emit = function() end,
+        on = function() return function() end end
+      }
+      local mock_logger = { debug = function() end }
+
+      local factory = HistoryService.create({
+        event_bus = mock_event_bus,
+        logger = mock_logger
+      })
+      local history = factory({})
+
+      assert.is_not_nil(history)
+      assert.equals(mock_event_bus, history._events)
+      assert.equals(mock_logger, history._logger)
+    end)
+
+    it("new accepts config and deps parameters", function()
+      local mock_event_bus = {
+        emit = function() end,
+        on = function() return function() end end
+      }
+      local mock_logger = { debug = function() end }
+
+      local history = HistoryService.new({}, {
+        event_bus = mock_event_bus,
+        logger = mock_logger
+      })
+
+      assert.equals(mock_event_bus, history._events)
+      assert.equals(mock_logger, history._logger)
+    end)
+
+    it("applies config from first parameter", function()
+      local history = HistoryService.new({ max_size = 50 }, {})
+
+      assert.equals(50, history._max_size)
+    end)
+
+    it("maintains backward compatibility with container", function()
+      local container = TestContainer.create()
+      local history = HistoryService.new(container)
+
+      assert.is_not_nil(history)
+      assert.is_not_nil(history._events)
+    end)
+
+    it("works without deps (backward compatibility)", function()
+      local history = HistoryService.new(nil)
+
+      assert.is_not_nil(history)
+      assert.is_nil(history._events)
+      assert.is_nil(history._logger)
+    end)
+  end)
+
+  describe("IService interface", function()
+    it("implements getName", function()
+      local history = HistoryService.new(nil)
+      assert.equals("history", history:getName())
+    end)
+
+    it("implements isInitialized", function()
+      local history = HistoryService.new(nil)
+      assert.is_true(history:isInitialized())
+    end)
+
+    it("isInitialized returns false after destroy", function()
+      local history = HistoryService.new(nil)
+      history:destroy()
+      assert.is_false(history:isInitialized())
+    end)
+  end)
+
+  describe("logger integration", function()
+    local history, log_calls
+
+    before_each(function()
+      log_calls = {}
+      local mock_logger = {
+        debug = function(self, msg)
+          table.insert(log_calls, msg)
+        end
+      }
+      local mock_event_bus = {
+        emit = function() end,
+        on = function() return function() end end
+      }
+
+      history = HistoryService.new({}, {
+        event_bus = mock_event_bus,
+        logger = mock_logger
+      })
+      log_calls = {}  -- Clear initialization log
+    end)
+
+    it("logs on push", function()
+      history:push("passage1")
+
+      assert.equals(1, #log_calls)
+      assert.is_truthy(log_calls[1]:match("push"))
+    end)
+
+    it("logs on pop", function()
+      history:push("passage1")
+      log_calls = {}
+
+      history:pop()
+
+      assert.equals(1, #log_calls)
+      assert.is_truthy(log_calls[1]:match("pop"))
+    end)
+
+    it("logs on back", function()
+      history:push("p1")
+      history:push("p2")
+      history:push("p3")
+      log_calls = {}
+
+      history:back()
+
+      assert.equals(1, #log_calls)
+      assert.is_truthy(log_calls[1]:match("back"))
+    end)
+
+    it("logs on clear", function()
+      history:clear()
+
+      assert.equals(1, #log_calls)
+      assert.is_truthy(log_calls[1]:match("cleared"))
+    end)
+
+    it("logs on destroy", function()
+      history:destroy()
+
+      assert.equals(1, #log_calls)
+      assert.is_truthy(log_calls[1]:match("destroying"))
+    end)
+  end)
 end)
