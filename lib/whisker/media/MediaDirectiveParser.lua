@@ -1,13 +1,78 @@
 -- Media Directive Parser
 -- Parses and executes WhiskerScript media directives (@@audio:, @@image:, @@preload:, @@video:)
 
-local AudioManager = require("whisker.media.AudioManager")
-local ImageManager = require("whisker.media.ImageManager")
-local PreloadManager = require("whisker.media.PreloadManager")
-
 local MediaDirectiveParser = {
   _VERSION = "1.0.0"
 }
+MediaDirectiveParser.__index = MediaDirectiveParser
+
+-- Dependencies for DI pattern
+MediaDirectiveParser._dependencies = {"audio_manager", "image_manager", "preload_manager"}
+
+-- Cached managers for backward compatibility (lazy loaded)
+local _audio_manager_cache = nil
+local _image_manager_cache = nil
+local _preload_manager_cache = nil
+
+--- Get the audio manager (supports both DI and backward compatibility)
+local function get_audio_manager(deps)
+  if deps and deps.audio_manager then
+    return deps.audio_manager
+  end
+  if not _audio_manager_cache then
+    _audio_manager_cache = require("whisker.media.AudioManager")
+  end
+  return _audio_manager_cache
+end
+
+--- Get the image manager (supports both DI and backward compatibility)
+local function get_image_manager(deps)
+  if deps and deps.image_manager then
+    return deps.image_manager
+  end
+  if not _image_manager_cache then
+    _image_manager_cache = require("whisker.media.ImageManager")
+  end
+  return _image_manager_cache
+end
+
+--- Get the preload manager (supports both DI and backward compatibility)
+local function get_preload_manager(deps)
+  if deps and deps.preload_manager then
+    return deps.preload_manager
+  end
+  if not _preload_manager_cache then
+    _preload_manager_cache = require("whisker.media.PreloadManager")
+  end
+  return _preload_manager_cache
+end
+
+--- Create a new MediaDirectiveParser instance via DI container
+-- @param deps table Dependencies from container (audio_manager, image_manager, preload_manager)
+-- @return function Factory function that creates MediaDirectiveParser instances
+function MediaDirectiveParser.create(deps)
+  return function(config)
+    return MediaDirectiveParser.new(config, deps)
+  end
+end
+
+--- Create a new MediaDirectiveParser instance
+-- @param config table|nil Configuration options
+-- @param deps table|nil Dependencies from container
+-- @return MediaDirectiveParser The new parser instance
+function MediaDirectiveParser.new(config, deps)
+  local self = setmetatable({}, MediaDirectiveParser)
+
+  config = config or {}
+  deps = deps or {}
+
+  -- Store dependencies
+  self._audio_manager = get_audio_manager(deps)
+  self._image_manager = get_image_manager(deps)
+  self._preload_manager = get_preload_manager(deps)
+
+  return self
+end
 
 function MediaDirectiveParser:parse(directiveText)
   -- Parse directive into structured command
@@ -135,7 +200,7 @@ function MediaDirectiveParser:_executeAudio(directive)
       priority = params.priority
     }
 
-    local sourceId = AudioManager:play(assetId, options)
+    local sourceId = self._audio_manager:play(assetId, options)
     return sourceId ~= nil, sourceId and tostring(sourceId) or "Failed to play audio"
 
   elseif command == "stop" then
@@ -152,7 +217,7 @@ function MediaDirectiveParser:_executeAudio(directive)
     local sourceId = tonumber(assetIdOrSourceId) or self:_findSourceByAssetId(assetIdOrSourceId)
 
     if sourceId then
-      return AudioManager:stop(sourceId, options), nil
+      return self._audio_manager:stop(sourceId, options), nil
     else
       -- Try stopping by asset ID anyway
       return true, nil
@@ -162,13 +227,13 @@ function MediaDirectiveParser:_executeAudio(directive)
     if #args < 1 then return false, "audio:pause requires source ID" end
     local sourceId = tonumber(args[1])
     if not sourceId then return false, "Invalid source ID" end
-    return AudioManager:pause(sourceId), nil
+    return self._audio_manager:pause(sourceId), nil
 
   elseif command == "resume" then
     if #args < 1 then return false, "audio:resume requires source ID" end
     local sourceId = tonumber(args[1])
     if not sourceId then return false, "Invalid source ID" end
-    return AudioManager:resume(sourceId), nil
+    return self._audio_manager:resume(sourceId), nil
 
   elseif command == "volume" then
     if #args < 2 then
@@ -183,12 +248,12 @@ function MediaDirectiveParser:_executeAudio(directive)
     end
 
     -- Check if target is a channel name or source ID
-    if AudioManager:getChannel(target) then
-      return AudioManager:setChannelVolume(target, volume), nil
+    if self._audio_manager:getChannel(target) then
+      return self._audio_manager:setChannelVolume(target, volume), nil
     else
       local sourceId = tonumber(target)
       if sourceId then
-        return AudioManager:setVolume(sourceId, volume), nil
+        return self._audio_manager:setVolume(sourceId, volume), nil
       else
         return false, "Invalid audio target: " .. target
       end
@@ -214,7 +279,7 @@ function MediaDirectiveParser:_executeAudio(directive)
       volume = params.volume
     }
 
-    local newSourceId = AudioManager:crossfade(fromSourceId, toAssetId, options)
+    local newSourceId = self._audio_manager:crossfade(fromSourceId, toAssetId, options)
     return newSourceId ~= nil, newSourceId and tostring(newSourceId) or "Crossfade failed"
 
   elseif command == "channel" then
@@ -226,7 +291,7 @@ function MediaDirectiveParser:_executeAudio(directive)
     local volume = params.volume
 
     if volume then
-      return AudioManager:setChannelVolume(channelName, volume), nil
+      return self._audio_manager:setChannelVolume(channelName, volume), nil
     end
 
     return true, nil
@@ -253,7 +318,7 @@ function MediaDirectiveParser:_executeImage(directive)
       fadeIn = params.fadeIn or 0
     }
 
-    ImageManager:display(assetId, options)
+    self._image_manager:display(assetId, options)
     return true, nil
 
   elseif command == "hide" then
@@ -266,13 +331,13 @@ function MediaDirectiveParser:_executeImage(directive)
       fadeOut = params.fadeOut or 0
     }
 
-    return ImageManager:hide(containerId, options), nil
+    return self._image_manager:hide(containerId, options), nil
 
   elseif command == "clear" then
     -- Hide all displayed images
-    if ImageManager._displayedImages then
-      for containerId, _ in pairs(ImageManager._displayedImages) do
-        ImageManager:hide(containerId)
+    if self._image_manager._displayedImages then
+      for containerId, _ in pairs(self._image_manager._displayedImages) do
+        self._image_manager:hide(containerId)
       end
     end
     return true, nil
@@ -292,7 +357,7 @@ function MediaDirectiveParser:_executePreload(directive)
       return false, "preload requires at least one asset ID"
     end
 
-    PreloadManager:preloadGroup(args, {
+    self._preload_manager:preloadGroup(args, {
       priority = "normal"
     })
     return true, nil
@@ -303,7 +368,7 @@ function MediaDirectiveParser:_executePreload(directive)
     end
 
     local groupName = args[1]
-    PreloadManager:preloadGroup(groupName, {
+    self._preload_manager:preloadGroup(groupName, {
       priority = "normal"
     })
     return true, nil
@@ -320,11 +385,11 @@ end
 
 function MediaDirectiveParser:_findSourceByAssetId(assetId)
   -- Find active audio source by asset ID
-  if not AudioManager._sources then
+  if not self._audio_manager._sources then
     return nil
   end
 
-  for sourceId, entry in pairs(AudioManager._sources) do
+  for sourceId, entry in pairs(self._audio_manager._sources) do
     if entry.assetId == assetId then
       return sourceId
     end

@@ -111,6 +111,19 @@ local function register_media_factories(container, events)
     singleton = false,
     implements = "IBundler"
   })
+
+  -- Register media_directive_parser (depends on all managers)
+  container:register("media_directive_parser", function(c)
+    local MediaDirectiveParser = require("whisker.media.MediaDirectiveParser")
+    return MediaDirectiveParser.new({}, {
+      audio_manager = c:resolve("audio_manager"),
+      image_manager = c:resolve("image_manager"),
+      preload_manager = c:resolve("preload_manager")
+    })
+  end, {
+    singleton = true,
+    depends = {"audio_manager", "image_manager", "preload_manager"}
+  })
 end
 
 --- Register core factories with lazy loading
