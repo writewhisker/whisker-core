@@ -1,11 +1,30 @@
 -- Tests for AssetCache module
 describe("AssetCache", function()
   local AssetCache
+  local mock_event_bus
+  local mock_logger
 
   before_each(function()
     package.loaded["whisker.media.AssetCache"] = nil
     package.loaded["whisker.media.types"] = nil
     AssetCache = require("whisker.media.AssetCache")
+
+    -- Create mock event bus
+    mock_event_bus = {
+      events = {},
+      emit = function(self, event, data)
+        table.insert(self.events, {event = event, data = data})
+      end
+    }
+
+    -- Create mock logger
+    mock_logger = {
+      logs = {},
+      debug = function(self, msg) table.insert(self.logs, {level = "debug", msg = msg}) end,
+      info = function(self, msg) table.insert(self.logs, {level = "info", msg = msg}) end,
+      warn = function(self, msg) table.insert(self.logs, {level = "warn", msg = msg}) end,
+      error = function(self, msg) table.insert(self.logs, {level = "error", msg = msg}) end
+    }
   end)
 
   describe("new", function()
@@ -249,6 +268,116 @@ describe("AssetCache", function()
 
       local stats = cache:getStats()
       assert.is_true(stats.bytesUsed <= 2000)
+    end)
+  end)
+
+  describe("DI pattern", function()
+    it("declares dependencies", function()
+      assert.is_table(AssetCache._dependencies)
+      assert.same({"logger", "event_bus"}, AssetCache._dependencies)
+    end)
+
+    it("provides create factory function", function()
+      assert.is_function(AssetCache.create)
+    end)
+
+    it("create returns a factory function", function()
+      local factory = AssetCache.create({
+        logger = mock_logger,
+        event_bus = mock_event_bus
+      })
+      assert.is_function(factory)
+    end)
+
+    it("factory creates cache instances with injected deps", function()
+      local factory = AssetCache.create({
+        logger = mock_logger,
+        event_bus = mock_event_bus
+      })
+      local cache = factory({bytesLimit = 1024 * 1024})
+      assert.is_not_nil(cache)
+      assert.is_function(cache.get)
+      assert.is_function(cache.set)
+    end)
+
+    it("stores event_bus dependency", function()
+      local cache = AssetCache.new({}, {event_bus = mock_event_bus})
+      assert.equals(mock_event_bus, cache._event_bus)
+    end)
+
+    it("stores logger dependency", function()
+      local cache = AssetCache.new({}, {logger = mock_logger})
+      assert.equals(mock_logger, cache._logger)
+    end)
+
+    it("works without deps (backward compatibility)", function()
+      local cache = AssetCache.new({bytesLimit = 1024})
+      assert.is_not_nil(cache)
+      cache:set("test", {}, 100)
+      assert.is_true(cache:has("test"))
+    end)
+  end)
+
+  describe("event emission", function()
+    it("emits cache:set event when setting asset", function()
+      local cache = AssetCache.new({}, {event_bus = mock_event_bus})
+      cache:set("test", {data = "value"}, 500)
+
+      assert.equals(1, #mock_event_bus.events)
+      local event = mock_event_bus.events[1]
+      assert.equals("cache:set", event.event)
+      assert.equals("test", event.data.assetId)
+      assert.equals(500, event.data.sizeBytes)
+    end)
+
+    it("emits cache:remove event when removing asset", function()
+      local cache = AssetCache.new({}, {event_bus = mock_event_bus})
+      cache:set("test", {}, 500)
+      mock_event_bus.events = {} -- Clear set event
+      cache:remove("test")
+
+      assert.equals(1, #mock_event_bus.events)
+      local event = mock_event_bus.events[1]
+      assert.equals("cache:remove", event.event)
+      assert.equals("test", event.data.assetId)
+      assert.equals(500, event.data.freedBytes)
+    end)
+
+    it("emits cache:evict event when evicting assets", function()
+      local cache = AssetCache.new({bytesLimit = 1500}, {event_bus = mock_event_bus})
+      cache:set("first", {}, 1000)
+      cache:set("second", {}, 1000) -- This should evict "first"
+
+      -- Find the evict event
+      local found_evict = false
+      for _, e in ipairs(mock_event_bus.events) do
+        if e.event == "cache:evict" then
+          found_evict = true
+          assert.equals("first", e.data.assetId)
+        end
+      end
+      assert.is_true(found_evict, "Should have emitted cache:evict event")
+    end)
+
+    it("does not emit events when event_bus is nil", function()
+      local cache = AssetCache.new({})
+      -- These should not error even without event_bus
+      cache:set("test", {}, 100)
+      cache:remove("test")
+    end)
+  end)
+
+  describe("put alias", function()
+    it("put is an alias for set", function()
+      assert.equals(AssetCache.set, AssetCache.put)
+    end)
+
+    it("put works the same as set", function()
+      local cache = AssetCache.new()
+      cache:put("test", {value = 42}, 100)
+      assert.is_true(cache:has("test"))
+      local retrieved = cache:get("test")
+      assert.equals(42, retrieved.value)
     end)
   end)
 end)
