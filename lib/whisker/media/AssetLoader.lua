@@ -2,17 +2,52 @@
 -- Handles async and sync loading of assets
 
 local Types = require("whisker.media.types")
-local FormatDetector = require("whisker.media.FormatDetector")
 
 local AssetLoader = {
   _VERSION = "1.0.0"
 }
 AssetLoader.__index = AssetLoader
 
-function AssetLoader.new(config)
+-- Dependencies for DI pattern
+AssetLoader._dependencies = {"event_bus", "format_detector", "file_system"}
+
+-- Cached FormatDetector for backward compatibility (lazy loaded)
+local _format_detector_cache = nil
+
+--- Get the format detector (supports both DI and backward compatibility)
+-- @param deps table|nil Dependencies from container
+-- @return table The format detector
+local function get_format_detector(deps)
+  if deps and deps.format_detector then
+    return deps.format_detector
+  end
+  -- Fallback: lazy load the default detector for backward compatibility
+  if not _format_detector_cache then
+    _format_detector_cache = require("whisker.media.FormatDetector")
+  end
+  return _format_detector_cache
+end
+
+--- Create a new AssetLoader instance via DI container
+-- @param deps table Dependencies from container (event_bus, format_detector, file_system)
+-- @return function Factory function that creates AssetLoader instances
+function AssetLoader.create(deps)
+  -- Return a factory function that creates loaders
+  return function(config)
+    return AssetLoader.new(config, deps)
+  end
+end
+
+function AssetLoader.new(config, deps)
   local self = setmetatable({}, AssetLoader)
 
   config = config or {}
+  deps = deps or {}
+
+  -- Store dependencies
+  self._event_bus = deps.event_bus
+  self._format_detector = get_format_detector(deps)
+  self._file_system = deps.file_system
 
   self._loading = {}
   self._callbacks = {}
@@ -36,12 +71,24 @@ function AssetLoader:load(assetConfig, callback)
   self._loading[assetId] = true
   self._callbacks[assetId] = callback and {callback} or {}
 
-  -- Select best source
+  -- Emit loading start event
+  if self._event_bus then
+    self._event_bus:emit("loader:start", {
+      assetId = assetId,
+      assetType = assetConfig.type
+    })
+  end
+
+  -- Select best source using injected format detector
   local source
   if assetConfig.type == "audio" then
-    source = FormatDetector:selectBestFormat(assetConfig.sources, "audio")
+    source = self._format_detector:selectBestFormat(assetConfig.sources, "audio")
   elseif assetConfig.type == "image" then
     source = self:_selectImageVariant(assetConfig.variants)
+    -- Fallback to sources if no variants provided
+    if not source and assetConfig.sources then
+      source = assetConfig.sources[1]
+    end
   else
     source = assetConfig.sources and assetConfig.sources[1]
   end
@@ -115,9 +162,61 @@ function AssetLoader:isLoading(assetId)
   return self._loading[assetId] == true
 end
 
+--- Check if a path exists and is accessible
+-- @param path string Path to check
+-- @return boolean True if accessible
+function AssetLoader:exists(path)
+  if self._file_system then
+    return self._file_system:exists(path)
+  end
+
+  -- Fallback: try to open the file
+  local file = io.open(path, "r")
+  if file then
+    file:close()
+    return true
+  end
+  return false
+end
+
+--- Get the detected asset type for a path
+-- @param path string Path to analyze
+-- @return string|nil Asset type or nil if unknown
+function AssetLoader:detectType(path)
+  local format = self._format_detector:getFormatFromPath(path)
+  if format then
+    return self._format_detector:getAssetTypeFromFormat(format)
+  end
+  return nil
+end
+
+--- Load an asset asynchronously (alias for load with callback)
+-- @param path string Path to the asset
+-- @param callback function Callback(success, result_or_error)
+-- @param asset_type string|nil Optional asset type hint
+function AssetLoader:loadAsync(path, callback, asset_type)
+  local config = {
+    id = path,
+    type = asset_type or self:detectType(path) or "data",
+    sources = {{path = path, format = path:match("%.(%w+)$")}}
+  }
+  return self:load(config, function(asset, err)
+    if asset then
+      callback(true, asset)
+    else
+      callback(false, err)
+    end
+  end)
+end
+
 function AssetLoader:_loadFile(path, assetType)
-  -- Platform detection
-  local platform = FormatDetector:detectPlatform()
+  -- Use injected file system if available
+  if self._file_system then
+    return self._file_system:read(path, assetType)
+  end
+
+  -- Platform detection using injected format detector
+  local platform = self._format_detector:detectPlatform()
 
   if platform == Types.Platform.LOVE2D then
     return self:_loadLOVE(path, assetType)
@@ -187,6 +286,22 @@ function AssetLoader:_handleLoadComplete(assetId, asset, error)
 
   self._loading[assetId] = nil
   self._callbacks[assetId] = nil
+
+  -- Emit completion event
+  if self._event_bus then
+    if asset then
+      self._event_bus:emit("loader:complete", {
+        assetId = assetId,
+        assetType = asset.type,
+        sizeBytes = asset.sizeBytes
+      })
+    else
+      self._event_bus:emit("loader:error", {
+        assetId = assetId,
+        error = error
+      })
+    end
+  end
 
   for _, callback in ipairs(callbacks) do
     callback(asset, error)
