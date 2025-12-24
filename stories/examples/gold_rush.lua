@@ -1,10 +1,15 @@
 -- stories/examples/gold_rush.lua
 -- A story about a prospector seeking gold while a corrupt sheriff tries to distract him
 -- Features branching choices with consequences
+-- Uses DI pattern via bootstrap template
 
-local Story = require("whisker.core.story")
-local Passage = require("whisker.core.passage")
-local Choice = require("whisker.core.choice")
+local bootstrap = require("examples.shared.bootstrap")
+local whisker = bootstrap.init()
+
+-- Aliases for cleaner code
+local Story = { new = function(opts) return whisker.story_factory:create(opts) end }
+local Passage = { new = function(opts) return whisker.passage_factory:create(opts) end }
+local Choice = { new = function(opts) return whisker.choice_factory:create(opts) end }
 
 -- Create the story
 local story = Story.new({

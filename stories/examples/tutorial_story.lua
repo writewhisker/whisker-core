@@ -1,12 +1,12 @@
 -- examples/tutorial_story.lua
 -- Interactive tutorial demonstrating whisker features
 -- Learn by example with hands-on demonstrations
+-- Uses DI pattern via bootstrap template
 
-local Story = require("whisker.core.story")
-local Passage = require("whisker.core.passage")
-local Choice = require("whisker.core.choice")
+local bootstrap = require("examples.shared.bootstrap")
+local whisker = bootstrap.init()
 
-local story = Story.new({
+local story = whisker.story_factory:create({
     title = "whisker Tutorial",
     author = "whisker Team",
     ifid = "TUTORIAL-001",
@@ -28,7 +28,7 @@ story.variables = {
 -- INTRODUCTION
 -- ============================================================================
 
-local intro = Passage.new({
+local intro = whisker.passage_factory:create({
     id = "intro",
     content = [[
 **Welcome to the whisker Tutorial!**
@@ -47,7 +47,7 @@ Let's get started!
     ]]
 })
 
-intro:add_choice(Choice.new({
+intro:add_choice(whisker.choice_factory:create({
     text = "Begin the tutorial",
     target = "lesson1_intro"
 }))
@@ -56,7 +56,7 @@ intro:add_choice(Choice.new({
 -- LESSON 1: BASIC STRUCTURE
 -- ============================================================================
 
-local lesson1_intro = Passage.new({
+local lesson1_intro = whisker.passage_factory:create({
     id = "lesson1_intro",
     content = [[
 **Lesson 1: Basic Story Structure**
@@ -74,17 +74,17 @@ Let's practice navigating!
     ]]
 })
 
-lesson1_intro:add_choice(Choice.new({
+lesson1_intro:add_choice(whisker.choice_factory:create({
     text = "Go to Passage A",
     target = "lesson1_a"
 }))
 
-lesson1_intro:add_choice(Choice.new({
+lesson1_intro:add_choice(whisker.choice_factory:create({
     text = "Go to Passage B",
     target = "lesson1_b"
 }))
 
-local lesson1_a = Passage.new({
+local lesson1_a = whisker.passage_factory:create({
     id = "lesson1_a",
     content = [[
 **Passage A**
@@ -97,17 +97,17 @@ Each passage can have its own unique text and choices.
     ]]
 })
 
-lesson1_a:add_choice(Choice.new({
+lesson1_a:add_choice(whisker.choice_factory:create({
     text = "Continue to Lesson 2",
     target = "lesson2_intro"
 }))
 
-lesson1_a:add_choice(Choice.new({
+lesson1_a:add_choice(whisker.choice_factory:create({
     text = "Go back and try Passage B",
     target = "lesson1_intro"
 }))
 
-local lesson1_b = Passage.new({
+local lesson1_b = whisker.passage_factory:create({
     id = "lesson1_b",
     content = [[
 **Passage B**
@@ -120,12 +120,12 @@ branching (multiple paths).
     ]]
 })
 
-lesson1_b:add_choice(Choice.new({
+lesson1_b:add_choice(whisker.choice_factory:create({
     text = "Continue to Lesson 2",
     target = "lesson2_intro"
 }))
 
-lesson1_b:add_choice(Choice.new({
+lesson1_b:add_choice(whisker.choice_factory:create({
     text = "Go back and try Passage A",
     target = "lesson1_intro"
 }))
@@ -134,7 +134,7 @@ lesson1_b:add_choice(Choice.new({
 -- LESSON 2: VARIABLES
 -- ============================================================================
 
-local lesson2_intro = Passage.new({
+local lesson2_intro = whisker.passage_factory:create({
     id = "lesson2_intro",
     content = [[
 **Lesson 2: Variables**
@@ -156,7 +156,7 @@ Let's practice with variables!
     ]]
 })
 
-lesson2_intro:add_choice(Choice.new({
+lesson2_intro:add_choice(whisker.choice_factory:create({
     text = "Increase my score by 10",
     target = "lesson2_add_score",
     action = [[
@@ -165,12 +165,12 @@ lesson2_intro:add_choice(Choice.new({
     ]]
 }))
 
-lesson2_intro:add_choice(Choice.new({
+lesson2_intro:add_choice(whisker.choice_factory:create({
     text = "Skip to Lesson 3",
     target = "lesson3_intro"
 }))
 
-local lesson2_add_score = Passage.new({
+local lesson2_add_score = whisker.passage_factory:create({
     id = "lesson2_add_score",
     content = [[
 **Score Updated!**
@@ -191,7 +191,7 @@ That's the power of variables!
     ]]
 })
 
-lesson2_add_score:add_choice(Choice.new({
+lesson2_add_score:add_choice(whisker.choice_factory:create({
     text = "Add 10 more points",
     target = "lesson2_add_score",
     action = [[
@@ -200,7 +200,7 @@ lesson2_add_score:add_choice(Choice.new({
     ]]
 }))
 
-lesson2_add_score:add_choice(Choice.new({
+lesson2_add_score:add_choice(whisker.choice_factory:create({
     text = "Continue to Lesson 3",
     target = "lesson3_intro"
 }))
@@ -209,7 +209,7 @@ lesson2_add_score:add_choice(Choice.new({
 -- LESSON 3: CONDITIONAL CHOICES
 -- ============================================================================
 
-local lesson3_intro = Passage.new({
+local lesson3_intro = whisker.passage_factory:create({
     id = "lesson3_intro",
     content = [[
 **Lesson 3: Conditional Choices**
@@ -225,34 +225,34 @@ requirements!
     ]]
 })
 
-lesson3_intro:add_choice(Choice.new({
+lesson3_intro:add_choice(whisker.choice_factory:create({
     text = "This choice always appears",
     target = "lesson3_always"
 }))
 
-lesson3_intro:add_choice(Choice.new({
+lesson3_intro:add_choice(whisker.choice_factory:create({
     text = "This choice requires 20+ score",
     target = "lesson3_high_score",
     condition = "player_score >= 20"
 }))
 
-lesson3_intro:add_choice(Choice.new({
+lesson3_intro:add_choice(whisker.choice_factory:create({
     text = "This choice requires learning variables",
     target = "lesson3_learned",
     condition = "learned_variables"
 }))
 
-lesson3_intro:add_choice(Choice.new({
+lesson3_intro:add_choice(whisker.choice_factory:create({
     text = "Go back and increase score",
     target = "lesson2_add_score"
 }))
 
-lesson3_intro:add_choice(Choice.new({
+lesson3_intro:add_choice(whisker.choice_factory:create({
     text = "Continue to Lesson 4",
     target = "lesson4_intro"
 }))
 
-local lesson3_always = Passage.new({
+local lesson3_always = whisker.passage_factory:create({
     id = "lesson3_always",
     content = [[
 **Always Available**
@@ -271,12 +271,12 @@ Conditional choices are useful for:
     ]]
 })
 
-lesson3_always:add_choice(Choice.new({
+lesson3_always:add_choice(whisker.choice_factory:create({
     text = "Return to Lesson 3",
     target = "lesson3_intro"
 }))
 
-local lesson3_high_score = Passage.new({
+local lesson3_high_score = whisker.passage_factory:create({
     id = "lesson3_high_score",
     content = [[
 **High Score Path**
@@ -288,12 +288,12 @@ creating a sense of progression and reward in your stories.
     ]]
 })
 
-lesson3_high_score:add_choice(Choice.new({
+lesson3_high_score:add_choice(whisker.choice_factory:create({
     text = "Return to Lesson 3",
     target = "lesson3_intro"
 }))
 
-local lesson3_learned = Passage.new({
+local lesson3_learned = whisker.passage_factory:create({
     id = "lesson3_learned",
     content = [[
 **Knowledge Check**
@@ -308,7 +308,7 @@ content based on what they've learned or accomplished.
     ]]
 })
 
-lesson3_learned:add_choice(Choice.new({
+lesson3_learned:add_choice(whisker.choice_factory:create({
     text = "Return to Lesson 3",
     target = "lesson3_intro"
 }))
@@ -317,7 +317,7 @@ lesson3_learned:add_choice(Choice.new({
 -- LESSON 4: LUA SCRIPTING
 -- ============================================================================
 
-local lesson4_intro = Passage.new({
+local lesson4_intro = whisker.passage_factory:create({
     id = "lesson4_intro",
     content = [[
 **Lesson 4: Lua Scripting**
@@ -338,7 +338,7 @@ Let's try a simple dice roll!
     ]]
 })
 
-lesson4_intro:add_choice(Choice.new({
+lesson4_intro:add_choice(whisker.choice_factory:create({
     text = "Roll the dice (1-6)",
     target = "lesson4_dice",
     action = [[
@@ -350,12 +350,12 @@ lesson4_intro:add_choice(Choice.new({
     ]]
 }))
 
-lesson4_intro:add_choice(Choice.new({
+lesson4_intro:add_choice(whisker.choice_factory:create({
     text = "Continue to graduation",
     target = "graduation"
 }))
 
-local lesson4_dice = Passage.new({
+local lesson4_dice = whisker.passage_factory:create({
     id = "lesson4_dice",
     content = [[
 **Dice Roll Result**
@@ -376,7 +376,7 @@ in your stories. You can use similar techniques for:
     ]]
 })
 
-lesson4_dice:add_choice(Choice.new({
+lesson4_dice:add_choice(whisker.choice_factory:create({
     text = "Roll again",
     target = "lesson4_dice",
     action = [[
@@ -388,7 +388,7 @@ lesson4_dice:add_choice(Choice.new({
     ]]
 }))
 
-lesson4_dice:add_choice(Choice.new({
+lesson4_dice:add_choice(whisker.choice_factory:create({
     text = "Continue to graduation",
     target = "graduation"
 }))
@@ -397,18 +397,18 @@ lesson4_dice:add_choice(Choice.new({
 -- GRADUATION
 -- ============================================================================
 
-local graduation = Passage.new({
+local graduation = whisker.passage_factory:create({
     id = "graduation",
     content = [[
-**🎓 Tutorial Complete!**
+**Tutorial Complete!**
 
 Congratulations! You've completed the whisker tutorial.
 
 **What you learned:**
-• Basic story structure {{learned_basics and "✓" or "✗"}}
-• Variables and state {{learned_variables and "✓" or "✗"}}
-• Conditional choices {{learned_conditions and "✓" or "✗"}}
-• Lua scripting {{learned_scripting and "✓" or "✗"}}
+• Basic story structure {{learned_basics and "check" or "x"}}
+• Variables and state {{learned_variables and "check" or "x"}}
+• Conditional choices {{learned_conditions and "check" or "x"}}
+• Lua scripting {{learned_scripting and "check" or "x"}}
 
 **Final Score:** {{player_score}}
 **Progress:** {{tutorial_progress}}/4 lessons
