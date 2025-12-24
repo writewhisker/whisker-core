@@ -4,6 +4,23 @@
 local GameState = {}
 GameState.__index = GameState
 
+-- Dependencies for DI pattern (none for GameState - it's a leaf module)
+GameState._dependencies = {}
+
+--- Create a new GameState instance via DI container
+-- @param deps table|nil Dependencies from container (optional for GameState)
+-- @return function Factory function that creates GameState instances
+function GameState.create(deps)
+  -- Return a factory function that creates game states
+  return function(options)
+    local game_state = GameState.new()
+    if options and options.max_history then
+      game_state.max_history = options.max_history
+    end
+    return game_state
+  end
+end
+
 function GameState.new()
     local instance = {
         -- Core state

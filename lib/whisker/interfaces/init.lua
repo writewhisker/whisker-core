@@ -4,6 +4,8 @@
 -- @author Whisker Core Team
 -- @license MIT
 
+local Factories = require("whisker.interfaces.factories")
+
 return {
   IFormat = require("whisker.interfaces.format"),
   IState = require("whisker.interfaces.state"),
@@ -17,4 +19,12 @@ return {
   IKeyboardHandler = require("whisker.interfaces.keyboard_handler"),
   IScreenReaderAdapter = require("whisker.interfaces.screen_reader"),
   IFocusManager = require("whisker.interfaces.focus_manager"),
+  -- Factory interfaces (DI pattern)
+  IChoiceFactory = Factories.IChoiceFactory,
+  IPassageFactory = Factories.IPassageFactory,
+  IStoryFactory = Factories.IStoryFactory,
+  IGameStateFactory = Factories.IGameStateFactory,
+  ILuaInterpreterFactory = Factories.ILuaInterpreterFactory,
+  IEngineFactory = Factories.IEngineFactory,
+  Factories = Factories,
 }

@@ -240,4 +240,57 @@ describe("Choice", function()
       assert.is_nil(choice)
     end)
   end)
+
+  describe("DI pattern support", function()
+    it("declares _dependencies", function()
+      assert.is_table(Choice._dependencies)
+    end)
+
+    it("_dependencies is empty (no dependencies)", function()
+      assert.equals(0, #Choice._dependencies)
+    end)
+
+    it("provides create factory method", function()
+      assert.is_function(Choice.create)
+    end)
+
+    it("create returns a factory function", function()
+      local factory = Choice.create({})
+
+      assert.is_function(factory)
+    end)
+
+    it("factory function creates valid choices", function()
+      local factory = Choice.create({})
+      local choice = factory({ text = "Test", target = "next" })
+
+      assert.is_not_nil(choice)
+      assert.equals("Test", choice.text)
+      assert.equals("next", choice.target)
+    end)
+
+    it("factory function works without deps parameter", function()
+      local factory = Choice.create()
+      local choice = factory({ text = "No deps", target = "target" })
+
+      assert.is_not_nil(choice)
+      assert.equals("No deps", choice.text)
+    end)
+
+    it("factory function supports two-argument form", function()
+      local factory = Choice.create({})
+      local choice = factory("Simple text", "destination")
+
+      assert.is_not_nil(choice)
+      assert.equals("Simple text", choice.text)
+      assert.equals("destination", choice.target)
+    end)
+
+    it("backward compatibility: Choice.new still works", function()
+      local choice = Choice.new({ text = "Direct", target = "direct" })
+
+      assert.is_not_nil(choice)
+      assert.equals("Direct", choice.text)
+    end)
+  end)
 end)

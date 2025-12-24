@@ -236,5 +236,143 @@ describe("Passage", function()
 
       assert.is_nil(passage)
     end)
+
+    it("restores choices with metatables", function()
+      local data = {
+        id = "with_choices",
+        name = "With Choices",
+        choices = {
+          { text = "Choice 1", target_passage = "p1" },
+          { text = "Choice 2", target_passage = "p2" }
+        }
+      }
+
+      local passage = Passage.from_table(data)
+
+      assert.equals(2, #passage.choices)
+      assert.is_function(passage.choices[1].validate)
+      assert.is_function(passage.choices[2].get_text)
+    end)
+  end)
+
+  describe("DI pattern support", function()
+    local ChoiceFactory
+
+    before_each(function()
+      ChoiceFactory = require("whisker.core.factories.choice_factory")
+    end)
+
+    it("declares _dependencies", function()
+      assert.is_table(Passage._dependencies)
+    end)
+
+    it("_dependencies includes choice_factory", function()
+      local has_choice_factory = false
+      for _, dep in ipairs(Passage._dependencies) do
+        if dep == "choice_factory" then
+          has_choice_factory = true
+          break
+        end
+      end
+      assert.is_true(has_choice_factory)
+    end)
+
+    it("provides create factory method", function()
+      assert.is_function(Passage.create)
+    end)
+
+    it("create returns a factory function", function()
+      local factory = Passage.create({ choice_factory = ChoiceFactory.new() })
+
+      assert.is_function(factory)
+    end)
+
+    it("factory function creates valid passages", function()
+      local factory = Passage.create({ choice_factory = ChoiceFactory.new() })
+      local passage = factory({ id = "test", name = "Test" })
+
+      assert.is_not_nil(passage)
+      assert.equals("test", passage.id)
+      assert.equals("Test", passage.name)
+    end)
+
+    it("factory function works without deps (backward compat)", function()
+      local factory = Passage.create()
+      local passage = factory({ id = "no_deps", name = "No Deps" })
+
+      assert.is_not_nil(passage)
+      assert.equals("no_deps", passage.id)
+    end)
+
+    it("backward compatibility: Passage.new still works", function()
+      local passage = Passage.new({ id = "direct", name = "Direct" })
+
+      assert.is_not_nil(passage)
+      assert.equals("direct", passage.id)
+    end)
+
+    it("from_table accepts choice_factory parameter", function()
+      local choice_factory = ChoiceFactory.new()
+      local data = {
+        id = "test",
+        name = "Test",
+        choices = {{ text = "Go", target_passage = "next" }}
+      }
+
+      local passage = Passage.from_table(data, choice_factory)
+
+      assert.is_not_nil(passage)
+      assert.equals(1, #passage.choices)
+    end)
+
+    it("restore_metatable accepts choice_factory parameter", function()
+      local choice_factory = ChoiceFactory.new()
+      local plain = {
+        id = "plain",
+        name = "Plain",
+        choices = {{ text = "Go", target_passage = "next", metadata = {} }},
+        tags = {},
+        metadata = {}
+      }
+
+      local passage = Passage.restore_metatable(plain, choice_factory)
+
+      assert.is_not_nil(passage)
+      assert.equals(Passage, getmetatable(passage))
+      assert.is_function(passage.choices[1].validate)
+    end)
+
+    it("uses mock choice factory when injected", function()
+      -- Create a mock factory that tracks calls
+      local mock_calls = 0
+      local mock_factory = {
+        create = function(self, opts)
+          mock_calls = mock_calls + 1
+          return Choice.new(opts)
+        end,
+        from_table = function(self, data)
+          mock_calls = mock_calls + 1
+          return Choice.from_table(data)
+        end,
+        restore_metatable = function(self, data)
+          mock_calls = mock_calls + 1
+          return Choice.restore_metatable(data)
+        end
+      }
+
+      local data = {
+        id = "mock_test",
+        name = "Mock Test",
+        choices = {
+          { text = "A", target_passage = "a" },
+          { text = "B", target_passage = "b" }
+        }
+      }
+
+      local passage = Passage.from_table(data, mock_factory)
+
+      assert.is_not_nil(passage)
+      assert.equals(2, mock_calls)  -- from_table called twice for 2 choices
+    end)
   end)
 end)

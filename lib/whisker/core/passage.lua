@@ -4,7 +4,39 @@
 local Passage = {}
 Passage.__index = Passage
 
-function Passage.new(id_or_options, name)
+-- Dependencies for DI pattern
+Passage._dependencies = {"choice_factory"}
+
+-- Cached choice factory for backward compatibility (lazy loaded)
+local _choice_factory_cache = nil
+
+--- Get the choice factory (supports both DI and backward compatibility)
+-- @param deps table|nil Dependencies from container
+-- @return table The choice factory
+local function get_choice_factory(deps)
+  if deps and deps.choice_factory then
+    return deps.choice_factory
+  end
+  -- Fallback: lazy load the default factory for backward compatibility
+  if not _choice_factory_cache then
+    local ChoiceFactory = require("whisker.core.factories.choice_factory")
+    _choice_factory_cache = ChoiceFactory.new()
+  end
+  return _choice_factory_cache
+end
+
+--- Create a new Passage instance via DI container
+-- @param deps table Dependencies from container (choice_factory)
+-- @return function Factory function that creates Passage instances
+function Passage.create(deps)
+  local choice_factory = get_choice_factory(deps)
+  -- Return a factory function that creates passages
+  return function(id_or_options, name)
+    return Passage.new(id_or_options, name, choice_factory)
+  end
+end
+
+function Passage.new(id_or_options, name, choice_factory)
     -- Support both old table-based and new parameter patterns
     local options = {}
     if type(id_or_options) == "table" then
@@ -24,7 +56,9 @@ function Passage.new(id_or_options, name)
         size = options.size or {width = 100, height = 100},
         metadata = options.metadata or {},
         on_enter_script = options.on_enter_script or nil,
-        on_exit_script = options.on_exit_script or nil
+        on_exit_script = options.on_exit_script or nil,
+        -- Store choice factory for DI (optional, for metatable restoration)
+        _choice_factory = choice_factory
     }
 
     setmetatable(instance, Passage)
@@ -185,17 +219,21 @@ function Passage:deserialize(data)
 
     -- Restore metatables for choice objects if needed
     if self.choices then
-        local Choice = require("whisker.core.choice")
+        -- Use injected choice factory if available, otherwise fallback
+        local choice_factory = self._choice_factory or get_choice_factory()
         for i, choice in ipairs(self.choices) do
             if type(choice) == "table" and not getmetatable(choice) then
-                setmetatable(choice, Choice)
+                self.choices[i] = choice_factory:restore_metatable(choice)
             end
         end
     end
 end
 
--- Static method to restore metatable to a table
-function Passage.restore_metatable(data)
+--- Static method to restore metatable to a table
+-- @param data table Plain table with passage data
+-- @param choice_factory table|nil Optional choice factory for DI
+-- @return Passage The table with Passage metatable restored
+function Passage.restore_metatable(data, choice_factory)
     if not data or type(data) ~= "table" then
         return nil
     end
@@ -210,15 +248,11 @@ function Passage.restore_metatable(data)
 
     -- Restore metatables for nested objects (choices)
     if data.choices then
-        local Choice = require("whisker.core.choice")
+        -- Use provided factory or fallback to default
+        local factory = choice_factory or data._choice_factory or get_choice_factory()
         for i, choice in ipairs(data.choices) do
             if type(choice) == "table" and not getmetatable(choice) then
-                -- Use Choice's restore method if available, otherwise set metatable directly
-                if Choice.restore_metatable then
-                    data.choices[i] = Choice.restore_metatable(choice)
-                else
-                    setmetatable(choice, Choice)
-                end
+                data.choices[i] = factory:restore_metatable(choice)
             end
         end
     end
@@ -226,11 +260,17 @@ function Passage.restore_metatable(data)
     return data
 end
 
--- Static method to create from plain table (useful for deserialization)
-function Passage.from_table(data)
+--- Static method to create from plain table (useful for deserialization)
+-- @param data table Serialized passage data
+-- @param choice_factory table|nil Optional choice factory for DI
+-- @return Passage The restored passage instance
+function Passage.from_table(data, choice_factory)
     if not data then
         return nil
     end
+
+    -- Get choice factory (use provided or fallback)
+    local factory = choice_factory or get_choice_factory()
 
     -- Create a new instance
     local instance = Passage.new({
@@ -243,22 +283,13 @@ function Passage.from_table(data)
         metadata = data.metadata,
         on_enter_script = data.on_enter_script,
         on_exit_script = data.on_exit_script
-    })
+    }, nil, factory)
 
     -- Restore choices with proper metatables
     if data.choices then
-        local Choice = require("whisker.core.choice")
         for _, choice_data in ipairs(data.choices) do
             if type(choice_data) == "table" then
-                local choice
-                if Choice.from_table then
-                    choice = Choice.from_table(choice_data)
-                elseif Choice.restore_metatable then
-                    choice = Choice.restore_metatable(choice_data)
-                else
-                    choice = choice_data
-                    setmetatable(choice, Choice)
-                end
+                local choice = factory:from_table(choice_data)
                 table.insert(instance.choices, choice)
             end
         end
