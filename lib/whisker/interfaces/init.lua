@@ -6,6 +6,7 @@
 
 local Factories = require("whisker.interfaces.factories")
 local Media = require("whisker.interfaces.media")
+local Service = require("whisker.interfaces.service")
 
 return {
   IFormat = require("whisker.interfaces.format"),
@@ -37,4 +38,11 @@ return {
   IPreloadManager = Media.IPreloadManager,
   IBundler = Media.IBundler,
   Media = Media,
+  -- Service interfaces (DI pattern)
+  IService = Service.IService,
+  IServiceRegistry = Service.IServiceRegistry,
+  IServiceLifecycle = Service.IServiceLifecycle,
+  ServiceStatus = Service.ServiceStatus,
+  ServicePriority = Service.ServicePriority,
+  Service = Service,
 }

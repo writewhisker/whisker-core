@@ -10,19 +10,59 @@ local StateManager = {}
 setmetatable(StateManager, { __index = IState })
 
 StateManager.name = "state_manager"
-StateManager.version = "2.1.0"
+StateManager.version = "2.2.0"
+
+-- Dependencies for DI pattern
+StateManager._dependencies = {"event_bus", "logger"}
+
+--- Create a new StateManager instance via DI container
+-- @param deps table Dependencies from container (event_bus, logger)
+-- @return function Factory function that creates StateManager instances
+function StateManager.create(deps)
+  return function(config)
+    return StateManager.new(config, deps)
+  end
+end
 
 --- Create a new state manager instance
--- @param container Container The DI container
+-- @param config_or_container table|nil Configuration options or legacy container
+-- @param deps table|nil Dependencies from container
 -- @return StateManager
-function StateManager.new(container)
+function StateManager.new(config_or_container, deps)
   local self = {
     _data = {},
-    _events = container and container:has("events") and container:resolve("events") or nil,
-    _serializer = container and container:has("serializer") and container:resolve("serializer") or nil,
+    _events = nil,
+    _logger = nil,
+    _initialized = false
   }
 
+  -- Handle backward compatibility with container parameter
+  if config_or_container and type(config_or_container.has) == "function" then
+    -- Legacy container-based initialization
+    local container = config_or_container
+    self._events = container:has("events") and container:resolve("events") or nil
+    self._logger = container:has("logger") and container:resolve("logger") or nil
+  elseif deps then
+    -- New DI pattern
+    self._events = deps.event_bus
+    self._logger = deps.logger
+  end
+
+  self._initialized = true
+
   return setmetatable(self, { __index = StateManager })
+end
+
+--- Get the service name
+-- @return string The service name
+function StateManager:getName()
+  return "state"
+end
+
+--- Check if the service is initialized
+-- @return boolean True if initialized
+function StateManager:isInitialized()
+  return self._initialized == true
 end
 
 --- Get a value from state
@@ -38,6 +78,11 @@ end
 function StateManager:set(key, value)
   local old_value = self._data[key]
   self._data[key] = value
+
+  -- Log state change
+  if self._logger then
+    self._logger:debug("State set: " .. tostring(key))
+  end
 
   -- Emit state change event
   if self._events then
@@ -68,6 +113,10 @@ function StateManager:delete(key)
 
   self._data[key] = nil
 
+  if self._logger then
+    self._logger:debug("State deleted: " .. tostring(key))
+  end
+
   if self._events then
     self._events:emit("state:deleted", {
       key = key,
@@ -80,7 +129,12 @@ end
 
 --- Clear all state
 function StateManager:clear()
+  local count = self:count()
   self._data = {}
+
+  if self._logger then
+    self._logger:debug("State cleared: " .. tostring(count) .. " keys")
+  end
 
   if self._events then
     self._events:emit("state:cleared", {
@@ -105,6 +159,10 @@ function StateManager:restore(snapshot)
   self._data = {}
   for k, v in pairs(snapshot or {}) do
     self._data[k] = v
+  end
+
+  if self._logger then
+    self._logger:debug("State restored: " .. tostring(self:count()) .. " keys")
   end
 
   if self._events then
@@ -137,9 +195,14 @@ end
 
 --- Destroy the state manager and cleanup
 function StateManager:destroy()
+  if self._logger then
+    self._logger:debug("StateManager destroying")
+  end
+
   self._data = {}
   self._events = nil
-  self._serializer = nil
+  self._logger = nil
+  self._initialized = false
 end
 
 return StateManager
