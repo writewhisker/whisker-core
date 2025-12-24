@@ -6,8 +6,32 @@ local BundlingStrategy = require("whisker.media.bundlers.BundlingStrategy")
 local DesktopBundler = setmetatable({}, {__index = BundlingStrategy})
 DesktopBundler.__index = DesktopBundler
 
-function DesktopBundler.new()
+-- Dependencies for DI pattern (inherits from BundlingStrategy)
+DesktopBundler._dependencies = {"file_system", "event_bus"}
+
+--- Create a new DesktopBundler instance via DI container
+-- @param deps table Dependencies from container (file_system, event_bus)
+-- @return function Factory function that creates DesktopBundler instances
+function DesktopBundler.create(deps)
+  return function(config)
+    return DesktopBundler.new(config, deps)
+  end
+end
+
+--- Create a new DesktopBundler instance
+-- @param config table|nil Configuration options
+-- @param deps table|nil Dependencies from container
+-- @return DesktopBundler The new bundler instance
+function DesktopBundler.new(config, deps)
   local self = setmetatable({}, DesktopBundler)
+
+  config = config or {}
+  deps = deps or {}
+
+  -- Store dependencies
+  self._file_system = deps.file_system
+  self._event_bus = deps.event_bus
+
   return self
 end
 
@@ -23,6 +47,15 @@ function DesktopBundler:bundle(assets, config)
 
   local bundledAssets = {}
   local errors = {}
+
+  -- Emit bundling start event
+  if self._event_bus then
+    self._event_bus:emit("bundler:start", {
+      platform = "desktop",
+      assetCount = #assets,
+      outputPath = outputPath
+    })
+  end
 
   if strategy == "external" then
     self:_createDirectories(outputPath)
@@ -60,6 +93,17 @@ function DesktopBundler:bundle(assets, config)
   self:_writeManifest(manifestPath, manifest)
 
   local success = #errors == 0
+
+  -- Emit bundling complete event
+  if self._event_bus then
+    self._event_bus:emit("bundler:complete", {
+      platform = "desktop",
+      success = success,
+      assetCount = #bundledAssets,
+      errorCount = #errors
+    })
+  end
+
   return success, manifest, errors
 end
 

@@ -6,8 +6,32 @@ local BundlingStrategy = require("whisker.media.bundlers.BundlingStrategy")
 local WebBundler = setmetatable({}, {__index = BundlingStrategy})
 WebBundler.__index = WebBundler
 
-function WebBundler.new()
+-- Dependencies for DI pattern (inherits from BundlingStrategy)
+WebBundler._dependencies = {"file_system", "event_bus"}
+
+--- Create a new WebBundler instance via DI container
+-- @param deps table Dependencies from container (file_system, event_bus)
+-- @return function Factory function that creates WebBundler instances
+function WebBundler.create(deps)
+  return function(config)
+    return WebBundler.new(config, deps)
+  end
+end
+
+--- Create a new WebBundler instance
+-- @param config table|nil Configuration options
+-- @param deps table|nil Dependencies from container
+-- @return WebBundler The new bundler instance
+function WebBundler.new(config, deps)
   local self = setmetatable({}, WebBundler)
+
+  config = config or {}
+  deps = deps or {}
+
+  -- Store dependencies
+  self._file_system = deps.file_system
+  self._event_bus = deps.event_bus
+
   return self
 end
 
@@ -24,6 +48,15 @@ function WebBundler:bundle(assets, config)
 
   local bundledAssets = {}
   local errors = {}
+
+  -- Emit bundling start event
+  if self._event_bus then
+    self._event_bus:emit("bundler:start", {
+      platform = "web",
+      assetCount = #assets,
+      outputPath = outputPath
+    })
+  end
 
   -- Create output directories
   self:_createDirectories(outputPath)
@@ -77,6 +110,17 @@ function WebBundler:bundle(assets, config)
   self:_writeJSON(manifestPath, manifest)
 
   local success = #errors == 0
+
+  -- Emit bundling complete event
+  if self._event_bus then
+    self._event_bus:emit("bundler:complete", {
+      platform = "web",
+      success = success,
+      assetCount = #bundledAssets,
+      errorCount = #errors
+    })
+  end
+
   return success, manifest, errors
 end
 
