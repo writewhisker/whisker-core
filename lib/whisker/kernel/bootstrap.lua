@@ -14,186 +14,6 @@ local Loader = require("whisker.kernel.loader")
 
 local Bootstrap = {}
 
---- Register media factories with lazy loading
--- @param container Container The DI container
--- @param events EventBus The event bus instance
-local function register_media_factories(container, events)
-  -- Register asset_cache (leaf - no dependencies beyond event_bus)
-  container:register("asset_cache", function(c)
-    local AssetCache = require("whisker.media.AssetCache")
-    return AssetCache.new({}, {
-      event_bus = c:resolve("events"),
-      logger = c:resolve("logger")
-    })
-  end, {
-    singleton = true,
-    implements = "IAssetCache",
-    depends = {"events", "logger"}
-  })
-
-  -- Register asset_loader (depends on event_bus)
-  container:register("asset_loader", function(c)
-    local AssetLoader = require("whisker.media.AssetLoader")
-    return AssetLoader.new({}, {
-      event_bus = c:resolve("events")
-    })
-  end, {
-    singleton = true,
-    implements = "IAssetLoader",
-    depends = {"events"}
-  })
-
-  -- Register asset_manager (depends on cache and loader)
-  container:register("asset_manager", function(c)
-    local AssetManager = require("whisker.media.AssetManager")
-    return AssetManager.new({}, {
-      asset_cache = c:resolve("asset_cache"),
-      asset_loader = c:resolve("asset_loader"),
-      event_bus = c:resolve("events")
-    })
-  end, {
-    singleton = true,
-    implements = "IAssetManager",
-    depends = {"asset_cache", "asset_loader", "events"}
-  })
-
-  -- Register audio_manager (depends on asset_manager)
-  container:register("audio_manager", function(c)
-    local AudioManager = require("whisker.media.AudioManager")
-    return AudioManager.new({}, {
-      asset_manager = c:resolve("asset_manager"),
-      event_bus = c:resolve("events")
-    })
-  end, {
-    singleton = true,
-    implements = "IAudioManager",
-    depends = {"asset_manager", "events"}
-  })
-
-  -- Register image_manager (depends on asset_manager)
-  container:register("image_manager", function(c)
-    local ImageManager = require("whisker.media.ImageManager")
-    return ImageManager.new({}, {
-      asset_manager = c:resolve("asset_manager"),
-      event_bus = c:resolve("events")
-    })
-  end, {
-    singleton = true,
-    implements = "IImageManager",
-    depends = {"asset_manager", "events"}
-  })
-
-  -- Register preload_manager (depends on asset_manager)
-  container:register("preload_manager", function(c)
-    local PreloadManager = require("whisker.media.PreloadManager")
-    return PreloadManager.new({}, {
-      asset_manager = c:resolve("asset_manager"),
-      event_bus = c:resolve("events")
-    })
-  end, {
-    singleton = true,
-    implements = "IPreloadManager",
-    depends = {"asset_manager", "events"}
-  })
-
-  -- Register bundlers (lazy loaded - typically only needed for export)
-  container:register_lazy("web_bundler", "whisker.media.bundlers.WebBundler", {
-    singleton = false,
-    implements = "IBundler"
-  })
-
-  container:register_lazy("desktop_bundler", "whisker.media.bundlers.DesktopBundler", {
-    singleton = false,
-    implements = "IBundler"
-  })
-
-  container:register_lazy("mobile_bundler", "whisker.media.bundlers.MobileBundler", {
-    singleton = false,
-    implements = "IBundler"
-  })
-
-  -- Register media_directive_parser (depends on all managers)
-  container:register("media_directive_parser", function(c)
-    local MediaDirectiveParser = require("whisker.media.MediaDirectiveParser")
-    return MediaDirectiveParser.new({}, {
-      audio_manager = c:resolve("audio_manager"),
-      image_manager = c:resolve("image_manager"),
-      preload_manager = c:resolve("preload_manager")
-    })
-  end, {
-    singleton = true,
-    depends = {"audio_manager", "image_manager", "preload_manager"}
-  })
-end
-
---- Register core factories with lazy loading
--- @param container Container The DI container
--- @param events EventBus The event bus instance
-local function register_core_factories(container, events)
-  -- Register choice_factory (leaf - no dependencies)
-  container:register_lazy("choice_factory", "whisker.core.factories.choice_factory", {
-    singleton = true,
-    implements = "IChoiceFactory"
-  })
-
-  -- Register passage_factory (depends on choice_factory)
-  container:register("passage_factory", function(c)
-    local PassageFactory = require("whisker.core.factories.passage_factory")
-    return PassageFactory.new({
-      choice_factory = c:resolve("choice_factory")
-    })
-  end, {
-    singleton = true,
-    implements = "IPassageFactory",
-    depends = {"choice_factory"}
-  })
-
-  -- Register story_factory (depends on passage_factory)
-  container:register("story_factory", function(c)
-    local StoryFactory = require("whisker.core.factories.story_factory")
-    return StoryFactory.new({
-      passage_factory = c:resolve("passage_factory"),
-      event_bus = c:resolve("events")
-    })
-  end, {
-    singleton = true,
-    implements = "IStoryFactory",
-    depends = {"passage_factory", "events"}
-  })
-
-  -- Register game_state_factory (leaf - no dependencies)
-  container:register_lazy("game_state_factory", "whisker.core.factories.game_state_factory", {
-    singleton = true,
-    implements = "IGameStateFactory"
-  })
-
-  -- Register lua_interpreter_factory (leaf - no dependencies)
-  container:register_lazy("lua_interpreter_factory", "whisker.core.factories.lua_interpreter_factory", {
-    singleton = true,
-    implements = "ILuaInterpreterFactory"
-  })
-
-  -- Register engine_factory (depends on all other factories)
-  container:register("engine_factory", function(c)
-    -- Return a factory function that creates engines
-    return {
-      create = function(self, story, game_state, config)
-        local Engine = require("whisker.core.engine")
-        return Engine.new(story, game_state, config, {
-          story_factory = c:resolve("story_factory"),
-          game_state_factory = c:resolve("game_state_factory"),
-          lua_interpreter_factory = c:resolve("lua_interpreter_factory"),
-          event_bus = c:resolve("events")
-        })
-      end
-    }
-  end, {
-    singleton = true,
-    implements = "IEngineFactory",
-    depends = {"story_factory", "game_state_factory", "lua_interpreter_factory", "events"}
-  })
-end
-
 --- Create and initialize a new whisker-core instance
 -- @param options table|nil Bootstrap options
 -- @return table The initialized kernel components
@@ -216,7 +36,7 @@ function Bootstrap.create(options)
   local loader = Loader.new(container, registry)
   container:register("loader", loader, {singleton = true})
 
-  -- Create logger (simple default)
+  -- Create logger (simple default) - will be moved to service_extension
   local logger = {
     level = options.log_level or "info",
     log = function(self, level, msg)
@@ -231,11 +51,9 @@ function Bootstrap.create(options)
   }
   container:register("logger", logger, {singleton = true})
 
-  -- Register core factories (lazy-loaded)
-  register_core_factories(container, events)
-
-  -- Register media factories (lazy-loaded)
-  register_media_factories(container, events)
+  -- Load extensions (core, media, services)
+  local Extensions = require("whisker.extensions")
+  Extensions.load_all(container, events)
 
   -- Emit bootstrap event
   events:emit("kernel:bootstrap", {
@@ -262,9 +80,6 @@ end
 -- @return table The initialized kernel with modules loaded
 function Bootstrap.init(options)
   local kernel = Bootstrap.create(options)
-
-  -- Register core modules in registry
-  -- These would be loaded from the actual module files
 
   -- Emit ready event
   kernel.events:emit("kernel:ready", {
