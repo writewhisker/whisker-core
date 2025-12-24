@@ -2,22 +2,71 @@
 -- Coordinates preloading operations with group management and memory budget
 
 local Types = require("whisker.media.types")
-local AssetManager = require("whisker.media.AssetManager")
 
 local PreloadManager = {
-  _VERSION = "1.0.0",
-
-  _preloadGroups = {},
-  _activePreloads = {},
-  _preloadQueue = {},
-  _nextPreloadId = 1,
-  _maxConcurrentPreloads = 3,
-  _preloadBudgetRatio = 0.3,
-  _initialized = false
+  _VERSION = "1.0.0"
 }
+PreloadManager.__index = PreloadManager
 
+-- Dependencies for DI pattern
+PreloadManager._dependencies = {"asset_manager", "event_bus"}
+
+-- Cached asset manager for backward compatibility (lazy loaded)
+local _asset_manager_cache = nil
+
+--- Get the asset manager (supports both DI and backward compatibility)
+local function get_asset_manager(deps)
+  if deps and deps.asset_manager then
+    return deps.asset_manager
+  end
+  if not _asset_manager_cache then
+    _asset_manager_cache = require("whisker.media.AssetManager")
+  end
+  return _asset_manager_cache
+end
+
+--- Create a new PreloadManager instance via DI container
+-- @param deps table Dependencies from container (asset_manager, event_bus)
+-- @return function Factory function that creates PreloadManager instances
+function PreloadManager.create(deps)
+  return function(config)
+    return PreloadManager.new(config, deps)
+  end
+end
+
+--- Create a new PreloadManager instance
+-- @param config table|nil Configuration options
+-- @param deps table|nil Dependencies from container
+-- @return PreloadManager The new manager instance
+function PreloadManager.new(config, deps)
+  local self = setmetatable({}, PreloadManager)
+
+  config = config or {}
+  deps = deps or {}
+
+  -- Store dependencies
+  self._event_bus = deps.event_bus
+  self._asset_manager = get_asset_manager(deps)
+
+  self._preloadGroups = {}
+  self._activePreloads = {}
+  self._preloadQueue = {}
+  self._nextPreloadId = 1
+  self._maxConcurrentPreloads = config.maxConcurrent or 3
+  self._preloadBudgetRatio = config.budgetRatio or 0.3
+  self._initialized = true
+
+  return self
+end
+
+-- Legacy singleton-style initialize (for backward compatibility)
 function PreloadManager:initialize(config)
   config = config or {}
+
+  -- Ensure asset manager is available for legacy usage
+  if not self._asset_manager then
+    self._asset_manager = get_asset_manager()
+  end
 
   self._preloadGroups = {}
   self._activePreloads = {}
@@ -65,7 +114,7 @@ function PreloadManager:preloadGroup(groupNameOrAssets, options)
   -- Filter already-loaded assets
   local assetsToLoad = {}
   for _, assetId in ipairs(assetIds) do
-    if not AssetManager:isLoaded(assetId) then
+    if not self._asset_manager:isLoaded(assetId) then
       table.insert(assetsToLoad, assetId)
     end
   end
@@ -113,8 +162,17 @@ end
 function PreloadManager:_startPreload(preloadOp)
   self._activePreloads[preloadOp.id] = preloadOp
 
+  -- Emit preload started event
+  if self._event_bus then
+    self._event_bus:emit("preload:start", {
+      preloadId = preloadOp.id,
+      assetCount = #preloadOp.assetIds,
+      priority = preloadOp.priority
+    })
+  end
+
   for _, assetId in ipairs(preloadOp.assetIds) do
-    AssetManager:load(assetId, function(asset, error)
+    self._asset_manager:load(assetId, function(asset, error)
       self:_handleAssetLoaded(preloadOp.id, assetId, asset, error)
     end)
   end
@@ -133,6 +191,17 @@ function PreloadManager:_handleAssetLoaded(preloadId, assetId, asset, error)
     })
   end
 
+  -- Emit progress event
+  if self._event_bus then
+    self._event_bus:emit("preload:progress", {
+      preloadId = preloadId,
+      assetId = assetId,
+      loaded = preloadOp.loaded,
+      total = preloadOp.total,
+      success = not error
+    })
+  end
+
   if preloadOp.onProgress then
     preloadOp.onProgress(preloadOp.loaded, preloadOp.total)
   end
@@ -147,6 +216,16 @@ function PreloadManager:_completePreload(preloadId)
   if not preloadOp then return end
 
   local successCount = preloadOp.loaded - #preloadOp.errors
+
+  -- Emit completion event
+  if self._event_bus then
+    self._event_bus:emit("preload:complete", {
+      preloadId = preloadId,
+      successCount = successCount,
+      errorCount = #preloadOp.errors,
+      duration = os.clock() - preloadOp.startTime
+    })
+  end
 
   if preloadOp.onComplete then
     preloadOp.onComplete(successCount, preloadOp.errors)
@@ -201,7 +280,7 @@ function PreloadManager:unloadGroup(groupNameOrAssets)
   end
 
   for _, assetId in ipairs(assetIds) do
-    AssetManager:unload(assetId)
+    self._asset_manager:unload(assetId)
   end
 
   return true
@@ -240,7 +319,7 @@ function PreloadManager:extractPassageAssets(passage)
 end
 
 function PreloadManager:getPreloadBudget()
-  local cacheStats = AssetManager:getCacheStats()
+  local cacheStats = self._asset_manager:getCacheStats()
   return cacheStats.bytesLimit * self._preloadBudgetRatio
 end
 
@@ -249,8 +328,8 @@ function PreloadManager:getPreloadUsage()
 
   for _, preloadOp in pairs(self._activePreloads) do
     for _, assetId in ipairs(preloadOp.assetIds) do
-      if AssetManager:isLoaded(assetId) then
-        local asset = AssetManager:get(assetId)
+      if self._asset_manager:isLoaded(assetId) then
+        local asset = self._asset_manager:get(assetId)
         if asset and asset.sizeBytes then
           usage = usage + asset.sizeBytes
         end
