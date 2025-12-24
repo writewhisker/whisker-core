@@ -2,33 +2,99 @@
 -- High-level audio playback with channels, crossfading, and ducking
 
 local Types = require("whisker.media.types")
-local AudioChannel = require("whisker.media.AudioChannel")
-local AssetManager = require("whisker.media.AssetManager")
 
 local AudioManager = {
-  _VERSION = "1.0.0",
-
-  _backend = nil,
-  _channels = {},
-  _sources = {},
-  _nextSourceId = 1,
-  _masterVolume = 1.0,
-  _initialized = false,
-
-  _crossfades = {},
-  _fades = {}
+  _VERSION = "1.0.0"
 }
+AudioManager.__index = AudioManager
 
-function AudioManager:initialize(backend, config)
+-- Dependencies for DI pattern
+AudioManager._dependencies = {"audio_backend", "asset_manager", "event_bus"}
+
+-- Cached dependencies for backward compatibility (lazy loaded)
+local _audio_channel_cache = nil
+local _asset_manager_cache = nil
+
+--- Get AudioChannel class (supports both DI and backward compatibility)
+local function get_audio_channel(deps)
+  if deps and deps.audio_channel then
+    return deps.audio_channel
+  end
+  if not _audio_channel_cache then
+    _audio_channel_cache = require("whisker.media.AudioChannel")
+  end
+  return _audio_channel_cache
+end
+
+--- Get the asset manager (supports both DI and backward compatibility)
+local function get_asset_manager(deps)
+  if deps and deps.asset_manager then
+    return deps.asset_manager
+  end
+  if not _asset_manager_cache then
+    _asset_manager_cache = require("whisker.media.AssetManager")
+  end
+  return _asset_manager_cache
+end
+
+--- Create a new AudioManager instance via DI container
+-- @param deps table Dependencies from container (audio_backend, asset_manager, event_bus)
+-- @return function Factory function that creates AudioManager instances
+function AudioManager.create(deps)
+  return function(config)
+    return AudioManager.new(config, deps)
+  end
+end
+
+--- Create a new AudioManager instance
+-- @param config table|nil Configuration options
+-- @param deps table|nil Dependencies from container
+-- @return AudioManager The new manager instance
+function AudioManager.new(config, deps)
+  local self = setmetatable({}, AudioManager)
+
   config = config or {}
+  deps = deps or {}
 
-  self._backend = backend
+  -- Store dependencies
+  self._event_bus = deps.event_bus
+  self._audio_backend = deps.audio_backend
+  self._asset_manager = get_asset_manager(deps)
+  self._audio_channel_class = get_audio_channel(deps)
+
+  self._backend = nil
   self._channels = {}
   self._sources = {}
   self._nextSourceId = 1
   self._masterVolume = config.masterVolume or 1.0
   self._crossfades = {}
   self._fades = {}
+  self._initialized = false
+
+  return self
+end
+
+-- Legacy singleton-style initialize (for backward compatibility)
+function AudioManager:initialize(backend, config)
+  config = config or {}
+
+  self._backend = backend or self._audio_backend
+  self._channels = {}
+  self._sources = {}
+  self._nextSourceId = 1
+  self._masterVolume = config.masterVolume or 1.0
+  self._crossfades = {}
+  self._fades = {}
+
+  -- Initialize asset manager if needed
+  if not self._asset_manager then
+    self._asset_manager = get_asset_manager()
+  end
+
+  -- Get AudioChannel class if needed
+  if not self._audio_channel_class then
+    self._audio_channel_class = get_audio_channel()
+  end
 
   -- Initialize backend
   if self._backend then
@@ -46,7 +112,8 @@ function AudioManager:initialize(backend, config)
 end
 
 function AudioManager:createChannel(name, config)
-  local channel = AudioChannel.new(name, config)
+  local AudioChannelClass = self._audio_channel_class or get_audio_channel()
+  local channel = AudioChannelClass.new(name, config)
   self._channels[name] = channel
   return channel
 end
@@ -62,12 +129,13 @@ function AudioManager:play(assetId, options)
 
   options = options or {}
 
-  -- Get asset from AssetManager
-  local asset = AssetManager:get(assetId)
+  -- Get asset from injected asset manager
+  local asset_manager = self._asset_manager or get_asset_manager()
+  local asset = asset_manager:get(assetId)
 
   if not asset then
     -- Try to load synchronously
-    local loadedAsset, err = AssetManager:loadSync(assetId)
+    local loadedAsset, err = asset_manager:loadSync(assetId)
     if not loadedAsset then
       return nil
     end
@@ -129,7 +197,7 @@ function AudioManager:play(assetId, options)
   end
 
   -- Retain asset in cache
-  AssetManager:retain(assetId)
+  asset_manager:retain(assetId)
 
   -- Play the source
   local playOptions = {
@@ -144,6 +212,15 @@ function AudioManager:play(assetId, options)
   end
 
   self._backend:play(source, playOptions)
+
+  -- Emit event
+  if self._event_bus then
+    self._event_bus:emit("audio:play", {
+      sourceId = sourceId,
+      assetId = assetId,
+      channel = options.channel or "SFX"
+    })
+  end
 
   return sourceId
 end
@@ -191,8 +268,18 @@ function AudioManager:_stopSource(sourceId)
     end
   end
 
-  -- Release asset
-  AssetManager:release(sourceInfo.assetId)
+  -- Release asset using injected asset manager
+  local asset_manager = self._asset_manager or get_asset_manager()
+  asset_manager:release(sourceInfo.assetId)
+
+  -- Emit event
+  if self._event_bus then
+    self._event_bus:emit("audio:stop", {
+      sourceId = sourceId,
+      assetId = sourceInfo.assetId,
+      channel = sourceInfo.channelName
+    })
+  end
 
   -- Remove source
   self._sources[sourceId] = nil
