@@ -9,7 +9,10 @@ local Extensions = {}
 --- Load all extensions in order
 -- @param container Container The DI container
 -- @param events EventBus The event bus instance
-function Extensions.load_all(container, events)
+-- @param options table|nil Bootstrap options (passed to service_extension)
+function Extensions.load_all(container, events, options)
+  options = options or {}
+
   -- Load extensions in dependency order
   local extension_modules = {
     "whisker.extensions.service_extension",  -- Logger and base services first
@@ -20,7 +23,7 @@ function Extensions.load_all(container, events)
   for _, ext_path in ipairs(extension_modules) do
     local ok, ext = pcall(require, ext_path)
     if ok and ext and ext.register then
-      ext.register(container, events)
+      ext.register(container, events, options)
     end
   end
 
