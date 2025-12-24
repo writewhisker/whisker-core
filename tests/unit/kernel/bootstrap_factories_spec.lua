@@ -257,4 +257,143 @@ describe("Bootstrap factory wiring", function()
       assert.equals(f1, f2)
     end)
   end)
+
+  describe("media factory registration", function()
+    it("registers asset_cache", function()
+      local kernel = Bootstrap.create()
+      assert.is_true(kernel.container:has("asset_cache"))
+    end)
+
+    it("registers asset_loader", function()
+      local kernel = Bootstrap.create()
+      assert.is_true(kernel.container:has("asset_loader"))
+    end)
+
+    it("registers asset_manager", function()
+      local kernel = Bootstrap.create()
+      assert.is_true(kernel.container:has("asset_manager"))
+    end)
+
+    it("registers audio_manager", function()
+      local kernel = Bootstrap.create()
+      assert.is_true(kernel.container:has("audio_manager"))
+    end)
+
+    it("registers image_manager", function()
+      local kernel = Bootstrap.create()
+      assert.is_true(kernel.container:has("image_manager"))
+    end)
+
+    it("registers preload_manager", function()
+      local kernel = Bootstrap.create()
+      assert.is_true(kernel.container:has("preload_manager"))
+    end)
+
+    it("registers web_bundler", function()
+      local kernel = Bootstrap.create()
+      assert.is_true(kernel.container:has("web_bundler"))
+    end)
+
+    it("registers desktop_bundler", function()
+      local kernel = Bootstrap.create()
+      assert.is_true(kernel.container:has("desktop_bundler"))
+    end)
+
+    it("registers mobile_bundler", function()
+      local kernel = Bootstrap.create()
+      assert.is_true(kernel.container:has("mobile_bundler"))
+    end)
+  end)
+
+  describe("media factory resolution", function()
+    it("resolves asset_cache with injected event_bus", function()
+      local kernel = Bootstrap.create()
+      local cache = kernel.container:resolve("asset_cache")
+
+      assert.is_not_nil(cache)
+      assert.is_function(cache.get)
+      assert.is_function(cache.set)
+      assert.is_not_nil(cache._event_bus)
+    end)
+
+    it("resolves asset_loader with injected event_bus", function()
+      local kernel = Bootstrap.create()
+      local loader = kernel.container:resolve("asset_loader")
+
+      assert.is_not_nil(loader)
+      assert.is_function(loader.load)
+      assert.is_not_nil(loader._event_bus)
+    end)
+
+    it("resolves asset_manager with injected dependencies", function()
+      local kernel = Bootstrap.create()
+      local manager = kernel.container:resolve("asset_manager")
+
+      assert.is_not_nil(manager)
+      assert.is_function(manager.register)
+      assert.is_function(manager.load)
+      assert.is_not_nil(manager._cache)
+      assert.is_not_nil(manager._loader)
+      assert.is_not_nil(manager._event_bus)
+    end)
+
+    it("resolves audio_manager with injected asset_manager", function()
+      local kernel = Bootstrap.create()
+      local manager = kernel.container:resolve("audio_manager")
+
+      assert.is_not_nil(manager)
+      assert.is_function(manager.play)
+      assert.is_not_nil(manager._asset_manager)
+      assert.is_not_nil(manager._event_bus)
+    end)
+
+    it("resolves image_manager with injected asset_manager", function()
+      local kernel = Bootstrap.create()
+      local manager = kernel.container:resolve("image_manager")
+
+      assert.is_not_nil(manager)
+      assert.is_function(manager.display)
+      assert.is_not_nil(manager._asset_manager)
+      assert.is_not_nil(manager._event_bus)
+    end)
+
+    it("resolves preload_manager with injected asset_manager", function()
+      local kernel = Bootstrap.create()
+      local manager = kernel.container:resolve("preload_manager")
+
+      assert.is_not_nil(manager)
+      assert.is_function(manager.preloadGroup)
+      assert.is_not_nil(manager._asset_manager)
+      assert.is_not_nil(manager._event_bus)
+    end)
+  end)
+
+  describe("media singleton behavior", function()
+    it("returns same asset_cache instance", function()
+      local kernel = Bootstrap.create()
+
+      local c1 = kernel.container:resolve("asset_cache")
+      local c2 = kernel.container:resolve("asset_cache")
+
+      assert.equals(c1, c2)
+    end)
+
+    it("returns same asset_manager instance", function()
+      local kernel = Bootstrap.create()
+
+      local m1 = kernel.container:resolve("asset_manager")
+      local m2 = kernel.container:resolve("asset_manager")
+
+      assert.equals(m1, m2)
+    end)
+
+    it("returns same audio_manager instance", function()
+      local kernel = Bootstrap.create()
+
+      local m1 = kernel.container:resolve("audio_manager")
+      local m2 = kernel.container:resolve("audio_manager")
+
+      assert.equals(m1, m2)
+    end)
+  end)
 end)

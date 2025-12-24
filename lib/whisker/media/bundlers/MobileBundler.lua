@@ -6,8 +6,32 @@ local BundlingStrategy = require("whisker.media.bundlers.BundlingStrategy")
 local MobileBundler = setmetatable({}, {__index = BundlingStrategy})
 MobileBundler.__index = MobileBundler
 
-function MobileBundler.new()
+-- Dependencies for DI pattern (inherits from BundlingStrategy)
+MobileBundler._dependencies = {"file_system", "event_bus"}
+
+--- Create a new MobileBundler instance via DI container
+-- @param deps table Dependencies from container (file_system, event_bus)
+-- @return function Factory function that creates MobileBundler instances
+function MobileBundler.create(deps)
+  return function(config)
+    return MobileBundler.new(config, deps)
+  end
+end
+
+--- Create a new MobileBundler instance
+-- @param config table|nil Configuration options
+-- @param deps table|nil Dependencies from container
+-- @return MobileBundler The new bundler instance
+function MobileBundler.new(config, deps)
   local self = setmetatable({}, MobileBundler)
+
+  config = config or {}
+  deps = deps or {}
+
+  -- Store dependencies
+  self._file_system = deps.file_system
+  self._event_bus = deps.event_bus
+
   return self
 end
 
@@ -20,6 +44,15 @@ function MobileBundler:bundle(assets, config)
 
   local bundledAssets = {}
   local errors = {}
+
+  -- Emit bundling start event
+  if self._event_bus then
+    self._event_bus:emit("bundler:start", {
+      platform = platform,
+      assetCount = #assets,
+      outputPath = outputPath
+    })
+  end
 
   self:_createPlatformDirectories(outputPath, platform)
 
@@ -51,6 +84,17 @@ function MobileBundler:bundle(assets, config)
   local manifest = self:generateManifest(bundledAssets)
 
   local success = #errors == 0
+
+  -- Emit bundling complete event
+  if self._event_bus then
+    self._event_bus:emit("bundler:complete", {
+      platform = platform,
+      success = success,
+      assetCount = #bundledAssets,
+      errorCount = #errors
+    })
+  end
+
   return success, manifest, errors
 end
 

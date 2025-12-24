@@ -5,6 +5,7 @@
 -- @license MIT
 
 local Factories = require("whisker.interfaces.factories")
+local Media = require("whisker.interfaces.media")
 
 return {
   IFormat = require("whisker.interfaces.format"),
@@ -27,4 +28,13 @@ return {
   ILuaInterpreterFactory = Factories.ILuaInterpreterFactory,
   IEngineFactory = Factories.IEngineFactory,
   Factories = Factories,
+  -- Media interfaces (DI pattern)
+  IAssetCache = Media.IAssetCache,
+  IAssetLoader = Media.IAssetLoader,
+  IAssetManager = Media.IAssetManager,
+  IAudioManager = Media.IAudioManager,
+  IImageManager = Media.IImageManager,
+  IPreloadManager = Media.IPreloadManager,
+  IBundler = Media.IBundler,
+  Media = Media,
 }

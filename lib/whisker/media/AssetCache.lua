@@ -8,10 +8,28 @@ local AssetCache = {
 }
 AssetCache.__index = AssetCache
 
-function AssetCache.new(config)
+-- Dependencies for DI pattern (optional - cache is mostly standalone)
+AssetCache._dependencies = {"logger", "event_bus"}
+
+--- Create a new AssetCache instance via DI container
+-- @param deps table Dependencies from container (logger, event_bus)
+-- @return function Factory function that creates AssetCache instances
+function AssetCache.create(deps)
+  -- Return a factory function that creates caches
+  return function(config)
+    return AssetCache.new(config, deps)
+  end
+end
+
+function AssetCache.new(config, deps)
   local self = setmetatable({}, AssetCache)
 
   config = config or {}
+  deps = deps or {}
+
+  -- Store dependencies
+  self._logger = deps.logger
+  self._event_bus = deps.event_bus
 
   self._cache = {}
   self._accessOrder = {}
@@ -71,6 +89,16 @@ function AssetCache:set(assetId, data, sizeBytes)
 
   self:_touchAccess(assetId)
 
+  -- Emit event if event bus is available
+  if self._event_bus then
+    self._event_bus:emit("cache:set", {
+      assetId = assetId,
+      sizeBytes = sizeBytes,
+      totalBytes = self._bytesUsed,
+      assetCount = self._assetCount
+    })
+  end
+
   return true
 end
 
@@ -91,12 +119,23 @@ function AssetCache:remove(assetId)
     return false
   end
 
-  self._bytesUsed = self._bytesUsed - (entry.sizeBytes or 0)
+  local removedBytes = entry.sizeBytes or 0
+  self._bytesUsed = self._bytesUsed - removedBytes
   self._assetCount = self._assetCount - 1
 
   self._cache[assetId] = nil
   self._refCounts[assetId] = nil
   self:_removeFromAccessOrder(assetId)
+
+  -- Emit event if event bus is available
+  if self._event_bus then
+    self._event_bus:emit("cache:remove", {
+      assetId = assetId,
+      freedBytes = removedBytes,
+      totalBytes = self._bytesUsed,
+      assetCount = self._assetCount
+    })
+  end
 
   return true
 end
@@ -226,12 +265,24 @@ function AssetCache:_evictOne()
   -- Find oldest non-pinned, non-referenced asset
   for _, assetId in ipairs(self._accessOrder) do
     if not self._pinnedAssets[assetId] and self:getRefCount(assetId) == 0 then
+      -- Emit eviction event before removal
+      if self._event_bus then
+        local entry = self._cache[assetId]
+        self._event_bus:emit("cache:evict", {
+          assetId = assetId,
+          sizeBytes = entry and entry.sizeBytes or 0,
+          strategy = self._evictionStrategy
+        })
+      end
       return self:remove(assetId)
     end
   end
 
   return false
 end
+
+-- Alias for interface compatibility
+AssetCache.put = AssetCache.set
 
 function AssetCache:_countPinned()
   local count = 0

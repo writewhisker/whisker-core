@@ -6,8 +6,32 @@ local BundlingStrategy = {
 }
 BundlingStrategy.__index = BundlingStrategy
 
-function BundlingStrategy.new()
+-- Dependencies for DI pattern
+BundlingStrategy._dependencies = {"file_system", "event_bus"}
+
+--- Create a new BundlingStrategy instance via DI container
+-- @param deps table Dependencies from container (file_system, event_bus)
+-- @return function Factory function that creates BundlingStrategy instances
+function BundlingStrategy.create(deps)
+  return function(config)
+    return BundlingStrategy.new(config, deps)
+  end
+end
+
+--- Create a new BundlingStrategy instance
+-- @param config table|nil Configuration options
+-- @param deps table|nil Dependencies from container
+-- @return BundlingStrategy The new strategy instance
+function BundlingStrategy.new(config, deps)
   local self = setmetatable({}, BundlingStrategy)
+
+  config = config or {}
+  deps = deps or {}
+
+  -- Store dependencies
+  self._file_system = deps.file_system
+  self._event_bus = deps.event_bus
+
   return self
 end
 
@@ -35,6 +59,12 @@ end
 -- @return success (boolean)
 -- @return error (string or nil)
 function BundlingStrategy:copyAsset(sourcePath, destPath, options)
+  -- Use injected file system if available
+  if self._file_system then
+    return self._file_system:copy(sourcePath, destPath, options)
+  end
+
+  -- Fallback to native io
   local sourceFile = io.open(sourcePath, "rb")
   if not sourceFile then
     return false, "Cannot open source: " .. sourcePath
@@ -64,6 +94,12 @@ end
 -- @param path (string) File path
 -- @return size (number) Size in bytes
 function BundlingStrategy:getFileSize(path)
+  -- Use injected file system if available
+  if self._file_system and self._file_system.getSize then
+    return self._file_system:getSize(path)
+  end
+
+  -- Fallback to native io
   local file = io.open(path, "rb")
   if not file then return 0 end
 

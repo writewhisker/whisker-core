@@ -1,6 +1,9 @@
 -- Tests for AssetManager module
 describe("AssetManager", function()
   local AssetManager
+  local mock_event_bus
+  local mock_cache
+  local mock_loader
 
   before_each(function()
     package.loaded["whisker.media.AssetManager"] = nil
@@ -11,6 +14,62 @@ describe("AssetManager", function()
     package.loaded["whisker.media.FormatDetector"] = nil
     AssetManager = require("whisker.media.AssetManager")
     AssetManager:initialize()
+
+    -- Create mock event bus
+    mock_event_bus = {
+      events = {},
+      emit = function(self, event, data)
+        table.insert(self.events, {event = event, data = data})
+      end
+    }
+
+    -- Create mock cache
+    mock_cache = {
+      _data = {},
+      get = function(self, id)
+        return self._data[id]
+      end,
+      set = function(self, id, data, size)
+        self._data[id] = data
+        return true
+      end,
+      has = function(self, id)
+        return self._data[id] ~= nil
+      end,
+      remove = function(self, id)
+        if self._data[id] then
+          self._data[id] = nil
+          return true
+        end
+        return false
+      end,
+      pin = function() return true end,
+      unpin = function() return true end,
+      retain = function() return true end,
+      release = function() return true end,
+      getRefCount = function() return 0 end,
+      getStats = function()
+        return {bytesUsed = 0, bytesLimit = 100, assetCount = 0, hitRate = 0}
+      end,
+      setMemoryBudget = function() end,
+      clear = function(self) self._data = {} end
+    }
+
+    -- Create mock loader
+    mock_loader = {
+      load = function(self, config, callback)
+        if callback then
+          callback({
+            id = config.id,
+            type = config.type,
+            data = "mock data",
+            sizeBytes = 100
+          }, nil)
+        end
+        return true
+      end,
+      cancel = function() return true end
+    }
   end)
 
   describe("initialize", function()
@@ -212,6 +271,194 @@ describe("AssetManager", function()
 
     it("returns nil for unregistered asset", function()
       assert.is_nil(AssetManager:getConfig("nonexistent"))
+    end)
+  end)
+
+  describe("DI pattern", function()
+    it("declares dependencies", function()
+      assert.is_table(AssetManager._dependencies)
+      assert.same({"asset_cache", "asset_loader", "event_bus"}, AssetManager._dependencies)
+    end)
+
+    it("provides create factory function", function()
+      assert.is_function(AssetManager.create)
+    end)
+
+    it("provides new constructor", function()
+      assert.is_function(AssetManager.new)
+    end)
+
+    it("create returns a factory function", function()
+      local factory = AssetManager.create({
+        asset_cache = mock_cache,
+        asset_loader = mock_loader,
+        event_bus = mock_event_bus
+      })
+      assert.is_function(factory)
+    end)
+
+    it("factory creates manager instances with injected deps", function()
+      local factory = AssetManager.create({
+        asset_cache = mock_cache,
+        asset_loader = mock_loader,
+        event_bus = mock_event_bus
+      })
+      local manager = factory({})
+      assert.is_not_nil(manager)
+      assert.is_function(manager.register)
+      assert.is_function(manager.load)
+    end)
+
+    it("new creates instance with injected cache", function()
+      local manager = AssetManager.new({}, {asset_cache = mock_cache})
+      assert.equals(mock_cache, manager._cache)
+    end)
+
+    it("new creates instance with injected loader", function()
+      local manager = AssetManager.new({}, {asset_loader = mock_loader})
+      assert.equals(mock_loader, manager._loader)
+    end)
+
+    it("new creates instance with injected event_bus", function()
+      local manager = AssetManager.new({}, {event_bus = mock_event_bus})
+      assert.equals(mock_event_bus, manager._event_bus)
+    end)
+
+    it("works without deps (backward compatibility)", function()
+      local manager = AssetManager.new({})
+      assert.is_not_nil(manager)
+      assert.is_not_nil(manager._cache)
+      assert.is_not_nil(manager._loader)
+    end)
+  end)
+
+  describe("isRegistered", function()
+    it("returns true for registered assets", function()
+      local manager = AssetManager.new({})
+      manager:register({
+        id = "test",
+        type = "audio",
+        sources = {{format = "mp3", path = "test.mp3"}}
+      })
+      assert.is_true(manager:isRegistered("test"))
+    end)
+
+    it("returns false for unregistered assets", function()
+      local manager = AssetManager.new({})
+      assert.is_false(manager:isRegistered("nonexistent"))
+    end)
+  end)
+
+  describe("getAllIds", function()
+    it("is alias for getAllAssets", function()
+      assert.equals(AssetManager.getAllAssets, AssetManager.getAllIds)
+    end)
+  end)
+
+  describe("event emission", function()
+    it("emits asset:registered event on register", function()
+      local manager = AssetManager.new({}, {event_bus = mock_event_bus})
+      manager:register({
+        id = "test",
+        type = "audio",
+        sources = {{format = "mp3", path = "test.mp3"}}
+      })
+
+      local found = false
+      for _, e in ipairs(mock_event_bus.events) do
+        if e.event == "asset:registered" then
+          found = true
+          assert.equals("test", e.data.assetId)
+          assert.equals("audio", e.data.assetType)
+        end
+      end
+      assert.is_true(found, "Should have emitted asset:registered event")
+    end)
+
+    it("emits asset:unregistered event on unregister", function()
+      local manager = AssetManager.new({}, {
+        event_bus = mock_event_bus,
+        asset_cache = mock_cache
+      })
+      manager:register({
+        id = "test",
+        type = "audio",
+        sources = {{format = "mp3", path = "test.mp3"}}
+      })
+      mock_event_bus.events = {} -- Clear previous events
+      manager:unregister("test")
+
+      local found = false
+      for _, e in ipairs(mock_event_bus.events) do
+        if e.event == "asset:unregistered" then
+          found = true
+          assert.equals("test", e.data.assetId)
+        end
+      end
+      assert.is_true(found, "Should have emitted asset:unregistered event")
+    end)
+
+    it("emits asset:loading event on load", function()
+      local manager = AssetManager.new({}, {
+        event_bus = mock_event_bus,
+        asset_cache = mock_cache,
+        asset_loader = mock_loader
+      })
+      manager:register({
+        id = "test",
+        type = "audio",
+        sources = {{format = "mp3", path = "test.mp3"}}
+      })
+      mock_event_bus.events = {} -- Clear previous events
+      manager:load("test")
+
+      local found = false
+      for _, e in ipairs(mock_event_bus.events) do
+        if e.event == "asset:loading" then
+          found = true
+          assert.equals("test", e.data.assetId)
+        end
+      end
+      assert.is_true(found, "Should have emitted asset:loading event")
+    end)
+
+    it("emits asset:loaded event on successful load", function()
+      local manager = AssetManager.new({}, {
+        event_bus = mock_event_bus,
+        asset_cache = mock_cache,
+        asset_loader = mock_loader
+      })
+      manager:register({
+        id = "test",
+        type = "audio",
+        sources = {{format = "mp3", path = "test.mp3"}}
+      })
+      mock_event_bus.events = {} -- Clear previous events
+      manager:load("test")
+
+      local found = false
+      for _, e in ipairs(mock_event_bus.events) do
+        if e.event == "asset:loaded" then
+          found = true
+          assert.equals("test", e.data.assetId)
+        end
+      end
+      assert.is_true(found, "Should have emitted asset:loaded event")
+    end)
+
+    it("does not emit events when event_bus is nil", function()
+      local manager = AssetManager.new({}, {
+        asset_cache = mock_cache,
+        asset_loader = mock_loader
+      })
+      -- Should not error
+      manager:register({
+        id = "test",
+        type = "audio",
+        sources = {{format = "mp3", path = "test.mp3"}}
+      })
+      manager:load("test")
+      manager:unregister("test")
     end)
   end)
 end)

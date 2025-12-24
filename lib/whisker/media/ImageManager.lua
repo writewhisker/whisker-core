@@ -2,19 +2,69 @@
 -- Manages image display with responsive variants and containers
 
 local Types = require("whisker.media.types")
-local AssetManager = require("whisker.media.AssetManager")
 
 local ImageManager = {
-  _VERSION = "1.0.0",
-
-  _containers = {},
-  _displayedImages = {},
-  _devicePixelRatio = 1,
-  _initialized = false
+  _VERSION = "1.0.0"
 }
+ImageManager.__index = ImageManager
 
+-- Dependencies for DI pattern
+ImageManager._dependencies = {"asset_manager", "event_bus"}
+
+-- Cached asset manager for backward compatibility (lazy loaded)
+local _asset_manager_cache = nil
+
+--- Get the asset manager (supports both DI and backward compatibility)
+local function get_asset_manager(deps)
+  if deps and deps.asset_manager then
+    return deps.asset_manager
+  end
+  if not _asset_manager_cache then
+    _asset_manager_cache = require("whisker.media.AssetManager")
+  end
+  return _asset_manager_cache
+end
+
+--- Create a new ImageManager instance via DI container
+-- @param deps table Dependencies from container (asset_manager, event_bus)
+-- @return function Factory function that creates ImageManager instances
+function ImageManager.create(deps)
+  return function(config)
+    return ImageManager.new(config, deps)
+  end
+end
+
+--- Create a new ImageManager instance
+-- @param config table|nil Configuration options
+-- @param deps table|nil Dependencies from container
+-- @return ImageManager The new manager instance
+function ImageManager.new(config, deps)
+  local self = setmetatable({}, ImageManager)
+
+  config = config or {}
+  deps = deps or {}
+
+  -- Store dependencies
+  self._event_bus = deps.event_bus
+  self._asset_manager = get_asset_manager(deps)
+
+  self._containers = {}
+  self._displayedImages = {}
+  self._devicePixelRatio = config.devicePixelRatio or 1
+  self._defaultFitMode = config.defaultFitMode or Types.FitMode.CONTAIN
+  self._initialized = false
+
+  return self
+end
+
+-- Legacy singleton-style initialize (for backward compatibility)
 function ImageManager:initialize(config)
   config = config or {}
+
+  -- Ensure asset manager is available for legacy usage
+  if not self._asset_manager then
+    self._asset_manager = get_asset_manager()
+  end
 
   self._containers = {}
   self._displayedImages = {}
@@ -97,11 +147,12 @@ function ImageManager:display(assetId, options)
     self:createContainer(containerId, options)
   end
 
-  -- Get asset from AssetManager
-  local asset = AssetManager:get(assetId)
+  -- Get asset from injected asset manager
+  local asset_manager = self._asset_manager
+  local asset = asset_manager:get(assetId)
 
   if not asset then
-    local loadedAsset, err = AssetManager:loadSync(assetId)
+    local loadedAsset, err = asset_manager:loadSync(assetId)
     if not loadedAsset then
       return false, err
     end
@@ -138,7 +189,16 @@ function ImageManager:display(assetId, options)
   self._displayedImages[containerId] = displayInfo
 
   -- Retain asset
-  AssetManager:retain(assetId)
+  asset_manager:retain(assetId)
+
+  -- Emit event
+  if self._event_bus then
+    self._event_bus:emit("image:display", {
+      assetId = assetId,
+      containerId = containerId,
+      fitMode = displayInfo.fitMode
+    })
+  end
 
   return true
 end
@@ -169,7 +229,15 @@ function ImageManager:_removeDisplay(containerId)
   end
 
   -- Release asset
-  AssetManager:release(displayInfo.assetId)
+  self._asset_manager:release(displayInfo.assetId)
+
+  -- Emit event
+  if self._event_bus then
+    self._event_bus:emit("image:hide", {
+      assetId = displayInfo.assetId,
+      containerId = containerId
+    })
+  end
 
   self._displayedImages[containerId] = nil
 
@@ -264,7 +332,7 @@ function ImageManager:update(dt)
 end
 
 function ImageManager:_selectVariant(assetId)
-  local config = AssetManager:getConfig(assetId)
+  local config = self._asset_manager:getConfig(assetId)
   if not config or not config.variants then
     return nil
   end
@@ -320,9 +388,9 @@ function ImageManager:calculateFitDimensions(imageWidth, imageHeight, containerW
 end
 
 function ImageManager:registerImage(config)
-  -- Convenience method that delegates to AssetManager
+  -- Convenience method that delegates to asset manager
   config.type = "image"
-  return AssetManager:register(config)
+  return self._asset_manager:register(config)
 end
 
 return ImageManager
