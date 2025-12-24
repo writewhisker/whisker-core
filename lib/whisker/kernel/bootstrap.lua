@@ -36,24 +36,9 @@ function Bootstrap.create(options)
   local loader = Loader.new(container, registry)
   container:register("loader", loader, {singleton = true})
 
-  -- Create logger (simple default) - will be moved to service_extension
-  local logger = {
-    level = options.log_level or "info",
-    log = function(self, level, msg)
-      if options.debug then
-        print(string.format("[%s] %s", level:upper(), msg))
-      end
-    end,
-    info = function(self, msg) self:log("info", msg) end,
-    warn = function(self, msg) self:log("warn", msg) end,
-    error = function(self, msg) self:log("error", msg) end,
-    debug = function(self, msg) self:log("debug", msg) end,
-  }
-  container:register("logger", logger, {singleton = true})
-
-  -- Load extensions (core, media, services)
+  -- Load extensions (services, core, media) with options
   local Extensions = require("whisker.extensions")
-  Extensions.load_all(container, events)
+  Extensions.load_all(container, events, options)
 
   -- Emit bootstrap event
   events:emit("kernel:bootstrap", {
@@ -71,7 +56,7 @@ function Bootstrap.create(options)
     events = events,
     registry = registry,
     loader = loader,
-    logger = logger,
+    logger = container:resolve("logger"),
   }
 end
 
