@@ -7,6 +7,7 @@
 local Factories = require("whisker.interfaces.factories")
 local Media = require("whisker.interfaces.media")
 local Service = require("whisker.interfaces.service")
+local Vendor = require("whisker.interfaces.vendor")
 
 return {
   IFormat = require("whisker.interfaces.format"),
@@ -45,4 +46,9 @@ return {
   ServiceStatus = Service.ServiceStatus,
   ServicePriority = Service.ServicePriority,
   Service = Service,
+  -- Vendor interfaces (DI pattern for external dependencies)
+  IJsonCodec = Vendor.IJsonCodec,
+  IInkRuntime = Vendor.IInkRuntime,
+  IStoryWrapper = Vendor.IStoryWrapper,
+  Vendor = Vendor,
 }

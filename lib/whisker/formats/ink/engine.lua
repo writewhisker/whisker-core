@@ -8,7 +8,8 @@ local InkEngine = {}
 InkEngine.__index = InkEngine
 
 --- Dependencies injected via container
-InkEngine._dependencies = { "events", "state", "logger" }
+-- ink_runtime and json_codec are the vendor abstractions
+InkEngine._dependencies = { "events", "state", "logger", "ink_runtime", "json_codec" }
 
 --- Create a new InkEngine instance
 -- @param deps table Dependencies from container
@@ -16,9 +17,14 @@ InkEngine._dependencies = { "events", "state", "logger" }
 function InkEngine.new(deps)
   local self = setmetatable({}, InkEngine)
 
+  deps = deps or {}
   self.events = deps.events
   self.state = deps.state
   self.log = deps.logger
+
+  -- Vendor dependencies (lazy-loaded if not injected)
+  self._ink_runtime = deps.ink_runtime
+  self._json_codec = deps.json_codec
 
   self._story = nil
   self._loaded = false
@@ -31,6 +37,56 @@ function InkEngine.new(deps)
   return self
 end
 
+--- Create InkEngine via container pattern
+-- @param container table DI container
+-- @return InkEngine
+function InkEngine.create(container)
+  local deps = {}
+  if container and container.has then
+    if container:has("events") then
+      deps.events = container:resolve("events")
+    end
+    if container:has("state") then
+      deps.state = container:resolve("state")
+    end
+    if container:has("logger") then
+      deps.logger = container:resolve("logger")
+    end
+    if container:has("ink_runtime") then
+      deps.ink_runtime = container:resolve("ink_runtime")
+    end
+    if container:has("json_codec") then
+      deps.json_codec = container:resolve("json_codec")
+    end
+  end
+  return InkEngine.new(deps)
+end
+
+--- Get or lazy-load the JSON codec
+-- @private
+-- @return IJsonCodec
+function InkEngine:_get_json_codec()
+  if not self._json_codec then
+    local JsonCodec = require("whisker.vendor.codecs.json_codec")
+    self._json_codec = JsonCodec.new()
+  end
+  return self._json_codec
+end
+
+--- Get or lazy-load the Ink runtime
+-- @private
+-- @return IInkRuntime
+function InkEngine:_get_ink_runtime()
+  if not self._ink_runtime then
+    local InkRuntime = require("whisker.vendor.runtimes.ink_runtime")
+    self._ink_runtime = InkRuntime.new({
+      json_codec = self:_get_json_codec(),
+      logger = self.log,
+    })
+  end
+  return self._ink_runtime
+end
+
 --- Load Ink JSON into the engine
 -- @param json_text string The Ink JSON to load
 -- @return boolean Success
@@ -40,20 +96,19 @@ function InkEngine:load(json_text)
     return nil, "Story already loaded. Call reset() first."
   end
 
-  local tinta = require("whisker.vendor.tinta")
-  local json = require("cjson")
+  -- Use injected or lazy-loaded runtime
+  local ink_runtime = self:_get_ink_runtime()
 
-  local ok, parsed = pcall(json.decode, json_text)
-  if not ok then
-    return nil, "Failed to parse Ink JSON: " .. tostring(parsed)
+  -- Create story using the runtime abstraction
+  local story_wrapper, err = ink_runtime:create_story(json_text)
+  if err then
+    return nil, err
   end
 
-  local ok2, story = pcall(tinta.create_story, parsed)
-  if not ok2 then
-    return nil, "Failed to create Ink story: " .. tostring(story)
-  end
+  -- Get the ink data for metadata
+  local ink_data = story_wrapper:get_ink_data()
 
-  self._story = story
+  self._story = story_wrapper
   self._loaded = true
   self._started = false
   self._ended = false
@@ -65,8 +120,8 @@ function InkEngine:load(json_text)
   if self.events then
     self.events:emit("ink:loaded", {
       metadata = {
-        inkVersion = parsed.inkVersion,
-        hasVariables = parsed.root ~= nil,
+        inkVersion = ink_data.inkVersion,
+        hasVariables = ink_data.root ~= nil,
       },
     })
   end
@@ -245,6 +300,10 @@ function InkEngine:get_variable(name)
   if not self._loaded then
     return nil
   end
+  -- Use wrapper method if available, fallback to direct state access
+  if self._story.GetVariable then
+    return self._story:GetVariable(name)
+  end
   return self._story.state.variablesState:GetVariableWithName(name)
 end
 
@@ -257,7 +316,13 @@ function InkEngine:set_variable(name, value)
   end
 
   local old_value = self:get_variable(name)
-  self._story.state.variablesState:SetVariable(name, value)
+
+  -- Use wrapper method if available, fallback to direct state access
+  if self._story.SetVariable then
+    self._story:SetVariable(name, value)
+  else
+    self._story.state.variablesState:SetVariable(name, value)
+  end
 
   if self.events then
     self.events:emit("ink:variable_changed", {
@@ -276,7 +341,13 @@ function InkEngine:get_variable_names()
   end
 
   local names = {}
-  local vars_state = self._story.state.variablesState
+  -- Use wrapper method if available, fallback to direct state access
+  local vars_state
+  if self._story.get_variables_state then
+    vars_state = self._story:get_variables_state()
+  else
+    vars_state = self._story.state.variablesState
+  end
   if vars_state and vars_state._globalVariables then
     for name, _ in pairs(vars_state._globalVariables) do
       table.insert(names, name)
@@ -388,6 +459,10 @@ function InkEngine:save_state()
     return nil, "No story loaded"
   end
 
+  -- Use wrapper method if available, fallback to direct state access
+  if self._story.save then
+    return self._story:save()
+  end
   return self._story.state:save()
 end
 
@@ -398,7 +473,12 @@ function InkEngine:restore_state(state)
     return false, "No story loaded"
   end
 
-  self._story.state:load(state)
+  -- Use wrapper method if available, fallback to direct state access
+  if self._story.load then
+    self._story:load(state)
+  else
+    self._story.state:load(state)
+  end
 
   if self.events then
     self.events:emit("ink:state_restored", {})
@@ -481,8 +561,18 @@ function InkEngine:_setup_state_bridge()
 end
 
 --- Get the raw tinta story (for advanced usage)
--- @return Story
+-- @return Story The raw tinta story or wrapper
 function InkEngine:get_raw_story()
+  -- If we have a wrapper, return the underlying raw story
+  if self._story and self._story.get_raw_story then
+    return self._story:get_raw_story()
+  end
+  return self._story
+end
+
+--- Get the story wrapper (if using injected runtime)
+-- @return StoryWrapper|nil The story wrapper
+function InkEngine:get_story_wrapper()
   return self._story
 end
 

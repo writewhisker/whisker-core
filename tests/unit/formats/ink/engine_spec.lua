@@ -226,4 +226,128 @@ describe("InkEngine", function()
       assert.is_false(engine:is_started())
     end)
   end)
+
+  describe("DI pattern", function()
+    it("declares _dependencies", function()
+      assert.is_table(InkEngine._dependencies)
+      assert.is_truthy(#InkEngine._dependencies > 0)
+    end)
+
+    it("includes ink_runtime in dependencies", function()
+      local found = false
+      for _, dep in ipairs(InkEngine._dependencies) do
+        if dep == "ink_runtime" then
+          found = true
+          break
+        end
+      end
+      assert.is_true(found, "ink_runtime not found in _dependencies")
+    end)
+
+    it("includes json_codec in dependencies", function()
+      local found = false
+      for _, dep in ipairs(InkEngine._dependencies) do
+        if dep == "json_codec" then
+          found = true
+          break
+        end
+      end
+      assert.is_true(found, "json_codec not found in _dependencies")
+    end)
+
+    it("accepts injected ink_runtime", function()
+      local mock_story = {
+        canContinue = function() return true end,
+        Continue = function() return "Hello" end,
+        currentText = function() return "Hello" end,
+        currentTags = function() return {} end,
+        currentChoices = function() return {} end,
+        ChooseChoiceIndex = function() end,
+        ChoosePathString = function() end,
+        ResetState = function() end,
+        BindExternalFunction = function() end,
+        UnbindExternalFunction = function() end,
+        ObserveVariable = function() end,
+        RemoveVariableObserver = function() end,
+        currentFlowName = function() return "DEFAULT" end,
+        SwitchFlow = function() end,
+        RemoveFlow = function() end,
+        aliveFlowNames = function() return {} end,
+        HasFunction = function() return false end,
+        EvaluateFunction = function() return nil, "" end,
+        get_ink_data = function() return { inkVersion = 21, root = {} } end,
+        get_raw_story = function() return {} end,
+        state = {
+          save = function() return {} end,
+          load = function() end,
+          variablesState = {
+            GetVariableWithName = function() return nil end,
+            SetVariable = function() end,
+          },
+        },
+      }
+
+      local mock_runtime = {
+        create_story = function(self, json_text)
+          return mock_story
+        end,
+        get_runtime_name = function() return "mock" end,
+        get_ink_version = function() return 21 end,
+        supports = function() return true end,
+      }
+
+      local deps_with_runtime = {
+        events = mock_deps.events,
+        state = mock_deps.state,
+        logger = mock_deps.logger,
+        ink_runtime = mock_runtime,
+      }
+
+      local engine = InkEngine.new(deps_with_runtime)
+      assert.equals(mock_runtime, engine._ink_runtime)
+    end)
+
+    it("accepts injected json_codec", function()
+      local mock_codec = {
+        encode = function() return "{}" end,
+        decode = function() return {} end,
+        get_library_name = function() return "mock" end,
+        supports = function() return false end,
+        null = function() return nil end,
+      }
+
+      local deps_with_codec = {
+        events = mock_deps.events,
+        state = mock_deps.state,
+        logger = mock_deps.logger,
+        json_codec = mock_codec,
+      }
+
+      local engine = InkEngine.new(deps_with_codec)
+      assert.equals(mock_codec, engine._json_codec)
+    end)
+
+    it("has create factory method", function()
+      assert.is_function(InkEngine.create)
+    end)
+
+    it("create method resolves from container", function()
+      local mock_container = {
+        has = function(self, name)
+          return name == "events" or name == "logger"
+        end,
+        resolve = function(self, name)
+          if name == "events" then
+            return mock_deps.events
+          elseif name == "logger" then
+            return mock_deps.logger
+          end
+        end,
+      }
+
+      local engine = InkEngine.create(mock_container)
+      assert.is_table(engine)
+      assert.equals(mock_deps.events, engine.events)
+    end)
+  end)
 end)

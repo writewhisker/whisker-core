@@ -6,8 +6,23 @@
 
 local InkExporter = {}
 
+--- Dependencies injected via container
+InkExporter._dependencies = { "json_codec" }
+
 --- Ink JSON version
 InkExporter.INK_VERSION = 21
+
+--- Get or lazy-load JSON codec
+-- @param options table|nil Options that may include json_codec
+-- @return IJsonCodec
+local function get_json_codec(options)
+  if options and options.json_codec then
+    return options.json_codec
+  end
+  -- Lazy-load default codec
+  local JsonCodec = require("whisker.vendor.codecs.json_codec")
+  return JsonCodec.new()
+end
 
 --- Check if a story can be exported to Ink format
 -- @param story Story The story to check
@@ -91,12 +106,12 @@ function InkExporter.export(story, options)
     ink_structure.listDefs = story.metadata.listDefs
   end
 
-  -- Encode to JSON
-  local json = require("cjson")
-  local ok, json_str = pcall(json.encode, ink_structure)
+  -- Encode to JSON using injected or lazy-loaded codec
+  local json_codec = get_json_codec(options)
+  local json_str, err = json_codec:encode(ink_structure)
 
-  if not ok then
-    return nil, "Failed to encode JSON: " .. tostring(json_str)
+  if err then
+    return nil, "Failed to encode JSON: " .. err
   end
 
   return json_str

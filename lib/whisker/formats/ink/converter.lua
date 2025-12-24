@@ -6,18 +6,34 @@
 
 local InkConverter = {}
 
+--- Dependencies injected via container
+InkConverter._dependencies = { "json_codec" }
+
+--- Get or lazy-load JSON codec
+-- @param deps table|nil Dependencies that may include json_codec
+-- @return IJsonCodec
+local function get_json_codec(deps)
+  if deps and deps.json_codec then
+    return deps.json_codec
+  end
+  -- Lazy-load default codec
+  local JsonCodec = require("whisker.vendor.codecs.json_codec")
+  return JsonCodec.new()
+end
+
 --- Import Ink JSON to Whisker story format
 -- @param json_text string The Ink JSON string
--- @param deps table Dependencies (events, log)
+-- @param deps table|nil Dependencies (json_codec, events, log)
 -- @return Story|nil The imported story
 -- @return string|nil Error message
 function InkConverter.import(json_text, deps)
-  local json = require("cjson")
+  deps = deps or {}
+  local json_codec = get_json_codec(deps)
 
   -- Parse JSON
-  local ok, ink_data = pcall(json.decode, json_text)
-  if not ok then
-    return nil, "Failed to parse Ink JSON: " .. tostring(ink_data)
+  local ink_data, err = json_codec:decode(json_text)
+  if err then
+    return nil, "Failed to parse Ink JSON: " .. err
   end
 
   -- Validate Ink structure
