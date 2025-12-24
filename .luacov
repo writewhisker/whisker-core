@@ -1,0 +1,31 @@
+-- LuaCov configuration for whisker-core
+return {
+  -- Include patterns
+  include = {
+    "lib/whisker",
+  },
+
+  -- Exclude patterns
+  exclude = {
+    "tests/",
+    "spec/",
+    "examples/",
+    "fixtures/",
+  },
+
+  -- Report file name
+  reportfile = "luacov.report.out",
+
+  -- Stats file name
+  statsfile = "luacov.stats.out",
+
+  -- Run reporter on completion
+  runreport = false,
+
+  -- Delete stats file after reporting
+  deletestats = false,
+
+  -- Coverage threshold (0-100)
+  -- Actual thresholds checked by check-coverage.sh
+  codefromstrings = false,
+}

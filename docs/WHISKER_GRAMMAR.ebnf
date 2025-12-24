@@ -1,0 +1,152 @@
+(* Whisker Script Grammar - EBNF *)
+(* Version: 1.0 *)
+(* ISO/IEC 14977 Extended BNF notation *)
+
+(* ============================================ *)
+(* Top-level structure                          *)
+(* ============================================ *)
+
+program = { passage } ;
+
+passage = passage_header , content ;
+
+passage_header = "::" , identifier , newline ;
+
+content = { content_element } ;
+
+content_element = text
+                | choice
+                | conditional
+                | assignment
+                | embedded_lua
+                | comment ;
+
+(* ============================================ *)
+(* Choices                                      *)
+(* ============================================ *)
+
+choice = "+" , [ condition ] , choice_text , "->" , target , newline ;
+
+condition = "{" , expression , "}" ;
+
+choice_text = "[" , text , "]" ;
+
+target = identifier ;
+
+(* ============================================ *)
+(* Conditionals                                 *)
+(* ============================================ *)
+
+conditional = condition_open , expression , condition_close ,
+              content ,
+              conditional_end ;
+
+condition_open = "{" ;
+
+condition_close = "}" ;
+
+conditional_end = "{" , "/" , "}" ;
+
+(* ============================================ *)
+(* Expressions                                  *)
+(* ============================================ *)
+(* Precedence (low to high): ||, &&, comparison, unary *)
+
+expression = or_expression ;
+
+or_expression = and_expression , { "||" , and_expression } ;
+
+and_expression = comparison_expression , { "&&" , comparison_expression } ;
+
+comparison_expression = unary_expression , [ comparison_operator , unary_expression ] ;
+
+comparison_operator = "==" | "!=" | "<" | ">" | "<=" | ">=" ;
+
+unary_expression = [ "!" ] , primary_expression ;
+
+primary_expression = variable
+                   | literal
+                   | "(" , expression , ")" ;
+
+variable = "$" , identifier ;
+
+literal = number | string | boolean ;
+
+boolean = "true" | "false" ;
+
+(* ============================================ *)
+(* Assignments                                  *)
+(* ============================================ *)
+
+assignment = variable , assign_operator , value , newline ;
+
+assign_operator = "=" | "+=" | "-=" ;
+
+value = expression ;
+
+(* ============================================ *)
+(* Embedded Lua                                 *)
+(* ============================================ *)
+
+embedded_lua = "{{" , lua_code , "}}" ;
+
+lua_code = (* any Lua code, parsed by Lua interpreter *) ;
+
+(* ============================================ *)
+(* Comments                                     *)
+(* ============================================ *)
+
+comment = line_comment | block_comment ;
+
+line_comment = "//" , { any_character - newline } , newline ;
+
+block_comment = "/*" , { any_character } , "*/" ;
+
+(* ============================================ *)
+(* Terminals                                    *)
+(* ============================================ *)
+
+identifier = letter , { letter | digit | "_" } ;
+
+number = digit , { digit } , [ "." , digit , { digit } ] ;
+
+string = '"' , { string_character } , '"' ;
+
+string_character = ( any_character - ( '"' | "\" ) )
+                 | escape_sequence ;
+
+escape_sequence = "\" , ( "n" | "t" | "r" | "\" | "{" | "}" | '"' | "$" ) ;
+
+text = { any_character - special_marker } ;
+
+special_marker = "::" | "+" | "{" | "$" | "{{" | "//" | "/*" ;
+
+(* ============================================ *)
+(* Primitives                                   *)
+(* ============================================ *)
+
+letter = "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J"
+       | "K" | "L" | "M" | "N" | "O" | "P" | "Q" | "R" | "S" | "T"
+       | "U" | "V" | "W" | "X" | "Y" | "Z"
+       | "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j"
+       | "k" | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t"
+       | "u" | "v" | "w" | "x" | "y" | "z"
+       | "_" ;
+
+digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+
+newline = ? U+000A LINE FEED ? ;
+
+any_character = ? any Unicode character ? ;
+
+(* ============================================ *)
+(* Notes                                        *)
+(* ============================================ *)
+
+(*
+ * 1. Whitespace (spaces, tabs) is ignored except where significant
+ * 2. Newlines are significant for passage/choice boundaries
+ * 3. Comments are stripped during lexing (not in AST)
+ * 4. The grammar has no left recursion (suitable for recursive descent)
+ * 5. Expression operators use standard precedence climbing
+ *)
