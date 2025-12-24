@@ -276,4 +276,180 @@ describe("PersistenceService", function()
       -- Should not throw
     end)
   end)
+
+  describe("DI pattern", function()
+    it("declares dependencies", function()
+      assert.is_table(PersistenceService._dependencies)
+      assert.same({"state", "event_bus", "serializer", "file_storage", "logger"}, PersistenceService._dependencies)
+    end)
+
+    it("provides create factory function", function()
+      assert.is_function(PersistenceService.create)
+    end)
+
+    it("create returns a factory function", function()
+      local mock_state = {
+        snapshot = function() return {} end,
+        restore = function() end
+      }
+      local mock_event_bus = { emit = function() end }
+      local mock_logger = { debug = function() end }
+
+      local factory = PersistenceService.create({
+        state = mock_state,
+        event_bus = mock_event_bus,
+        logger = mock_logger
+      })
+
+      assert.is_function(factory)
+    end)
+
+    it("factory creates persistence instances with injected deps", function()
+      local mock_state = {
+        snapshot = function() return {} end,
+        restore = function() end
+      }
+      local mock_event_bus = { emit = function() end }
+      local mock_logger = { debug = function() end }
+
+      local factory = PersistenceService.create({
+        state = mock_state,
+        event_bus = mock_event_bus,
+        logger = mock_logger
+      })
+      local persistence = factory({})
+
+      assert.is_not_nil(persistence)
+      assert.equals(mock_state, persistence._state)
+      assert.equals(mock_event_bus, persistence._events)
+      assert.equals(mock_logger, persistence._logger)
+    end)
+
+    it("new accepts config and deps parameters", function()
+      local mock_state = {
+        snapshot = function() return {} end,
+        restore = function() end
+      }
+      local mock_event_bus = { emit = function() end }
+      local mock_logger = { debug = function() end }
+
+      local persistence = PersistenceService.new({}, {
+        state = mock_state,
+        event_bus = mock_event_bus,
+        logger = mock_logger
+      })
+
+      assert.equals(mock_state, persistence._state)
+      assert.equals(mock_event_bus, persistence._events)
+      assert.equals(mock_logger, persistence._logger)
+    end)
+
+    it("accepts file_storage as platform dependency", function()
+      local mock_storage = { save = function() end, load = function() end }
+
+      local persistence = PersistenceService.new({}, {
+        file_storage = mock_storage
+      })
+
+      assert.equals(mock_storage, persistence._platform)
+    end)
+
+    it("maintains backward compatibility with container", function()
+      local container = TestContainer.create()
+      container:register("state", StateManager, { singleton = true })
+      local persistence = PersistenceService.new(container)
+
+      assert.is_not_nil(persistence)
+      assert.is_not_nil(persistence._state)
+      assert.is_not_nil(persistence._events)
+    end)
+
+    it("works without deps (backward compatibility)", function()
+      local persistence = PersistenceService.new(nil)
+
+      assert.is_not_nil(persistence)
+      assert.is_nil(persistence._state)
+      assert.is_nil(persistence._events)
+    end)
+  end)
+
+  describe("IService interface", function()
+    it("implements getName", function()
+      local persistence = PersistenceService.new(nil)
+      assert.equals("persistence", persistence:getName())
+    end)
+
+    it("implements isInitialized", function()
+      local persistence = PersistenceService.new(nil)
+      assert.is_true(persistence:isInitialized())
+    end)
+
+    it("isInitialized returns false after destroy", function()
+      local persistence = PersistenceService.new(nil)
+      persistence:destroy()
+      assert.is_false(persistence:isInitialized())
+    end)
+  end)
+
+  describe("logger integration", function()
+    local persistence, state, log_calls
+
+    before_each(function()
+      log_calls = {}
+      local mock_logger = {
+        debug = function(self, msg)
+          table.insert(log_calls, msg)
+        end
+      }
+      state = StateManager.new(nil)
+
+      persistence = PersistenceService.new({}, {
+        state = state,
+        logger = mock_logger
+      })
+      log_calls = {}  -- Clear initialization log
+    end)
+
+    it("logs on save", function()
+      state:set("key", "value")
+      persistence:save("slot1")
+
+      assert.is_true(#log_calls >= 1)
+      local found = false
+      for _, msg in ipairs(log_calls) do
+        if msg:match("Saving") or msg:match("Save") then
+          found = true
+          break
+        end
+      end
+      assert.is_true(found)
+    end)
+
+    it("logs on load", function()
+      state:set("key", "value")
+      persistence:save("slot1")
+      log_calls = {}
+
+      persistence:load("slot1")
+
+      assert.is_true(#log_calls >= 1)
+    end)
+
+    it("logs on delete", function()
+      state:set("key", "value")
+      persistence:save("slot1")
+      log_calls = {}
+
+      persistence:delete("slot1")
+
+      assert.is_true(#log_calls >= 1)
+    end)
+
+    it("logs on destroy", function()
+      persistence:destroy()
+
+      assert.equals(1, #log_calls)
+      assert.is_truthy(log_calls[1]:match("destroying"))
+    end)
+  end)
 end)
