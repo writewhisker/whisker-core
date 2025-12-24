@@ -260,4 +260,145 @@ describe("StateManager", function()
       assert.equals(0, state:count())
     end)
   end)
+
+  describe("DI pattern", function()
+    it("declares dependencies", function()
+      assert.is_table(StateManager._dependencies)
+      assert.same({"event_bus", "logger"}, StateManager._dependencies)
+    end)
+
+    it("provides create factory function", function()
+      assert.is_function(StateManager.create)
+    end)
+
+    it("create returns a factory function", function()
+      local mock_event_bus = { emit = function() end }
+      local mock_logger = { debug = function() end }
+
+      local factory = StateManager.create({
+        event_bus = mock_event_bus,
+        logger = mock_logger
+      })
+
+      assert.is_function(factory)
+    end)
+
+    it("factory creates state instances with injected deps", function()
+      local mock_event_bus = { emit = function() end }
+      local mock_logger = { debug = function() end }
+
+      local factory = StateManager.create({
+        event_bus = mock_event_bus,
+        logger = mock_logger
+      })
+      local state = factory({})
+
+      assert.is_not_nil(state)
+      assert.equals(mock_event_bus, state._events)
+      assert.equals(mock_logger, state._logger)
+    end)
+
+    it("new accepts config and deps parameters", function()
+      local mock_event_bus = { emit = function() end }
+      local mock_logger = { debug = function() end }
+
+      local state = StateManager.new({}, {
+        event_bus = mock_event_bus,
+        logger = mock_logger
+      })
+
+      assert.equals(mock_event_bus, state._events)
+      assert.equals(mock_logger, state._logger)
+    end)
+
+    it("maintains backward compatibility with container", function()
+      local container = TestContainer.create()
+      local state = StateManager.new(container)
+
+      assert.is_not_nil(state)
+      assert.is_not_nil(state._events)
+    end)
+
+    it("works without deps (backward compatibility)", function()
+      local state = StateManager.new(nil)
+
+      assert.is_not_nil(state)
+      assert.is_nil(state._events)
+      assert.is_nil(state._logger)
+    end)
+  end)
+
+  describe("IService interface", function()
+    it("implements getName", function()
+      local state = StateManager.new(nil)
+      assert.equals("state", state:getName())
+    end)
+
+    it("implements isInitialized", function()
+      local state = StateManager.new(nil)
+      assert.is_true(state:isInitialized())
+    end)
+
+    it("isInitialized returns false after destroy", function()
+      local state = StateManager.new(nil)
+      state:destroy()
+      assert.is_false(state:isInitialized())
+    end)
+  end)
+
+  describe("logger integration", function()
+    local state, log_calls
+
+    before_each(function()
+      log_calls = {}
+      local mock_logger = {
+        debug = function(self, msg)
+          table.insert(log_calls, msg)
+        end
+      }
+
+      state = StateManager.new({}, { logger = mock_logger })
+    end)
+
+    it("logs on set", function()
+      state:set("key", "value")
+
+      assert.equals(1, #log_calls)
+      assert.is_truthy(log_calls[1]:match("State set"))
+    end)
+
+    it("logs on delete", function()
+      state:set("key", "value")
+      log_calls = {}
+
+      state:delete("key")
+
+      assert.equals(1, #log_calls)
+      assert.is_truthy(log_calls[1]:match("State deleted"))
+    end)
+
+    it("logs on clear", function()
+      state:set("key", "value")
+      log_calls = {}
+
+      state:clear()
+
+      assert.equals(1, #log_calls)
+      assert.is_truthy(log_calls[1]:match("State cleared"))
+    end)
+
+    it("logs on restore", function()
+      state:restore({ key = "value" })
+
+      assert.equals(1, #log_calls)
+      assert.is_truthy(log_calls[1]:match("State restored"))
+    end)
+
+    it("logs on destroy", function()
+      state:destroy()
+
+      assert.equals(1, #log_calls)
+      assert.is_truthy(log_calls[1]:match("destroying"))
+    end)
+  end)
 end)
