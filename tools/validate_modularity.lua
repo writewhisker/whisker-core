@@ -43,13 +43,33 @@ local RULES = {
       "vendor%..*",           -- Vendor abstractions (not raw vendors)
       "kernel%.container",    -- Container is allowed in bootstrap
       "kernel%.event_bus",    -- Event bus is allowed in bootstrap
+      "kernel%.events",       -- Events is allowed
       "kernel%.bootstrap",    -- Bootstrap is allowed in init
       "core%.choice",         -- Core types needed by factories
       "core%.passage",        -- Core types needed by factories
       "core%.story",          -- Core types needed by factories
       "core%.game_state",     -- Core types needed by factories
       "core%.lua_interpreter", -- Core types needed by factories
+      "core%.engine",         -- Engine is core infrastructure
       "core%.factories%..*",  -- Factories can be required
+      -- Intra-module requires are allowed (same module can require its own files)
+      "security%..*",         -- Security module intra-module
+      "profiling%..*",        -- Profiling module intra-module
+      "benchmarks%..*",       -- Benchmarks module intra-module
+      "analytics%..*",        -- Analytics module intra-module
+      "platform%..*",         -- Platform module intra-module
+      "plugin%..*",           -- Plugin module intra-module
+      "media%..*",            -- Media module intra-module
+      "formats%..*",          -- Formats module intra-module
+      "script%..*",           -- Script module intra-module
+      "runtime%..*",          -- Runtime module intra-module
+      "i18n%..*",             -- i18n module intra-module
+      "twine%..*",            -- Twine module intra-module
+      "export%..*",           -- Export module intra-module
+      "cli%..*",              -- CLI module intra-module
+      "tools%..*",            -- Tools module intra-module
+      "format%..*",           -- Format module intra-module
+      "utils%..*",            -- Utils module intra-module (shared utilities)
     },
     -- Files where direct requires are allowed
     allowed_files = {
