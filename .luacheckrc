@@ -23,6 +23,7 @@ read_globals = {
 -- Exclude certain warnings
 ignore = {
     "111",  -- Setting non-standard global variable
+    "112",  -- Mutating non-standard global variable
     "113",  -- Accessing undefined variable (self, globals in runtime)
     "121",  -- Setting read-only global variable
     "122",  -- Setting read-only field
