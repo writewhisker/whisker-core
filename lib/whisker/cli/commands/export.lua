@@ -4,10 +4,46 @@
 -- @author Whisker Core Team
 -- @license MIT
 
-local ExportUtils = require("whisker.export.utils")
-local ExportManager = require("whisker.export.init")
-
 local ExportCommand = {}
+
+-- Dependencies (lazily loaded)
+local _export_utils = nil
+local _export_manager_class = nil
+
+--- Initialize dependencies (lazy load)
+local function get_export_utils()
+  if not _export_utils then
+    local ok, utils = pcall(require, "whisker.export.utils")
+    if ok then _export_utils = utils end
+  end
+  return _export_utils
+end
+
+local function get_export_manager_class()
+  if not _export_manager_class then
+    local ok, mgr = pcall(require, "whisker.export.init")
+    if ok then _export_manager_class = mgr end
+  end
+  return _export_manager_class
+end
+
+--- Create a new ExportCommand with optional container
+-- @param container table|nil DI container for resolving dependencies
+-- @return table ExportCommand instance
+function ExportCommand.new(container)
+  local instance = {
+    _container = container,
+    _export_manager = nil,
+  }
+  setmetatable(instance, { __index = ExportCommand })
+
+  -- If container provided, try to resolve export_manager
+  if container and container:has("export_manager") then
+    instance._export_manager = container:resolve("export_manager")
+  end
+
+  return instance
+end
 
 --- Parse command-line arguments
 -- @param args table Raw arguments array
@@ -105,7 +141,12 @@ end
 -- @return table|nil Story data
 -- @return string|nil Error message
 local function load_story(path)
-  local content = ExportUtils.read_file(path)
+  local export_utils = get_export_utils()
+  if not export_utils then
+    return nil, "Export utils not available"
+  end
+
+  local content = export_utils.read_file(path)
   if not content then
     return nil, "Cannot read file: " .. path
   end
@@ -127,7 +168,6 @@ local function load_story(path)
     return result
   elseif ext == "json" then
     -- JSON story - need a JSON parser
-    -- For now, try to convert simple JSON to Lua
     return nil, "JSON parsing not yet implemented (use .lua format)"
   elseif ext == "whisker" or ext == "ws" then
     -- Whisker script format - would need compiler
@@ -145,11 +185,59 @@ local function load_story(path)
   end
 end
 
+--- Get or create export manager
+-- @param self table ExportCommand instance
+-- @return table ExportManager instance
+local function get_or_create_export_manager(self)
+  if self._export_manager then
+    return self._export_manager
+  end
+
+  -- Create a new export manager
+  local ExportManagerClass = get_export_manager_class()
+  if not ExportManagerClass then
+    return nil
+  end
+
+  -- Create with event bus (from container or new)
+  local event_bus
+  if self._container and self._container:has("events") then
+    event_bus = self._container:resolve("events")
+  else
+    local EventBus = require("whisker.kernel.events")
+    event_bus = EventBus.new()
+  end
+
+  local export_manager = ExportManagerClass.new(event_bus)
+
+  -- Register exporters (lazy load)
+  local ok, HTMLExporter = pcall(require, "whisker.export.html.html_exporter")
+  if ok then export_manager:register("html", HTMLExporter.new()) end
+
+  ok, InkExporter = pcall(require, "whisker.export.ink.ink_exporter")
+  if ok then export_manager:register("ink", InkExporter.new()) end
+
+  ok, TextExporter = pcall(require, "whisker.export.text.text_exporter")
+  if ok then export_manager:register("text", TextExporter.new()) end
+
+  self._export_manager = export_manager
+  return export_manager
+end
+
 --- Execute export command
 -- @param args table Command-line arguments
 -- @param whisker table|nil Whisker instance (optional)
 -- @return number Exit code
 function ExportCommand.execute(args, whisker)
+  -- Support both static and instance-based calls
+  local self = ExportCommand.new(whisker and whisker.container)
+  return self:run(args)
+end
+
+--- Run the export command (instance method)
+-- @param args table Command-line arguments
+-- @return number Exit code
+function ExportCommand:run(args)
   local parsed = parse_args(args)
 
   if parsed.help then
@@ -172,19 +260,12 @@ function ExportCommand.execute(args, whisker)
     return 1
   end
 
-  -- Create export manager with dummy event bus
-  local EventBus = require("whisker.kernel.events")
-  local event_bus = EventBus.new()
-  local export_manager = ExportManager.new(event_bus)
-
-  -- Register exporters
-  local HTMLExporter = require("whisker.export.html.html_exporter")
-  local InkExporter = require("whisker.export.ink.ink_exporter")
-  local TextExporter = require("whisker.export.text.text_exporter")
-
-  export_manager:register("html", HTMLExporter.new())
-  export_manager:register("ink", InkExporter.new())
-  export_manager:register("text", TextExporter.new())
+  -- Get export manager
+  local export_manager = get_or_create_export_manager(self)
+  if not export_manager then
+    print("Error: Export manager not available")
+    return 1
+  end
 
   -- Check format exists
   if not export_manager:has_format(parsed.format) then
@@ -222,15 +303,21 @@ function ExportCommand.execute(args, whisker)
   end
 
   -- Determine output path
+  local export_utils = get_export_utils()
   local output_path = parsed.output
-  if not output_path then
+  if not output_path and export_utils then
     local exporter = export_manager:get_exporter(parsed.format)
     local ext = exporter:metadata().file_extension
-    output_path = ExportUtils.stem(story_path) .. ext
+    output_path = export_utils.stem(story_path) .. ext
   end
 
   -- Write output
-  local success = ExportUtils.write_file(output_path, bundle.content)
+  if not export_utils then
+    print("Error: Export utils not available")
+    return 1
+  end
+
+  local success = export_utils.write_file(output_path, bundle.content)
 
   if not success then
     print("Error: Cannot write output file: " .. output_path)
