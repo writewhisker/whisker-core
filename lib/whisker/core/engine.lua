@@ -4,7 +4,72 @@
 local Engine = {}
 Engine.__index = Engine
 
-function Engine.new(story, game_state, config)
+-- Dependencies for DI pattern
+Engine._dependencies = {"story_factory", "game_state_factory", "lua_interpreter_factory", "event_bus"}
+
+-- Cached factories for backward compatibility (lazy loaded)
+local _story_factory_cache = nil
+local _game_state_factory_cache = nil
+local _interpreter_factory_cache = nil
+
+--- Get the story factory (supports both DI and backward compatibility)
+local function get_story_factory(deps)
+  if deps and deps.story_factory then
+    return deps.story_factory
+  end
+  if not _story_factory_cache then
+    local StoryFactory = require("whisker.core.factories.story_factory")
+    _story_factory_cache = StoryFactory.new()
+  end
+  return _story_factory_cache
+end
+
+--- Get the game state factory
+local function get_game_state_factory(deps)
+  if deps and deps.game_state_factory then
+    return deps.game_state_factory
+  end
+  if not _game_state_factory_cache then
+    local GameStateFactory = require("whisker.core.factories.game_state_factory")
+    _game_state_factory_cache = GameStateFactory.new()
+  end
+  return _game_state_factory_cache
+end
+
+--- Get the lua interpreter factory
+local function get_interpreter_factory(deps)
+  if deps and deps.lua_interpreter_factory then
+    return deps.lua_interpreter_factory
+  end
+  if not _interpreter_factory_cache then
+    local InterpreterFactory = require("whisker.core.factories.lua_interpreter_factory")
+    _interpreter_factory_cache = InterpreterFactory.new()
+  end
+  return _interpreter_factory_cache
+end
+
+--- Create a new Engine instance via DI container
+-- @param deps table Dependencies from container
+-- @return function Factory function that creates Engine instances
+function Engine.create(deps)
+  local story_factory = get_story_factory(deps)
+  local game_state_factory = get_game_state_factory(deps)
+  local interpreter_factory = get_interpreter_factory(deps)
+  local event_bus = deps and deps.event_bus or nil
+  -- Return a factory function
+  return function(story, game_state, config)
+    return Engine.new(story, game_state, config, {
+      story_factory = story_factory,
+      game_state_factory = game_state_factory,
+      lua_interpreter_factory = interpreter_factory,
+      event_bus = event_bus
+    })
+  end
+end
+
+function Engine.new(story, game_state, config, deps)
+    deps = deps or {}
+
     local instance = {
         config = config or {},
         current_story = nil,
@@ -16,18 +81,28 @@ function Engine.new(story, game_state, config)
             story_start_time = nil,
             passages_visited = 0,
             choices_made = 0
-        }
+        },
+        -- Store factories for DI
+        _story_factory = deps.story_factory,
+        _game_state_factory = deps.game_state_factory,
+        _interpreter_factory = deps.lua_interpreter_factory,
+        _event_bus = deps.event_bus
     }
 
     setmetatable(instance, Engine)
+
+    -- Get factories (use injected or fallback)
+    local story_factory = get_story_factory(deps)
+    local game_state_factory = get_game_state_factory(deps)
+    local interpreter_factory = get_interpreter_factory(deps)
 
     -- Ensure story has proper metatable (handles deserialized stories)
     if story and type(story) == "table" then
         local Story = require("whisker.core.story")
         -- Check if story has Story metatable
         if getmetatable(story) ~= Story then
-            -- Restore metatable if missing
-            instance.current_story = Story.restore_metatable(story)
+            -- Restore metatable if missing using factory
+            instance.current_story = story_factory:restore_metatable(story)
         else
             instance.current_story = story
         end
@@ -37,27 +112,30 @@ function Engine.new(story, game_state, config)
 
     -- Initialize game state if not provided
     if not instance.game_state then
-        local GameState = require("whisker.core.game_state")
-        instance.game_state = GameState.new()
+        instance.game_state = game_state_factory:create()
     end
 
     -- Initialize interpreter
     if not instance.interpreter then
-        local LuaInterpreter = require("whisker.core.lua_interpreter")
-        instance.interpreter = LuaInterpreter.new()
+        instance.interpreter = interpreter_factory:create()
     end
 
     return instance
 end
 
 function Engine:load_story(story)
+    -- Get factories
+    local story_factory = self._story_factory or get_story_factory()
+    local game_state_factory = self._game_state_factory or get_game_state_factory()
+    local interpreter_factory = self._interpreter_factory or get_interpreter_factory()
+
     -- Ensure story has proper metatable (handles deserialized stories)
     if story and type(story) == "table" then
         local Story = require("whisker.core.story")
         -- Check if story has Story metatable
         if getmetatable(story) ~= Story then
-            -- Restore metatable if missing
-            self.current_story = Story.restore_metatable(story)
+            -- Restore metatable if missing using factory
+            self.current_story = story_factory:restore_metatable(story)
         else
             self.current_story = story
         end
@@ -67,14 +145,12 @@ function Engine:load_story(story)
 
     -- Initialize game state if not provided
     if not self.game_state then
-        local GameState = require("whisker.core.game_state")
-        self.game_state = GameState.new()
+        self.game_state = game_state_factory:create()
     end
 
     -- Initialize interpreter if not provided
     if not self.interpreter then
-        local LuaInterpreter = require("whisker.core.lua_interpreter")
-        self.interpreter = LuaInterpreter.new()
+        self.interpreter = interpreter_factory:create()
     end
 
     return true

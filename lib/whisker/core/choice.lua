@@ -4,12 +4,26 @@
 local Choice = {}
 Choice.__index = Choice
 
+-- Dependencies for DI pattern (none for Choice - it's a leaf module)
+Choice._dependencies = {}
+
 -- Generate a unique choice ID
 local function generate_choice_id()
     local template = "ch_xxxxxxxxxxxx"
     return string.gsub(template, "x", function()
         return string.format("%x", math.random(0, 0xf))
     end)
+end
+
+--- Create a new Choice instance via DI container
+-- @param deps table Dependencies from container (optional for Choice)
+-- @return function Factory function that creates Choice instances
+function Choice.create(deps)
+    -- deps is optional for Choice since it has no dependencies
+    -- Return a factory function that creates choices
+    return function(text_or_options, target)
+        return Choice.new(text_or_options, target)
+    end
 end
 
 function Choice.new(text_or_options, target)

@@ -1,6 +1,22 @@
 -- src/runtime/interpreter.lua
 -- Secure Lua sandbox with instruction counting
 
+local LuaInterpreter = {}
+LuaInterpreter.__index = LuaInterpreter
+
+-- Dependencies for DI pattern (none for LuaInterpreter - it's a leaf module)
+LuaInterpreter._dependencies = {}
+
+--- Create a new LuaInterpreter instance via DI container
+-- @param deps table|nil Dependencies from container (optional for LuaInterpreter)
+-- @return function Factory function that creates LuaInterpreter instances
+function LuaInterpreter.create(deps)
+  -- Return a factory function that creates interpreters
+  return function(config)
+    return LuaInterpreter.new(config)
+  end
+end
+
 -- Lua 5.1/5.2+ compatibility for load()
 local function load_compat(code, chunkname, mode, env)
     local func, err
@@ -16,9 +32,6 @@ local function load_compat(code, chunkname, mode, env)
     end
     return func, err
 end
-
-local LuaInterpreter = {}
-LuaInterpreter.__index = LuaInterpreter
 
 function LuaInterpreter.new(config)
     config = config or {}

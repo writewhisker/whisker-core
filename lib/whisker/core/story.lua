@@ -4,6 +4,39 @@
 local Story = {}
 Story.__index = Story
 
+-- Dependencies for DI pattern
+Story._dependencies = {"passage_factory", "event_bus"}
+
+-- Cached passage factory for backward compatibility (lazy loaded)
+local _passage_factory_cache = nil
+
+--- Get the passage factory (supports both DI and backward compatibility)
+-- @param deps table|nil Dependencies from container
+-- @return table The passage factory
+local function get_passage_factory(deps)
+  if deps and deps.passage_factory then
+    return deps.passage_factory
+  end
+  -- Fallback: lazy load the default factory for backward compatibility
+  if not _passage_factory_cache then
+    local PassageFactory = require("whisker.core.factories.passage_factory")
+    _passage_factory_cache = PassageFactory.new()
+  end
+  return _passage_factory_cache
+end
+
+--- Create a new Story instance via DI container
+-- @param deps table Dependencies from container (passage_factory, event_bus)
+-- @return function Factory function that creates Story instances
+function Story.create(deps)
+  local passage_factory = get_passage_factory(deps)
+  local event_bus = deps and deps.event_bus or nil
+  -- Return a factory function that creates stories
+  return function(options)
+    return Story.new(options, passage_factory, event_bus)
+  end
+end
+
 -- Helper function: Detect if variables are in typed format (v2.0)
 local function is_typed_variable_format(var_data)
     if type(var_data) ~= "table" then
@@ -46,7 +79,7 @@ local function variables_to_simple(variables)
     return simple_vars
 end
 
-function Story.new(options)
+function Story.new(options, passage_factory, event_bus)
     options = options or {}
     local instance = {
         metadata = {
@@ -67,7 +100,10 @@ function Story.new(options)
         scripts = options.scripts or {},
         assets = options.assets or {},
         tags = options.tags or {},  -- Story-level tags
-        settings = options.settings or {}  -- Story-level settings
+        settings = options.settings or {},  -- Story-level settings
+        -- Store factories for DI (optional)
+        _passage_factory = passage_factory,
+        _event_bus = event_bus
     }
 
     setmetatable(instance, Story)
@@ -435,17 +471,21 @@ function Story:deserialize(data)
 
     -- Restore metatables for passage objects if needed
     if self.passages then
-        local Passage = require("whisker.core.passage")
+        -- Use injected passage factory if available, otherwise fallback
+        local passage_factory = self._passage_factory or get_passage_factory()
         for id, passage in pairs(self.passages) do
             if type(passage) == "table" and not getmetatable(passage) then
-                setmetatable(passage, Passage)
+                self.passages[id] = passage_factory:restore_metatable(passage)
             end
         end
     end
 end
 
--- Static method to restore metatable to a table
-function Story.restore_metatable(data)
+--- Static method to restore metatable to a table
+-- @param data table Plain table with story data
+-- @param passage_factory table|nil Optional passage factory for DI
+-- @return Story The table with Story metatable restored
+function Story.restore_metatable(data, passage_factory)
     if not data or type(data) ~= "table" then
         return nil
     end
@@ -460,15 +500,11 @@ function Story.restore_metatable(data)
 
     -- Restore metatables for nested objects (passages)
     if data.passages then
-        local Passage = require("whisker.core.passage")
+        -- Use provided factory or fallback to default
+        local factory = passage_factory or data._passage_factory or get_passage_factory()
         for id, passage in pairs(data.passages) do
             if type(passage) == "table" and not getmetatable(passage) then
-                -- Use Passage's restore method if available, otherwise set metatable directly
-                if Passage.restore_metatable then
-                    data.passages[id] = Passage.restore_metatable(passage)
-                else
-                    setmetatable(passage, Passage)
-                end
+                data.passages[id] = factory:restore_metatable(passage)
             end
         end
     end
@@ -476,11 +512,17 @@ function Story.restore_metatable(data)
     return data
 end
 
--- Static method to create from plain table (useful for deserialization)
-function Story.from_table(data)
+--- Static method to create from plain table (useful for deserialization)
+-- @param data table Serialized story data
+-- @param passage_factory table|nil Optional passage factory for DI
+-- @return Story The restored story instance
+function Story.from_table(data, passage_factory)
     if not data then
         return nil
     end
+
+    -- Get passage factory (use provided or fallback)
+    local factory = passage_factory or get_passage_factory()
 
     -- Create a new instance
     local instance = Story.new({
@@ -493,7 +535,7 @@ function Story.from_table(data)
         ifid = data.metadata and data.metadata.ifid,
         format = data.metadata and data.metadata.format,
         format_version = data.metadata and data.metadata.format_version
-    })
+    }, factory)
 
     -- Copy over the rest of the data
     instance.variables = data.variables or {}
@@ -506,18 +548,9 @@ function Story.from_table(data)
 
     -- Restore passages with proper metatables
     if data.passages then
-        local Passage = require("whisker.core.passage")
         for id, passage_data in pairs(data.passages) do
             if type(passage_data) == "table" then
-                local passage
-                if Passage.from_table then
-                    passage = Passage.from_table(passage_data)
-                elseif Passage.restore_metatable then
-                    passage = Passage.restore_metatable(passage_data)
-                else
-                    passage = passage_data
-                    setmetatable(passage, Passage)
-                end
+                local passage = factory:from_table(passage_data)
                 instance.passages[id] = passage
             end
         end
