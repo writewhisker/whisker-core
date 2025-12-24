@@ -1,13 +1,13 @@
 -- examples/simple_story.lua
 -- A minimal working example of a whisker story
 -- Demonstrates basic story structure with passages and choices
+-- Uses DI pattern via bootstrap template
 
-local Story = require("whisker.core.story")
-local Passage = require("whisker.core.passage")
-local Choice = require("whisker.core.choice")
+local bootstrap = require("examples.shared.bootstrap")
+local whisker = bootstrap.init()
 
--- Create the story
-local story = Story.new({
+-- Create the story using factories
+local story = whisker.story_factory:create({
     title = "The Cave",
     author = "whisker Tutorial",
     ifid = "SIMPLE-001",
@@ -15,7 +15,7 @@ local story = Story.new({
 })
 
 -- Passage 1: Start
-local start = Passage.new({
+local start = whisker.passage_factory:create({
     id = "start",
     content = [[
 You stand at the entrance of a dark cave. A cool breeze flows from within,
@@ -25,18 +25,18 @@ Do you enter the cave?
     ]]
 })
 
-start:add_choice(Choice.new({
+start:add_choice(whisker.choice_factory:create({
     text = "Enter the cave",
     target = "inside_cave"
 }))
 
-start:add_choice(Choice.new({
+start:add_choice(whisker.choice_factory:create({
     text = "Walk away",
     target = "walk_away"
 }))
 
 -- Passage 2: Inside Cave
-local inside = Passage.new({
+local inside = whisker.passage_factory:create({
     id = "inside_cave",
     content = [[
 You step into the darkness. As your eyes adjust, you see two passages:
@@ -47,23 +47,23 @@ The right passage echoes with the sound of dripping water.
     ]]
 })
 
-inside:add_choice(Choice.new({
+inside:add_choice(whisker.choice_factory:create({
     text = "Take the left passage",
     target = "left_passage"
 }))
 
-inside:add_choice(Choice.new({
+inside:add_choice(whisker.choice_factory:create({
     text = "Take the right passage",
     target = "right_passage"
 }))
 
-inside:add_choice(Choice.new({
+inside:add_choice(whisker.choice_factory:create({
     text = "Go back outside",
     target = "start"
 }))
 
 -- Passage 3: Left Passage (Good ending)
-local left = Passage.new({
+local left = whisker.passage_factory:create({
     id = "left_passage",
     content = [[
 You follow the blue glow deeper into the cave. The light grows brighter
@@ -78,7 +78,7 @@ In the center of the chamber, you find an ancient treasure chest!
 })
 
 -- Passage 4: Right Passage (Bad ending)
-local right = Passage.new({
+local right = whisker.passage_factory:create({
     id = "right_passage",
     content = [[
 You follow the sound of water into a narrow tunnel. The ground becomes
@@ -93,7 +93,7 @@ You fall into an underground river and are swept away into the darkness.
 })
 
 -- Passage 5: Walk Away
-local away = Passage.new({
+local away = whisker.passage_factory:create({
     id = "walk_away",
     content = [[
 You decide the cave is too dangerous and walk away. Perhaps it's
