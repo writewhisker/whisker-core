@@ -150,12 +150,12 @@ Even more
 
   describe("Conversion Loss Detection", function()
     it("should warn about incompatible features when converting Harlowe to Chapbook", function()
-      local harlowe_with_link_repeat = [=[
+      local harlowe_with_live = [=[
 :: Start
-(link-repeat: "Click")[Text changes]
+(live: 2s)[Updates every 2 seconds]
 ]=]
 
-      local parsed = harlowe_parser.parse(harlowe_with_link_repeat)
+      local parsed = harlowe_parser.parse(harlowe_with_live)
       local converter = require("whisker.format.converters.harlowe")
 
       local result, warnings = converter.to_chapbook_with_warnings(parsed)
@@ -163,16 +163,16 @@ Even more
       assert.is_not_nil(result)
       assert.is_table(warnings)
       assert.is_true(#warnings > 0, "Expected warnings for incompatible feature")
-      assert.equals("link-repeat", warnings[1].feature)
+      assert.equals("live", warnings[1].feature)
       assert.equals("Start", warnings[1].passage)
     end)
 
     it("should warn about multiple incompatible features", function()
       local harlowe_complex = [=[
 :: Start
-(link-repeat: "Click")[Changes]
 (live: 2s)[Updates every 2 seconds]
 (enchant: "button", (click: ?button)[(alert: "clicked")])
+(mouseover: ?link)[Shows on hover]
 ]=]
 
       local parsed = harlowe_parser.parse(harlowe_complex)
@@ -188,9 +188,9 @@ Even more
       for _, w in ipairs(warnings) do
         features[w.feature] = true
       end
-      assert.is_true(features["link-repeat"])
       assert.is_true(features["live"])
       assert.is_true(features["enchant"])
+      assert.is_true(features["mouseover"])
     end)
 
     it("should return empty warnings for compatible Harlowe content", function()
@@ -279,6 +279,124 @@ Centered text
         features[a.feature] = true
       end
       assert.is_true(features["after modifier"] or features["align modifier"] or features["embed insert"])
+    end)
+  end)
+
+  describe("Harlowe to Chapbook Feature Conversions", function()
+    it("should convert dropdown macro to Chapbook dropdown insert", function()
+      local harlowe = [=[
+:: Start
+(set: $choice to "option1")
+(dropdown: bind $choice, "option1", "option2", "option3")
+]=]
+
+      local parsed = harlowe_parser.parse(harlowe)
+      local converter = require("whisker.format.converters.harlowe")
+      local chapbook = converter.to_chapbook(parsed)
+
+      assert.is_not_nil(chapbook)
+      assert.matches("{dropdown menu for: 'choice'", chapbook)
+      assert.matches("choices:", chapbook)
+    end)
+
+    it("should convert text-input macro to Chapbook text input insert", function()
+      local harlowe = [=[
+:: Start
+Enter your name: (input: bind $playerName)
+]=]
+
+      local parsed = harlowe_parser.parse(harlowe)
+      local converter = require("whisker.format.converters.harlowe")
+      local chapbook = converter.to_chapbook(parsed)
+
+      assert.is_not_nil(chapbook)
+      assert.matches("{text input for: 'playerName'}", chapbook)
+    end)
+
+    it("should convert cycling-link macro to Chapbook cycling link insert", function()
+      local harlowe = [=[
+:: Start
+(set: $color to "red")
+Pick a color: (cycling-link: bind $color, "red", "green", "blue")
+]=]
+
+      local parsed = harlowe_parser.parse(harlowe)
+      local converter = require("whisker.format.converters.harlowe")
+      local chapbook = converter.to_chapbook(parsed)
+
+      assert.is_not_nil(chapbook)
+      assert.matches("{cycling link for: 'color'", chapbook)
+      assert.matches("choices:", chapbook)
+    end)
+
+    it("should convert link-repeat macro to Chapbook reveal link insert", function()
+      local harlowe = [=[
+:: Start
+(link-repeat: "Click me")[This text appears each click]
+]=]
+
+      local parsed = harlowe_parser.parse(harlowe)
+      local converter = require("whisker.format.converters.harlowe")
+      local chapbook = converter.to_chapbook(parsed)
+
+      assert.is_not_nil(chapbook)
+      assert.matches("{reveal link:", chapbook)
+      assert.matches("Click me", chapbook)
+    end)
+
+    it("should convert transition macro to Chapbook note", function()
+      local harlowe = [=[
+:: Start
+(transition: "dissolve")
+Content with transition
+]=]
+
+      local parsed = harlowe_parser.parse(harlowe)
+      local converter = require("whisker.format.converters.harlowe")
+      local chapbook = converter.to_chapbook(parsed)
+
+      assert.is_not_nil(chapbook)
+      assert.matches("%[note%]", chapbook)
+      assert.matches("dissolve", chapbook)
+    end)
+
+    it("should provide list of converted features", function()
+      local converter = require("whisker.format.converters.harlowe")
+      local converted = converter.get_chapbook_converted_features()
+
+      assert.is_table(converted)
+      assert.is_true(#converted >= 5)
+
+      -- Verify expected features are listed
+      local features = {}
+      for _, c in ipairs(converted) do
+        features[c.feature] = true
+      end
+      assert.is_true(features["dropdown"])
+      assert.is_true(features["cycling-link"])
+      assert.is_true(features["link-repeat"])
+      assert.is_true(features["transition"])
+    end)
+
+    it("should not warn about converted features", function()
+      local harlowe = [=[
+:: Start
+(dropdown: bind $choice, "a", "b")
+(cycling-link: bind $color, "red", "blue")
+]=]
+
+      local parsed = harlowe_parser.parse(harlowe)
+      local converter = require("whisker.format.converters.harlowe")
+      local result, warnings = converter.to_chapbook_with_warnings(parsed)
+
+      assert.is_not_nil(result)
+      -- These features are converted, not incompatible, so no warnings
+      local feature_warned = {}
+      for _, w in ipairs(warnings) do
+        feature_warned[w.feature] = true
+      end
+      assert.is_nil(feature_warned["dropdown"])
+      assert.is_nil(feature_warned["cycling-link"])
     end)
   end)
 end)

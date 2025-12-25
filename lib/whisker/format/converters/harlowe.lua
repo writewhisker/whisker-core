@@ -80,6 +80,49 @@ function M.to_chapbook(parsed_story)
       table.insert(result, "--")
     end
 
+    -- Convert (dropdown: ...) to {dropdown menu for: 'var', choices: [...]}
+    -- Harlowe: (dropdown: bind $var, "opt1", "opt2", "opt3")
+    content = content:gsub("%(%s*dropdown:%s*bind%s*%$([%w_]+)%s*,%s*(.-)%)", function(var, options)
+      -- Parse options and format for Chapbook
+      local choices = {}
+      for opt in options:gmatch('"([^"]*)"') do
+        table.insert(choices, "'" .. opt .. "'")
+      end
+      return "{dropdown menu for: '" .. var .. "', choices: [" .. table.concat(choices, ", ") .. "]}"
+    end)
+
+    -- Convert (text-input: ...) to {text input for: 'var'}
+    -- Harlowe: (input: bind $var) or (text-input: bind $var)
+    content = content:gsub("%(%s*input:%s*bind%s*%$([%w_]+).-%)%s*", function(var)
+      return "{text input for: '" .. var .. "'}"
+    end)
+    content = content:gsub("%(%s*text%-input:%s*bind%s*%$([%w_]+).-%)%s*", function(var)
+      return "{text input for: '" .. var .. "'}"
+    end)
+
+    -- Convert (cycling-link: ...) to {cycling link for: 'var', choices: [...]}
+    -- Harlowe: (cycling-link: bind $var, "opt1", "opt2", "opt3")
+    content = content:gsub("%(%s*cycling%-link:%s*bind%s*%$([%w_]+)%s*,%s*(.-)%)", function(var, options)
+      local choices = {}
+      for opt in options:gmatch('"([^"]*)"') do
+        table.insert(choices, "'" .. opt .. "'")
+      end
+      return "{cycling link for: '" .. var .. "', choices: [" .. table.concat(choices, ", ") .. "]}"
+    end)
+
+    -- Convert (link-repeat: "text")[body] to {cycling link} (approximate)
+    -- Harlowe: (link-repeat: "Click me")[New text appears]
+    content = content:gsub("%(%s*link%-repeat:%s*\"([^\"]+)\"%s*%)%[(.-)%]", function(linkText, body)
+      -- Use reveal link as closest approximation
+      return "{reveal link: '" .. linkText .. "', text: '" .. body:gsub("'", "\\'") .. "'}"
+    end)
+
+    -- Convert (transition: "name") to [note: transition] (CSS hint)
+    -- Chapbook doesn't have built-in transitions, add as note
+    content = content:gsub("%(%s*transition:%s*\"([^\"]+)\"%s*%)", function(transitionName)
+      return "[note]Add CSS transition: " .. transitionName .. "[continue]"
+    end)
+
     -- Convert $var to {var} (Chapbook doesn't use $)
     content = content:gsub("%$([%w_]+)", function(var)
       return "{" .. var .. "}"
@@ -147,37 +190,53 @@ function M.to_snowman(parsed_story)
   return table.concat(result, "\n")
 end
 
--- Incompatible features that don't convert well to Chapbook
-local CHAPBOOK_INCOMPATIBLE = {
-  {
-    pattern = "%(link%-repeat:",
-    feature = "link-repeat",
-    description = "link-repeat macro has no direct Chapbook equivalent",
-    severity = "warning"
-  },
-  {
-    pattern = "%(live:",
-    feature = "live",
-    description = "live macro (real-time updates) not supported in Chapbook",
-    severity = "warning"
-  },
-  {
-    pattern = "%(cycling%-link:",
-    feature = "cycling-link",
-    description = "cycling-link needs manual implementation in Chapbook",
-    severity = "warning"
-  },
+-- Features that are automatically converted to Chapbook equivalents
+local CHAPBOOK_CONVERTED = {
   {
     pattern = "%(dropdown:",
     feature = "dropdown",
-    description = "dropdown macro needs Chapbook insert equivalent",
+    converts_to = "{dropdown menu for: 'var', choices: [...]}",
+    severity = "info"
+  },
+  {
+    pattern = "%(input:",
+    feature = "input",
+    converts_to = "{text input for: 'var'}",
     severity = "info"
   },
   {
     pattern = "%(text%-input:",
     feature = "text-input",
-    description = "text-input needs Chapbook text input insert",
+    converts_to = "{text input for: 'var'}",
     severity = "info"
+  },
+  {
+    pattern = "%(cycling%-link:",
+    feature = "cycling-link",
+    converts_to = "{cycling link for: 'var', choices: [...]}",
+    severity = "info"
+  },
+  {
+    pattern = "%(link%-repeat:",
+    feature = "link-repeat",
+    converts_to = "{reveal link: 'text', text: '...'}",
+    severity = "info"
+  },
+  {
+    pattern = "%(transition:",
+    feature = "transition",
+    converts_to = "[note]Add CSS transition: name[continue]",
+    severity = "info"
+  },
+}
+
+-- Features that cannot be converted to Chapbook (no equivalent)
+local CHAPBOOK_INCOMPATIBLE = {
+  {
+    pattern = "%(live:",
+    feature = "live",
+    description = "live macro (real-time updates) not supported in Chapbook",
+    severity = "warning"
   },
   {
     pattern = "%(enchant:",
@@ -196,12 +255,6 @@ local CHAPBOOK_INCOMPATIBLE = {
     feature = "mouseover",
     description = "mouseover interactions not available in Chapbook",
     severity = "warning"
-  },
-  {
-    pattern = "%(transition:",
-    feature = "transition",
-    description = "transition macro needs CSS in Chapbook",
-    severity = "info"
   },
   {
     pattern = "%(alert:",
@@ -239,6 +292,12 @@ end
 -- @return table List of incompatible feature definitions
 function M.get_chapbook_incompatible_features()
   return CHAPBOOK_INCOMPATIBLE
+end
+
+--- Get list of features that are automatically converted to Chapbook equivalents
+-- @return table List of converted feature definitions
+function M.get_chapbook_converted_features()
+  return CHAPBOOK_CONVERTED
 end
 
 -- Reconstruct Twee notation from parsed story
