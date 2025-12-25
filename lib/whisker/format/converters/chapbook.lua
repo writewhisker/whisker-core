@@ -1,6 +1,72 @@
 -- Chapbook Format Converter
+-- Converts Chapbook-format stories to other Twine formats
+-- Includes conversion with info about approximations used
 
 local M = {}
+
+-- Features that require approximation when converting to Harlowe
+local HARLOWE_APPROXIMATIONS = {
+  {
+    pattern = "%[after%s+%d+s%]",
+    feature = "after modifier",
+    description = "Timed delays converted to (live:) but behavior differs",
+    approximation = "live macro"
+  },
+  {
+    pattern = "%[align%s+",
+    feature = "align modifier",
+    description = "Text alignment has no direct Harlowe equivalent",
+    approximation = "removed (use CSS)"
+  },
+  {
+    pattern = "%[note%]",
+    feature = "note modifier",
+    description = "Author notes converted to HTML comments",
+    approximation = "HTML comment"
+  },
+  {
+    pattern = "{embed%s+",
+    feature = "embed insert",
+    description = "Embedded passages work differently in Harlowe",
+    approximation = "display macro"
+  },
+  {
+    pattern = "{cycling%s+link",
+    feature = "cycling link insert",
+    description = "Cycling links converted to link-repeat",
+    approximation = "link-repeat macro"
+  },
+  {
+    pattern = "{text%s+input",
+    feature = "text input insert",
+    description = "Text inputs converted to input-box",
+    approximation = "input-box macro"
+  },
+  {
+    pattern = "{dropdown",
+    feature = "dropdown insert",
+    description = "Dropdowns converted to dropdown macro",
+    approximation = "dropdown macro"
+  },
+  {
+    pattern = "{reveal%s+link",
+    feature = "reveal link insert",
+    description = "Reveal links work similarly but syntax differs",
+    approximation = "link-reveal macro"
+  },
+  {
+    pattern = "{restart%s+link",
+    feature = "restart link",
+    description = "Restart functionality uses undo macro",
+    approximation = "undo macro"
+  },
+  {
+    pattern = "%[cont'd%]",
+    feature = "cont'd modifier",
+    description = "Continuation marker not needed in Harlowe",
+    approximation = "removed"
+  },
+}
 
 function M.to_harlowe(parsed_story)
   local result = {}
@@ -67,6 +133,40 @@ function M.to_sugarcube(parsed_story)
   end
 
   return table.concat(result, "\n")
+end
+
+--- Convert Chapbook to Harlowe with info about approximations used
+-- @param parsed_story table The parsed Chapbook story
+-- @return string, table The converted content and info about approximations
+function M.to_harlowe_with_info(parsed_story)
+  local result = M.to_harlowe(parsed_story)
+  local info = {
+    approximations_used = {},
+    exact_conversion = true
+  }
+
+  -- Check each passage for features that require approximation
+  for _, passage in ipairs(parsed_story.passages) do
+    for _, approx in ipairs(HARLOWE_APPROXIMATIONS) do
+      if passage.content:match(approx.pattern) then
+        table.insert(info.approximations_used, {
+          passage = passage.name,
+          feature = approx.feature,
+          description = approx.description,
+          approximation = approx.approximation
+        })
+        info.exact_conversion = false
+      end
+    end
+  end
+
+  return result, info
+end
+
+--- Get list of features that require approximation when converting to Harlowe
+-- @return table List of approximation definitions
+function M.get_harlowe_approximations()
+  return HARLOWE_APPROXIMATIONS
 end
 
 -- Convert Chapbook to Snowman
