@@ -147,27 +147,98 @@ function M.to_snowman(parsed_story)
   return table.concat(result, "\n")
 end
 
--- Helper functions for conversion with warnings/info
+-- Incompatible features that don't convert well to Chapbook
+local CHAPBOOK_INCOMPATIBLE = {
+  {
+    pattern = "%(link%-repeat:",
+    feature = "link-repeat",
+    description = "link-repeat macro has no direct Chapbook equivalent",
+    severity = "warning"
+  },
+  {
+    pattern = "%(live:",
+    feature = "live",
+    description = "live macro (real-time updates) not supported in Chapbook",
+    severity = "warning"
+  },
+  {
+    pattern = "%(cycling%-link:",
+    feature = "cycling-link",
+    description = "cycling-link needs manual implementation in Chapbook",
+    severity = "warning"
+  },
+  {
+    pattern = "%(dropdown:",
+    feature = "dropdown",
+    description = "dropdown macro needs Chapbook insert equivalent",
+    severity = "info"
+  },
+  {
+    pattern = "%(text%-input:",
+    feature = "text-input",
+    description = "text-input needs Chapbook text input insert",
+    severity = "info"
+  },
+  {
+    pattern = "%(enchant:",
+    feature = "enchant",
+    description = "enchant macro (DOM manipulation) not available in Chapbook",
+    severity = "warning"
+  },
+  {
+    pattern = "%(click:",
+    feature = "click",
+    description = "click macro not directly available in Chapbook",
+    severity = "warning"
+  },
+  {
+    pattern = "%(mouseover:",
+    feature = "mouseover",
+    description = "mouseover interactions not available in Chapbook",
+    severity = "warning"
+  },
+  {
+    pattern = "%(transition:",
+    feature = "transition",
+    description = "transition macro needs CSS in Chapbook",
+    severity = "info"
+  },
+  {
+    pattern = "%(alert:",
+    feature = "alert",
+    description = "alert macro needs JavaScript in Chapbook",
+    severity = "info"
+  },
+}
+
+--- Convert Harlowe to Chapbook with warnings about incompatible features
+-- @param parsed_story table The parsed Harlowe story
+-- @return string, table The converted content and list of warnings
 function M.to_chapbook_with_warnings(parsed_story)
   local result = M.to_chapbook(parsed_story)
   local warnings = {}
 
-  -- Check for features that may not convert well
+  -- Check each passage for incompatible features
   for _, passage in ipairs(parsed_story.passages) do
-    if passage.content:match("%(link%-repeat:") then
-      table.insert(warnings, "link-repeat macro may not have exact Chapbook equivalent")
+    for _, incompatible in ipairs(CHAPBOOK_INCOMPATIBLE) do
+      if passage.content:match(incompatible.pattern) then
+        table.insert(warnings, {
+          passage = passage.name,
+          feature = incompatible.feature,
+          description = incompatible.description,
+          severity = incompatible.severity
+        })
+      end
     end
   end
 
   return result, warnings
 end
 
-function M.to_harlowe_with_info(parsed_story)
-  -- This would convert from another format to Harlowe
-  -- For now, just return the story as-is with info
-  local result = M.reconstruct_twee(parsed_story)
-  local info = { approximations_used = {} }
-  return result, info
+--- Get list of features that may have lossy conversion to Chapbook
+-- @return table List of incompatible feature definitions
+function M.get_chapbook_incompatible_features()
+  return CHAPBOOK_INCOMPATIBLE
 end
 
 -- Reconstruct Twee notation from parsed story

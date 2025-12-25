@@ -149,39 +149,136 @@ Even more
   end)
 
   describe("Conversion Loss Detection", function()
-    pending("should warn about incompatible features", function()
-      -- Future feature: to_chapbook_with_warnings()
-      local harlowe_with_specific_feature = [=[
+    it("should warn about incompatible features when converting Harlowe to Chapbook", function()
+      local harlowe_with_link_repeat = [=[
 :: Start
 (link-repeat: "Click")[Text changes]
 ]=]
 
-      local parsed = harlowe_parser.parse(harlowe_with_specific_feature)
+      local parsed = harlowe_parser.parse(harlowe_with_link_repeat)
       local converter = require("whisker.format.converters.harlowe")
 
-      -- Should either convert or warn
       local result, warnings = converter.to_chapbook_with_warnings(parsed)
 
       assert.is_not_nil(result)
-      -- May have warnings about feature compatibility
+      assert.is_table(warnings)
+      assert.is_true(#warnings > 0, "Expected warnings for incompatible feature")
+      assert.equals("link-repeat", warnings[1].feature)
+      assert.equals("Start", warnings[1].passage)
     end)
 
-    pending("should detect when exact conversion isn't possible", function()
-      -- Future feature: to_harlowe_with_info()
-      local chapbook_modifier = [[
+    it("should warn about multiple incompatible features", function()
+      local harlowe_complex = [=[
+:: Start
+(link-repeat: "Click")[Changes]
+(live: 2s)[Updates every 2 seconds]
+(enchant: "button", (click: ?button)[(alert: "clicked")])
+]=]
+
+      local parsed = harlowe_parser.parse(harlowe_complex)
+      local converter = require("whisker.format.converters.harlowe")
+
+      local result, warnings = converter.to_chapbook_with_warnings(parsed)
+
+      assert.is_not_nil(result)
+      assert.is_true(#warnings >= 3, "Expected at least 3 warnings")
+
+      -- Check that different features are detected
+      local features = {}
+      for _, w in ipairs(warnings) do
+        features[w.feature] = true
+      end
+      assert.is_true(features["link-repeat"])
+      assert.is_true(features["live"])
+      assert.is_true(features["enchant"])
+    end)
+
+    it("should return empty warnings for compatible Harlowe content", function()
+      local harlowe_compatible = [=[
+:: Start
+(set: $name to "Player")
+(if: $name is "Player")[Welcome, Player!]
+[[Continue->Next]]
+]=]
+
+      local parsed = harlowe_parser.parse(harlowe_compatible)
+      local converter = require("whisker.format.converters.harlowe")
+
+      local result, warnings = converter.to_chapbook_with_warnings(parsed)
+
+      assert.is_not_nil(result)
+      assert.equals(0, #warnings)
+    end)
+
+    it("should detect when exact conversion to Harlowe isn't possible", function()
+      local chapbook_with_timing = [=[
 :: Start
 [after 5s]
-Delayed text
+Delayed text appears here
 [continue]
-]]
+]=]
 
-      local parsed = chapbook_parser.parse(chapbook_modifier)
+      local parsed = chapbook_parser.parse(chapbook_with_timing)
       local converter = require("whisker.format.converters.chapbook")
 
       local result, info = converter.to_harlowe_with_info(parsed)
 
       assert.is_not_nil(result)
-      -- Info might indicate approximation used
+      assert.is_table(info)
+      assert.is_false(info.exact_conversion)
+      assert.is_true(#info.approximations_used > 0)
+      assert.equals("after modifier", info.approximations_used[1].feature)
+    end)
+
+    it("should report exact conversion for simple Chapbook content", function()
+      local chapbook_simple = [=[
+:: Start
+name: Player
+--
+Hello, {name}!
+
+[[Continue->Next]]
+]=]
+
+      local parsed = chapbook_parser.parse(chapbook_simple)
+      local converter = require("whisker.format.converters.chapbook")
+
+      local result, info = converter.to_harlowe_with_info(parsed)
+
+      assert.is_not_nil(result)
+      assert.is_true(info.exact_conversion)
+      assert.equals(0, #info.approximations_used)
+    end)
+
+    it("should list all approximations used for complex Chapbook content", function()
+      local chapbook_complex = [=[
+:: Start
+[after 3s]
+This appears after 3 seconds
+[continue]
+
+[align center]
+Centered text
+[continue]
+
+{embed passage: 'Other'}
+]=]
+
+      local parsed = chapbook_parser.parse(chapbook_complex)
+      local converter = require("whisker.format.converters.chapbook")
+
+      local result, info = converter.to_harlowe_with_info(parsed)
+
+      assert.is_not_nil(result)
+      assert.is_false(info.exact_conversion)
+      assert.is_true(#info.approximations_used >= 2)
+
+      -- Check that different approximations are reported
+      local features = {}
+      for _, a in ipairs(info.approximations_used) do
+        features[a.feature] = true
+      end
+      assert.is_true(features["after modifier"] or features["align modifier"] or features["embed insert"])
     end)
   end)
 end)
