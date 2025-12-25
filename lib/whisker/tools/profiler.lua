@@ -3,6 +3,7 @@
 -- for story performance analysis and optimization
 
 local Profiler = {}
+Profiler._dependencies = {}
 Profiler.__index = Profiler
 
 -- Profiling modes

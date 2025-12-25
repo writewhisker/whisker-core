@@ -174,17 +174,11 @@ describe("Modularity Validation", function()
       end
 
       local output = handle:read("*a")
-      local success = handle:close()
+      handle:close()
 
-      -- The tool should exit successfully and report 0 violations
-      if output:match("0 violations") or output:match("No violations") then
-        assert.is_true(true)
-      else
-        -- Check if it has an error or actual violations
-        if output:match("Error") or output:match("violation") then
-          assert.fail("validate_modularity.lua reported violations: " .. output)
-        end
-      end
+      -- The tool should report PASSED
+      local passed = output:match("PASSED") ~= nil
+      assert.is_true(passed, "validate_modularity.lua should pass: " .. output:sub(1, 200))
     end)
   end)
 end)

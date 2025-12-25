@@ -8,11 +8,13 @@ local ExportUtils = require("whisker.export.utils")
 local Runtime = require("whisker.export.html.runtime")
 
 local HTMLExporter = {}
+HTMLExporter._dependencies = {}
 HTMLExporter.__index = HTMLExporter
 
 --- Create a new HTML exporter instance
 -- @return HTMLExporter A new exporter
-function HTMLExporter.new()
+function HTMLExporter.new(deps)
+  deps = deps or {}
   local self = setmetatable({}, HTMLExporter)
   return self
 end

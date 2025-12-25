@@ -7,6 +7,7 @@
 local TextExporter = require("whisker.export.text.text_exporter")
 
 local M = {}
+M._dependencies = {}
 
 --- Initialize text export module
 -- @param export_manager table Export manager instance
@@ -17,7 +18,8 @@ end
 
 --- Create a new text exporter instance
 -- @return TextExporter A new exporter
-function M.new()
+function M.new(deps)
+  deps = deps or {}
   return TextExporter.new()
 end
 

@@ -2,9 +2,11 @@
 -- Parses Snowman syntax and converts to Whisker format
 
 local SnowmanParser = {}
+SnowmanParser._dependencies = {}
 SnowmanParser.__index = SnowmanParser
 
-function SnowmanParser.new()
+function SnowmanParser.new(deps)
+  deps = deps or {}
     local instance = setmetatable({}, self)
     return instance
 end

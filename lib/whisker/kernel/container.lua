@@ -5,11 +5,13 @@
 -- @license MIT
 
 local Container = {}
+Container._dependencies = {}
 Container.__index = Container
 
 --- Create a new container instance
 -- @return Container A new container
-function Container.new()
+function Container.new(deps)
+  deps = deps or {}
   local self = setmetatable({}, Container)
   self._registrations = {}
   self._singletons = {}

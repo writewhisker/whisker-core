@@ -24,6 +24,7 @@
 --- @license MIT
 
 local TouchHandler = {}
+TouchHandler._dependencies = {}
 TouchHandler.__index = TouchHandler
 
 --- Gesture types
@@ -50,7 +51,8 @@ TouchHandler.DIRECTION = {
 ---   config.tap_timeout number: Max tap duration in ms (default: 300)
 ---   config.move_tolerance number: Max movement for tap in pixels (default: 10)
 --- @return TouchHandler
-function TouchHandler.new(config)
+function TouchHandler.new(config, deps)
+  deps = deps or {}
   local self = setmetatable({}, TouchHandler)
 
   config = config or {}

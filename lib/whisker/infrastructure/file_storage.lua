@@ -2,6 +2,7 @@
 -- Platform-specific file storage (Love2D, standard Lua, web)
 
 local FileStorage = {}
+FileStorage._dependencies = {}
 FileStorage.__index = FileStorage
 
 function FileStorage.new(base_directory)

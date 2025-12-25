@@ -2,6 +2,7 @@
 -- Complete implementation for browser-based interactive fiction player
 
 local WebRuntime = {}
+WebRuntime._dependencies = {}
 WebRuntime.__index = WebRuntime
 
 --------------------------------------------------------------------------------

@@ -16,14 +16,16 @@
 local IPlatform = require("whisker.platform.interface")
 local Serialization = require("whisker.platform.serialization")
 
-local AndroidPlatform = setmetatable({}, {__index = IPlatform})
+local AndroidPlatform = setmetatable({}
+AndroidPlatform._dependencies = {}, {__index = IPlatform})
 AndroidPlatform.__index = AndroidPlatform
 
 --- Create a new AndroidPlatform instance
 --- @param config table|nil Configuration options
 ---   config.fallback_locale string: Locale if detection fails (default: "en-US")
 --- @return AndroidPlatform
-function AndroidPlatform.new(config)
+function AndroidPlatform.new(config, deps)
+  deps = deps or {}
   local self = setmetatable({}, AndroidPlatform)
 
   config = config or {}

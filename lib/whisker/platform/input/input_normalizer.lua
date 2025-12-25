@@ -24,6 +24,7 @@
 --- @license MIT
 
 local InputNormalizer = {}
+InputNormalizer._dependencies = {}
 InputNormalizer.__index = InputNormalizer
 
 --- Semantic event types
@@ -57,7 +58,8 @@ InputNormalizer.SOURCE = {
 --- Create a new InputNormalizer instance
 --- @param config table|nil Configuration options
 --- @return InputNormalizer
-function InputNormalizer.new(config)
+function InputNormalizer.new(config, deps)
+  deps = deps or {}
   local self = setmetatable({}, InputNormalizer)
 
   config = config or {}

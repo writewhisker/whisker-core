@@ -2,9 +2,11 @@
 -- Handles conversion between Snowman (Twine 2) and whisker formats
 
 local SnowmanConverter = {}
+SnowmanConverter._dependencies = {}
 SnowmanConverter.__index = SnowmanConverter
 
-function SnowmanConverter.new()
+function SnowmanConverter.new(deps)
+  deps = deps or {}
     local instance = setmetatable({}, SnowmanConverter)
     return instance
 end

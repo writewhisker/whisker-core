@@ -7,8 +7,10 @@ local AudioChannel = {
   _VERSION = "1.0.0"
 }
 AudioChannel.__index = AudioChannel
+AudioChannel._dependencies = {}
 
-function AudioChannel.new(name, config)
+function AudioChannel.new(name, config, deps)
+  deps = deps or {}
   local self = setmetatable({}, AudioChannel)
 
   config = config or {}

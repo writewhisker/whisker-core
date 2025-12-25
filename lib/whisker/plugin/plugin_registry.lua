@@ -9,6 +9,7 @@ local PluginContext = require("whisker.plugin.plugin_context")
 local DependencyResolver = require("whisker.plugin.dependency_resolver")
 
 local PluginRegistry = {}
+PluginRegistry._dependencies = {}
 PluginRegistry.__index = PluginRegistry
 
 -- Singleton instance
@@ -33,7 +34,8 @@ end
 
 --- Create a new plugin registry
 -- @return PluginRegistry A new registry instance
-function PluginRegistry.new()
+function PluginRegistry.new(deps)
+  deps = deps or {}
   local self = setmetatable({}, PluginRegistry)
 
   self._plugins = {}          -- name -> Plugin

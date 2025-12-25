@@ -5,6 +5,7 @@
 -- @license MIT
 
 local PluginContext = {}
+PluginContext._dependencies = {}
 PluginContext.__index = PluginContext
 
 --- Known capability types

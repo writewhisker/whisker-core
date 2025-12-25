@@ -5,6 +5,7 @@
 -- @license MIT
 
 local ExportCommand = {}
+ExportCommand._dependencies = {}
 
 -- Dependencies (lazily loaded)
 local _export_utils = nil

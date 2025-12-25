@@ -2,9 +2,11 @@
 -- Parses Harlowe syntax and converts to Whisker format
 
 local HarloweParser = {}
+HarloweParser._dependencies = {}
 HarloweParser.__index = HarloweParser
 
-function HarloweParser.new()
+function HarloweParser.new(deps)
+  deps = deps or {}
     local instance = setmetatable({}, self)
     return instance
 end

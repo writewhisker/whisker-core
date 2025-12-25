@@ -4,6 +4,7 @@
 -- lib/whisker/twine/formats/snowman/handler.lua
 
 local SnowmanHandler = {}
+SnowmanHandler._dependencies = {}
 SnowmanHandler.__index = SnowmanHandler
 
 local TemplateParser = require('whisker.twine.formats.snowman.template_parser')
@@ -17,7 +18,8 @@ local ASTBuilder = require('whisker.twine.ast_builder')
 
 --- Initialize handler
 ---@return table SnowmanHandler instance
-function SnowmanHandler.new()
+function SnowmanHandler.new(deps)
+  deps = deps or {}
   local self = setmetatable({}, SnowmanHandler)
   self.format_name = "snowman"
   self.supported_versions = { "2.0", "2.0.1", "2.0.2", "2.0.3" }

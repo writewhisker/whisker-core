@@ -3,6 +3,7 @@
 -- Converts to whisker format
 
 local TwineImporter = {}
+TwineImporter._dependencies = {}
 
 -- Supported Twine story formats
 TwineImporter.SupportedFormats = {

@@ -2,9 +2,11 @@
 -- Basic cross-platform file system operations
 
 local FileSystem = {}
+FileSystem._dependencies = {}
 FileSystem.__index = FileSystem
 
-function FileSystem.new()
+function FileSystem.new(deps)
+  deps = deps or {}
     local instance = {
         path_separator = package.config:sub(1, 1)
     }

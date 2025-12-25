@@ -5,11 +5,13 @@
 -- @license MIT
 
 local Profiler = {}
+Profiler._dependencies = {}
 Profiler.__index = Profiler
 
 --- Create a new profiler instance
 -- @return Profiler A new profiler
-function Profiler.new()
+function Profiler.new(deps)
+  deps = deps or {}
   local self = setmetatable({}, Profiler)
   self._call_counts = {}
   self._call_times = {}

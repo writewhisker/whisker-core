@@ -3,6 +3,7 @@
 -- Provides REPL-like environment for inspecting game state
 
 local Console = {}
+Console._dependencies = {}
 Console.__index = Console
 
 -- Console commands

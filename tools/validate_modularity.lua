@@ -149,17 +149,36 @@ local RULES = {
     name = "Global Variable Assignment",
     description = "Modules should not assign global variables",
     severity = SEVERITY.WARNING,
-    line_check = function(line, filepath, line_num)
-      -- Check for global assignment (not local)
-      if line and line:match("^[%w_]+%s*=") and not line:match("^local%s") then
-        -- Skip return statements and common patterns
-        if line:match("^return%s") then return false end
-        if line:match("^%-%-") then return false end
-        -- Skip M = {} pattern after local M declaration
-        if line:match("^M%s*=") then return false end
-        return true, "Possible global variable assignment"
+    -- Need file content to check for forward declarations
+    check = function(content, filepath)
+      local violations = {}
+      local forward_declared = {}
+
+      -- First pass: find forward declarations (local funcName)
+      for line in content:gmatch("[^\n]+") do
+        local name = line:match("^local%s+([%w_]+)%s*$")
+        if name then
+          forward_declared[name] = true
+        end
       end
-      return false
+
+      -- Second pass: find global assignments
+      local line_num = 0
+      for line in content:gmatch("[^\n]+") do
+        line_num = line_num + 1
+        if line:match("^[%w_]+%s*=") and not line:match("^local%s") then
+          -- Skip return statements and common patterns
+          if not line:match("^return%s") and not line:match("^%-%-") and not line:match("^M%s*=") then
+            -- Check if this is a forward declaration assignment
+            local name = line:match("^([%w_]+)%s*=")
+            if name and not forward_declared[name] then
+              table.insert(violations, {line = line_num, detail = "Possible global variable assignment"})
+            end
+          end
+        end
+      end
+
+      return #violations > 0, violations
     end,
     allowed_files = {
       "init%.lua$",

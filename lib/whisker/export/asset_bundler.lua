@@ -7,6 +7,7 @@
 local ExportUtils = require("whisker.export.utils")
 
 local AssetBundler = {}
+AssetBundler._dependencies = {}
 AssetBundler.__index = AssetBundler
 
 --- Create a new asset bundler instance

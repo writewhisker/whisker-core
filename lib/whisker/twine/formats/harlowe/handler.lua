@@ -4,6 +4,7 @@
 -- lib/whisker/twine/formats/harlowe/handler.lua
 
 local HarloweHandler = {}
+HarloweHandler._dependencies = {}
 HarloweHandler.__index = HarloweHandler
 
 local MacroCore = require('whisker.twine.formats.harlowe.macro_core')
@@ -17,7 +18,8 @@ local ASTBuilder = require('whisker.twine.ast_builder')
 
 --- Initialize handler
 ---@return table HarloweHandler instance
-function HarloweHandler.new()
+function HarloweHandler.new(deps)
+  deps = deps or {}
   local self = setmetatable({}, HarloweHandler)
   self.format_name = "harlowe"
   self.supported_versions = { "3.0", "3.1", "3.2", "3.3" }

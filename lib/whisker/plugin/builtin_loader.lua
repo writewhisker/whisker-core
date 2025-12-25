@@ -5,6 +5,7 @@
 -- @license MIT
 
 local BuiltinLoader = {}
+BuiltinLoader._dependencies = {}
 BuiltinLoader.__index = BuiltinLoader
 
 --- Default builtin plugins directory name
@@ -13,7 +14,8 @@ BuiltinLoader.BUILTIN_DIR = "builtin"
 --- Create a new builtin loader
 -- @param config table|nil Configuration options
 -- @return BuiltinLoader
-function BuiltinLoader.new(config)
+function BuiltinLoader.new(config, deps)
+  deps = deps or {}
   local self = setmetatable({}, BuiltinLoader)
 
   config = config or {}

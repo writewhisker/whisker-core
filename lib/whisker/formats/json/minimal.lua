@@ -5,6 +5,7 @@
 -- @license MIT
 
 local M = {}
+M._dependencies = {}
 
 -- Encode a Lua value to JSON string
 local function encode_value(val, indent, depth)

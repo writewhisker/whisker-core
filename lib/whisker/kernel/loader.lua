@@ -5,6 +5,7 @@
 -- @license MIT
 
 local Loader = {}
+Loader._dependencies = {}
 Loader.__index = Loader
 
 --- Create a new loader instance

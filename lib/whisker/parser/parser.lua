@@ -2,9 +2,11 @@
 -- Complete parser for whisker format
 
 local Parser = {}
+Parser._dependencies = {}
 Parser.__index = Parser
 
-function Parser.new()
+function Parser.new(deps)
+  deps = deps or {}
     local instance = {
         tokens = {},
         current = 1,

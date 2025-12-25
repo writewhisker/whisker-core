@@ -2,9 +2,11 @@
 -- Parses SugarCube syntax and converts to Whisker format
 
 local SugarCubeParser = {}
+SugarCubeParser._dependencies = {}
 SugarCubeParser.__index = SugarCubeParser
 
-function SugarCubeParser.new()
+function SugarCubeParser.new(deps)
+  deps = deps or {}
     local instance = setmetatable({}, self)
     return instance
 end

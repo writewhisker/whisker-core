@@ -21,7 +21,8 @@ function GameState.create(deps)
   end
 end
 
-function GameState.new()
+function GameState.new(deps)
+  deps = deps or {}
     local instance = {
         -- Core state
         variables = {},

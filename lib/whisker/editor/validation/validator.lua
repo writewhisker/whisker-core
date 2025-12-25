@@ -2,6 +2,7 @@
 -- Story Validation Module
 
 local Validator = {}
+Validator._dependencies = {}
 
 function Validator.new(project)
     return {

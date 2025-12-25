@@ -40,6 +40,7 @@ local ASSIGN_OPS = {
 --------------------------------------------------------------------------------
 
 local Parser = {}
+Parser._dependencies = {}
 Parser.__index = Parser
 
 --- Create a new parser for the given tokens

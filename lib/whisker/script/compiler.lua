@@ -10,6 +10,7 @@ local AST = require("whisker.script.ast")
 --------------------------------------------------------------------------------
 
 local Compiler = {}
+Compiler._dependencies = {}
 Compiler.__index = Compiler
 
 --- Create a new compiler

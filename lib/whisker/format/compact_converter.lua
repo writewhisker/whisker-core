@@ -3,6 +3,7 @@
 -- Provides significant file size reduction while maintaining full compatibility
 
 local CompactConverter = {}
+CompactConverter._dependencies = {}
 
 -- Format version constants
 CompactConverter.VERSION_VERBOSE = "1.0"
@@ -15,7 +16,8 @@ local DEFAULTS = {
 }
 
 -- Create new converter instance
-function CompactConverter.new()
+function CompactConverter.new(deps)
+  deps = deps or {}
     local self = setmetatable({}, {__index = CompactConverter})
     return self
 end

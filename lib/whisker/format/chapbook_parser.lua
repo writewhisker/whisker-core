@@ -2,9 +2,11 @@
 -- Parses Chapbook syntax and converts to Whisker format
 
 local ChapbookParser = {}
+ChapbookParser._dependencies = {}
 ChapbookParser.__index = ChapbookParser
 
-function ChapbookParser.new()
+function ChapbookParser.new(deps)
+  deps = deps or {}
     local instance = setmetatable({}, self)
     return instance
 end
