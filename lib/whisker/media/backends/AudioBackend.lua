@@ -5,8 +5,10 @@ local AudioBackend = {
   _VERSION = "1.0.0"
 }
 AudioBackend.__index = AudioBackend
+AudioBackend._dependencies = {}
 
-function AudioBackend.new()
+function AudioBackend.new(deps)
+  deps = deps or {}
   local self = setmetatable({}, AudioBackend)
   return self
 end

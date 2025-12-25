@@ -5,11 +5,13 @@
 -- @license MIT
 
 local TemplateEngine = {}
+TemplateEngine._dependencies = {}
 TemplateEngine.__index = TemplateEngine
 
 --- Create a new template engine instance
 -- @return TemplateEngine A new template engine
-function TemplateEngine.new()
+function TemplateEngine.new(deps)
+  deps = deps or {}
   local self = setmetatable({}, TemplateEngine)
   self._templates = {}
   self._partials = {}

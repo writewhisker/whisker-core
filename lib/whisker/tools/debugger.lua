@@ -3,6 +3,7 @@
 -- for interactive story development and testing
 
 local Debugger = {}
+Debugger._dependencies = {}
 Debugger.__index = Debugger
 
 -- Debug modes

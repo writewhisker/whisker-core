@@ -7,6 +7,7 @@
 local HookTypes = require("whisker.plugin.hook_types")
 
 local HookManager = {}
+HookManager._dependencies = {}
 HookManager.__index = HookManager
 
 --- Default hook priority
@@ -18,7 +19,8 @@ HookManager.MAX_PRIORITY = 100
 
 --- Create a new hook manager
 -- @return HookManager New instance
-function HookManager.new()
+function HookManager.new(deps)
+  deps = deps or {}
   local self = setmetatable({}, HookManager)
 
   self._hooks = {}         -- event -> [{id, callback, priority, plugin_name}]

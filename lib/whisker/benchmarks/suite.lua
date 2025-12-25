@@ -5,6 +5,7 @@
 -- @license MIT
 
 local BenchmarkSuite = {}
+BenchmarkSuite._dependencies = {}
 BenchmarkSuite.__index = BenchmarkSuite
 
 --- Create a new benchmark suite

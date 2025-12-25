@@ -4,6 +4,7 @@
 -- lib/whisker/twine/formats/chapbook/handler.lua
 
 local ChapbookHandler = {}
+ChapbookHandler._dependencies = {}
 ChapbookHandler.__index = ChapbookHandler
 
 local ModifierParser = require('whisker.twine.formats.chapbook.modifier_parser')
@@ -17,7 +18,8 @@ local ASTBuilder = require('whisker.twine.ast_builder')
 
 --- Initialize handler
 ---@return table ChapbookHandler instance
-function ChapbookHandler.new()
+function ChapbookHandler.new(deps)
+  deps = deps or {}
   local self = setmetatable({}, ChapbookHandler)
   self.format_name = "chapbook"
   self.supported_versions = { "1.0", "1.1", "1.2", "1.2.1", "1.2.2", "1.2.3" }

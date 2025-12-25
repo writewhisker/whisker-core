@@ -7,11 +7,13 @@
 local ExportUtils = require("whisker.export.utils")
 
 local TextExporter = {}
+TextExporter._dependencies = {}
 TextExporter.__index = TextExporter
 
 --- Create a new text exporter instance
 -- @return TextExporter A new exporter
-function TextExporter.new()
+function TextExporter.new(deps)
+  deps = deps or {}
   local self = setmetatable({}, TextExporter)
   return self
 end

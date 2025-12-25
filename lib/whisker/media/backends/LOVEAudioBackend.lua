@@ -3,10 +3,12 @@
 
 local AudioBackend = require("whisker.media.backends.AudioBackend")
 
-local LOVEAudioBackend = setmetatable({}, {__index = AudioBackend})
+local LOVEAudioBackend = setmetatable({}
+LOVEAudioBackend._dependencies = {}, {__index = AudioBackend})
 LOVEAudioBackend.__index = LOVEAudioBackend
 
-function LOVEAudioBackend.new()
+function LOVEAudioBackend.new(deps)
+  deps = deps or {}
   local self = setmetatable({}, LOVEAudioBackend)
   self._sources = {}
   self._nextId = 1

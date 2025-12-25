@@ -3,6 +3,7 @@
 -- Supports markdown-style formatting and Lua expression evaluation
 
 local Renderer = {}
+Renderer._dependencies = {}
 Renderer.__index = Renderer
 
 -- Formatting tokens

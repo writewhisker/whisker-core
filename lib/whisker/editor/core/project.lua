@@ -2,9 +2,11 @@
 -- Project Management Module
 
 local Project = {}
+Project._dependencies = {}
 Project.__index = Project
 
-function Project.new()
+function Project.new(deps)
+  deps = deps or {}
     local instance = {
         metadata = {
             title = "Untitled Story",

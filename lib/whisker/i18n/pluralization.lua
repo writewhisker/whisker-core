@@ -19,7 +19,8 @@ Pluralization.__index = Pluralization
 
 --- Create a new Pluralization instance
 -- @return Pluralization instance
-function M.new()
+function M.new(deps)
+  deps = deps or {}
   local self = setmetatable({}, Pluralization)
   self._initialized = false
   return self

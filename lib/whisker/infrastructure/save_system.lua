@@ -2,6 +2,7 @@
 -- Save and load functionality for game state
 
 local SaveSystem = {}
+SaveSystem._dependencies = {}
 SaveSystem.__index = SaveSystem
 
 --- Create a new SaveSystem instance

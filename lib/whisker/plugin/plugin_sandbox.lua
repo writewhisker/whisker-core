@@ -5,6 +5,7 @@
 -- @license MIT
 
 local PluginSandbox = {}
+PluginSandbox._dependencies = {}
 PluginSandbox.__index = PluginSandbox
 
 --- Default execution timeout in milliseconds
@@ -96,7 +97,8 @@ PluginSandbox.BLOCKED_GLOBALS = {
 --- Create a new sandbox configuration
 -- @param config table|nil Configuration options
 -- @return PluginSandbox
-function PluginSandbox.new(config)
+function PluginSandbox.new(config, deps)
+  deps = deps or {}
   local self = setmetatable({}, PluginSandbox)
 
   config = config or {}

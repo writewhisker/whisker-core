@@ -16,14 +16,16 @@
 local IPlatform = require("whisker.platform.interface")
 local Serialization = require("whisker.platform.serialization")
 
-local IOSPlatform = setmetatable({}, {__index = IPlatform})
+local IOSPlatform = setmetatable({}
+IOSPlatform._dependencies = {}, {__index = IPlatform})
 IOSPlatform.__index = IOSPlatform
 
 --- Create a new IOSPlatform instance
 --- @param config table|nil Configuration options
 ---   config.fallback_locale string: Locale if detection fails (default: "en-US")
 --- @return IOSPlatform
-function IOSPlatform.new(config)
+function IOSPlatform.new(config, deps)
+  deps = deps or {}
   local self = setmetatable({}, IOSPlatform)
 
   config = config or {}

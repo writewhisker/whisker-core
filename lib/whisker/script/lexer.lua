@@ -16,6 +16,7 @@
 ---@field raw string Original source text of token
 
 local Token = {}
+Token._dependencies = {}
 Token.__index = Token
 
 --- Create a new token

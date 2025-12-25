@@ -5,11 +5,13 @@
 -- @license MIT
 
 local Registry = {}
+Registry._dependencies = {}
 Registry.__index = Registry
 
 --- Create a new registry instance
 -- @return Registry A new registry
-function Registry.new()
+function Registry.new(deps)
+  deps = deps or {}
   local self = setmetatable({}, Registry)
   self._modules = {}
   self._categories = {}

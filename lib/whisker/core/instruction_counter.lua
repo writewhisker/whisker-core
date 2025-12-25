@@ -2,9 +2,11 @@
 -- Advanced instruction counting with CPU-accurate weighting and performance monitoring
 
 local AdvancedInstructionCounter = {}
+AdvancedInstructionCounter._dependencies = {}
 AdvancedInstructionCounter.__index = AdvancedInstructionCounter
 
-function AdvancedInstructionCounter.new(config)
+function AdvancedInstructionCounter.new(config, deps)
+  deps = deps or {}
     config = config or {}
 
     local instance = {

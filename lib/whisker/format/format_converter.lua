@@ -3,6 +3,7 @@
 -- Supports: Whisker, Twine (HTML), Twee, JSON
 
 local FormatConverter = {}
+FormatConverter._dependencies = {}
 
 -- Load required modules
 local story_to_whisker = require("whisker.format.story_to_whisker")

@@ -3,6 +3,7 @@
 -- and checks accessibility compliance for interactive stories
 
 local Validator = {}
+Validator._dependencies = {}
 Validator.__index = Validator
 
 -- Validation severity levels
@@ -23,7 +24,8 @@ Validator.Category = {
 }
 
 -- Create new validator instance
-function Validator.new()
+function Validator.new(deps)
+  deps = deps or {}
     local self = setmetatable({}, Validator)
 
     -- Validation results

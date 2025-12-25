@@ -16,7 +16,8 @@
 local IPlatform = require("whisker.platform.interface")
 local Serialization = require("whisker.platform.serialization")
 
-local WebPlatform = setmetatable({}, {__index = IPlatform})
+local WebPlatform = setmetatable({}
+WebPlatform._dependencies = {}, {__index = IPlatform})
 WebPlatform.__index = WebPlatform
 
 --- Create a new WebPlatform instance
@@ -24,7 +25,8 @@ WebPlatform.__index = WebPlatform
 ---   config.storage_prefix string: Prefix for localStorage keys (default: "whisker:")
 ---   config.fallback_locale string: Locale to use if detection fails (default: "en-US")
 --- @return WebPlatform
-function WebPlatform.new(config)
+function WebPlatform.new(config, deps)
+  deps = deps or {}
   local self = setmetatable({}, WebPlatform)
 
   config = config or {}

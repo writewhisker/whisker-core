@@ -2,6 +2,7 @@
 -- Passage Management Module
 
 local PassageManager = {}
+PassageManager._dependencies = {}
 PassageManager.__index = PassageManager
 
 function PassageManager.new(project)

@@ -5,6 +5,7 @@
 -- @license MIT
 
 local StateBridge = {}
+StateBridge._dependencies = {}
 StateBridge.__index = StateBridge
 
 --- Create new state bridge

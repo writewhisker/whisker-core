@@ -3,6 +3,7 @@
 -- Stage 3: Translation File Format Support
 
 local M = {}
+M._dependencies = {}
 
 -- Module version
 M._VERSION = "1.0.0"

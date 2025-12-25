@@ -3,6 +3,7 @@
 -- Supports multiple platforms (web, desktop, mobile)
 
 local AssetManager = {}
+AssetManager._dependencies = {}
 AssetManager.__index = AssetManager
 
 -- Asset types
@@ -23,7 +24,8 @@ local AssetStatus = {
 }
 
 -- Create new asset manager instance
-function AssetManager.new(config)
+function AssetManager.new(config, deps)
+  deps = deps or {}
     local self = setmetatable({}, AssetManager)
 
     config = config or {}

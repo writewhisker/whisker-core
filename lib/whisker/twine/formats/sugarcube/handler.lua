@@ -4,6 +4,7 @@
 -- lib/whisker/twine/formats/sugarcube/handler.lua
 
 local SugarCubeHandler = {}
+SugarCubeHandler._dependencies = {}
 SugarCubeHandler.__index = SugarCubeHandler
 
 local MacroCore = require('whisker.twine.formats.sugarcube.macro_core')
@@ -16,7 +17,8 @@ local ASTBuilder = require('whisker.twine.ast_builder')
 
 --- Initialize handler
 ---@return table SugarCubeHandler instance
-function SugarCubeHandler.new()
+function SugarCubeHandler.new(deps)
+  deps = deps or {}
   local self = setmetatable({}, SugarCubeHandler)
   self.format_name = "sugarcube"
   self.supported_versions = { "2.30", "2.31", "2.32", "2.33", "2.34", "2.35", "2.36", "2.37" }

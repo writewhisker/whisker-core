@@ -3,6 +3,7 @@
 -- Requires LÖVE2D (https://love2d.org/)
 
 local DesktopRuntime = {}
+DesktopRuntime._dependencies = {}
 DesktopRuntime.__index = DesktopRuntime
 
 -- Dependencies
@@ -10,7 +11,8 @@ local Engine = require('src.core.engine')
 local json = require('src.utils.json')
 
 -- Constructor
-function DesktopRuntime.new(config)
+function DesktopRuntime.new(config, deps)
+  deps = deps or {}
     local instance = {
         engine = nil,
         config = config or {},

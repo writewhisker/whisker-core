@@ -5,6 +5,7 @@
 -- @license MIT
 
 local EventTaxonomy = {}
+EventTaxonomy._dependencies = {}
 EventTaxonomy.__index = EventTaxonomy
 EventTaxonomy.VERSION = "1.0.0"
 
@@ -268,7 +269,8 @@ end
 
 --- Create a new EventTaxonomy instance
 -- @return EventTaxonomy A new instance
-function EventTaxonomy.new()
+function EventTaxonomy.new(deps)
+  deps = deps or {}
   local self = setmetatable({}, EventTaxonomy)
   self._customEvents = {}
   return self

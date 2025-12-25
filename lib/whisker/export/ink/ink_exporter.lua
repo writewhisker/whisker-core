@@ -9,11 +9,13 @@ local InkMapper = require("whisker.export.ink.mapper")
 local InkSchema = require("whisker.export.ink.schema")
 
 local InkExporter = {}
+InkExporter._dependencies = {}
 InkExporter.__index = InkExporter
 
 --- Create a new Ink exporter instance
 -- @return InkExporter A new exporter
-function InkExporter.new()
+function InkExporter.new(deps)
+  deps = deps or {}
   local self = setmetatable({}, InkExporter)
   return self
 end

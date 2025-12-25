@@ -2,9 +2,11 @@
 -- Complete tokenization for whisker format
 
 local Lexer = {}
+Lexer._dependencies = {}
 Lexer.__index = Lexer
 
-function Lexer.new()
+function Lexer.new(deps)
+  deps = deps or {}
     local instance = {
         -- Input processing
         input = "",

@@ -3,6 +3,7 @@
 -- Integrates rendering and input handling
 
 local UIFramework = {}
+UIFramework._dependencies = {}
 UIFramework.__index = UIFramework
 
 -- Create new UI framework instance

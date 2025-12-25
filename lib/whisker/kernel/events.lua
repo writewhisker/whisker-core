@@ -5,11 +5,13 @@
 -- @license MIT
 
 local EventBus = {}
+EventBus._dependencies = {}
 EventBus.__index = EventBus
 
 --- Create a new event bus instance
 -- @return EventBus A new event bus
-function EventBus.new()
+function EventBus.new(deps)
+  deps = deps or {}
   local self = setmetatable({}, EventBus)
   self._handlers = {}
   self._wildcard_handlers = {}

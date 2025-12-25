@@ -14,12 +14,14 @@
 --- @license MIT
 
 local IPlatform = {}
+IPlatform._dependencies = {}
 IPlatform.__index = IPlatform
 
 --- Create a new IPlatform instance (abstract base class)
 --- This should not be instantiated directly; use concrete platform implementations.
 --- @return IPlatform
-function IPlatform.new()
+function IPlatform.new(deps)
+  deps = deps or {}
   local self = setmetatable({}, IPlatform)
   return self
 end

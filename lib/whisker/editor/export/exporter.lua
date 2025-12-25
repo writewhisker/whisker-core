@@ -2,6 +2,7 @@
 -- Export Module for Multiple Formats
 
 local Exporter = {}
+Exporter._dependencies = {}
 
 function Exporter.new(project)
     return {

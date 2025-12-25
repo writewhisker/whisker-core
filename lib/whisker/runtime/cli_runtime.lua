@@ -2,6 +2,7 @@
 -- Provides a terminal-based interface for playing Whisker stories
 
 local CLIRuntime = {}
+CLIRuntime._dependencies = {}
 CLIRuntime.__index = CLIRuntime
 
 -- Dependencies
@@ -52,7 +53,8 @@ local BOX = {
 }
 
 -- Constructor
-function CLIRuntime.new(config)
+function CLIRuntime.new(config, deps)
+  deps = deps or {}
     local instance = {
         engine = nil,
         config = config or {},

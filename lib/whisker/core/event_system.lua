@@ -3,6 +3,7 @@
 -- Provides publish-subscribe pattern for game events
 
 local EventSystem = {}
+EventSystem._dependencies = {}
 EventSystem.__index = EventSystem
 
 -- Event types
@@ -38,7 +39,8 @@ EventSystem.EventType = {
 }
 
 -- Create new event system
-function EventSystem.new()
+function EventSystem.new(deps)
+  deps = deps or {}
     local self = setmetatable({}, EventSystem)
 
     -- Event listeners storage

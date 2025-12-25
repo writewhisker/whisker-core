@@ -7,6 +7,7 @@
 local InkExporter = require("whisker.export.ink.ink_exporter")
 
 local M = {}
+M._dependencies = {}
 
 --- Initialize Ink export module
 -- @param export_manager table Export manager instance
@@ -17,7 +18,8 @@ end
 
 --- Create a new Ink exporter instance
 -- @return InkExporter A new exporter
-function M.new()
+function M.new(deps)
+  deps = deps or {}
   return InkExporter.new()
 end
 

@@ -6,6 +6,7 @@
 -- @license MIT
 
 local StoryWrapper = {}
+StoryWrapper._dependencies = {}
 StoryWrapper.__index = StoryWrapper
 
 --- Create a new StoryWrapper instance

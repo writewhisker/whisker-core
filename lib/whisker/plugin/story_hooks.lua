@@ -7,6 +7,7 @@
 local HookTypes = require("whisker.plugin.hook_types")
 
 local StoryHooks = {}
+StoryHooks._dependencies = {}
 StoryHooks.__index = StoryHooks
 
 --- Create a new story hooks integration

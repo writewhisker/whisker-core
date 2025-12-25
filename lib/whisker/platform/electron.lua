@@ -16,14 +16,16 @@
 local IPlatform = require("whisker.platform.interface")
 local Serialization = require("whisker.platform.serialization")
 
-local ElectronPlatform = setmetatable({}, {__index = IPlatform})
+local ElectronPlatform = setmetatable({}
+ElectronPlatform._dependencies = {}, {__index = IPlatform})
 ElectronPlatform.__index = ElectronPlatform
 
 --- Create a new ElectronPlatform instance
 --- @param config table|nil Configuration options
 ---   config.fallback_locale string: Locale if detection fails (default: "en-US")
 --- @return ElectronPlatform
-function ElectronPlatform.new(config)
+function ElectronPlatform.new(config, deps)
+  deps = deps or {}
   local self = setmetatable({}, ElectronPlatform)
 
   config = config or {}

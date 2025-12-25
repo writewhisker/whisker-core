@@ -5,6 +5,7 @@
 -- @license MIT
 
 local ContrastChecker = {}
+ContrastChecker._dependencies = {}
 ContrastChecker.__index = ContrastChecker
 
 -- WCAG contrast requirements
@@ -15,7 +16,8 @@ local WCAG_REQUIREMENTS = {
 
 --- Create a new ContrastChecker
 -- @return ContrastChecker The new checker instance
-function ContrastChecker.new()
+function ContrastChecker.new(deps)
+  deps = deps or {}
   local self = setmetatable({}, ContrastChecker)
   return self
 end

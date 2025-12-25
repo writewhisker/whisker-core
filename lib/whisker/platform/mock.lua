@@ -12,7 +12,8 @@
 local IPlatform = require("whisker.platform.interface")
 local Serialization = require("whisker.platform.serialization")
 
-local MockPlatform = setmetatable({}, {__index = IPlatform})
+local MockPlatform = setmetatable({}
+MockPlatform._dependencies = {}, {__index = IPlatform})
 MockPlatform.__index = MockPlatform
 
 --- Create a new MockPlatform instance
@@ -23,7 +24,8 @@ MockPlatform.__index = MockPlatform
 ---   config.fail_saves boolean: Force all saves to fail (for testing)
 ---   config.fail_loads boolean: Force all loads to fail (for testing)
 --- @return MockPlatform
-function MockPlatform.new(config)
+function MockPlatform.new(config, deps)
+  deps = deps or {}
   local self = setmetatable({}, MockPlatform)
 
   config = config or {}

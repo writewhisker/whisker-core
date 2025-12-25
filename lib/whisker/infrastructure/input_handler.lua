@@ -3,6 +3,7 @@
 -- Provides unified interface for console, web, and GUI input
 
 local InputHandler = {}
+InputHandler._dependencies = {}
 InputHandler.__index = InputHandler
 
 -- Input types
