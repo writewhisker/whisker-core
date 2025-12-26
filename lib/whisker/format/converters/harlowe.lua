@@ -216,6 +216,62 @@ function M.to_snowman(parsed_story)
 
     local content = passage.content
 
+    -- Convert arrays (a: 1, 2, 3) -> [1, 2, 3] - do this BEFORE variable conversion
+    content = content:gsub("%(%s*a:%s*(.-)%)", function(items)
+      return "[" .. items .. "]"
+    end)
+
+    -- Convert datamaps (dm: "key", value, "key2", value2) -> {key: value, key2: value2}
+    content = content:gsub("%(%s*dm:%s*(.-)%)", function(pairs_str)
+      local items = {}
+      local result_pairs = {}
+
+      -- Parse comma-separated pairs
+      for item in (pairs_str .. ","):gmatch("([^,]+),") do
+        table.insert(items, item:match("^%s*(.-)%s*$"))
+      end
+
+      -- Pair up keys and values
+      for i = 1, #items, 2 do
+        if items[i] and items[i+1] then
+          local key = items[i]:gsub('["\']', '')
+          table.insert(result_pairs, key .. ": " .. items[i+1])
+        end
+      end
+
+      return "{" .. table.concat(result_pairs, ", ") .. "}"
+    end)
+
+    -- Convert (datanames: $map) -> Object.keys(s.map)
+    content = content:gsub("%(datanames:%s*%$([%w_]+)%)", function(map)
+      return "Object.keys(s." .. map .. ")"
+    end)
+
+    -- Convert (datavalues: $map) -> Object.values(s.map)
+    content = content:gsub("%(datavalues:%s*%$([%w_]+)%)", function(map)
+      return "Object.values(s." .. map .. ")"
+    end)
+
+    -- Convert array access $arr's 1st, 2nd, 3rd, etc. -> s.arr[0], s.arr[1], etc.
+    content = content:gsub("%$([%w_]+)'s%s+(%d+)[snrt][tdh]", function(arr, idx)
+      return "s." .. arr .. "[" .. (tonumber(idx) - 1) .. "]"
+    end)
+
+    -- Convert array/map length $arr's length -> s.arr.length
+    content = content:gsub("%$([%w_]+)'s%s+length", function(arr)
+      return "s." .. arr .. ".length"
+    end)
+
+    -- Convert datamap access $map's key -> s.map.key (must be before generic $var)
+    content = content:gsub("%$([%w_]+)'s%s+([%w_]+)", function(map, key)
+      return "s." .. map .. "." .. key
+    end)
+
+    -- Convert array contains ($arr contains X) -> s.arr.includes(X)
+    content = content:gsub("%(%s*%$([%w_]+)%s+contains%s+(.-)%)", function(arr, val)
+      return "s." .. arr .. ".includes(" .. val .. ")"
+    end)
+
     -- Convert (set: $var to value) -> <% s.var = value; %>
     content = content:gsub("%(%s*set:%s*%$([%w_]+)%s+to%s+(.-)%)", function(var, value)
       return "<% s." .. var .. " = " .. value .. "; %>"
@@ -745,6 +801,10 @@ local SNOWMAN_CONVERTED = {
   {pattern = "%(set:", feature = "set", converts_to = "<% s.var = value %>"},
   {pattern = "%$[%w_]+", feature = "variable", converts_to = "<%= s.var %>"},
   {pattern = "%[%[.-%->", feature = "link", converts_to = "[text](target)"},
+  {pattern = "%(a:", feature = "array", converts_to = "[...]"},
+  {pattern = "%(dm:", feature = "datamap", converts_to = "{...}"},
+  {pattern = "%(datanames:", feature = "datanames", converts_to = "Object.keys(...)"},
+  {pattern = "%(datavalues:", feature = "datavalues", converts_to = "Object.values(...)"},
 }
 
 -- Features approximated in Snowman
