@@ -4,6 +4,7 @@ local M = {}
 
 -- Require the report module
 local Report = require("whisker.format.converters.report")
+local InkCompat = require("whisker.format.converters.ink_compat")
 
 function M.to_harlowe(parsed_story)
   local result = {}
@@ -404,6 +405,128 @@ function M.to_snowman_with_report(parsed_story)
   end
 
   local result = M.to_snowman(parsed_story)
+  return result, report
+end
+
+-- Convert SugarCube to Ink format
+function M.to_ink(parsed_story)
+  local result = {}
+
+  -- Add variable declarations at the top
+  local var_declarations = {}
+
+  for _, passage in ipairs(parsed_story.passages) do
+    for var, value in passage.content:gmatch("<<%s*set%s+%$([%w_]+)%s+to%s+([^>]+)%s*>>") do
+      if not var_declarations[var] then
+        table.insert(result, "VAR " .. var .. " = " .. value)
+        var_declarations[var] = true
+      end
+    end
+  end
+
+  if next(var_declarations) then
+    table.insert(result, "")
+  end
+
+  -- Convert each passage to a knot
+  for _, passage in ipairs(parsed_story.passages) do
+    local knot_name = passage.name:gsub("%s+", "_")
+    table.insert(result, "=== " .. knot_name .. " ===")
+
+    local content = passage.content
+
+    -- Convert <<set $var to value>> to ~ var = value
+    content = content:gsub("<<%s*set%s+%$([%w_]+)%s+to%s+([^>]+)%s*>>", function(var, value)
+      return "~ " .. var .. " = " .. value
+    end)
+
+    -- Convert <<if cond>>body<</if>> to {cond: body}
+    content = content:gsub("<<%s*if%s+([^>]+)%s*>>(.-)<</%s*if%s*>>", function(cond, body)
+      cond = cond:gsub("%$([%w_]+)", "%1")
+      return "{" .. cond .. ": " .. body .. "}"
+    end)
+
+    -- Convert <<print $var>> to {var}
+    content = content:gsub("<<%s*print%s+%$([%w_]+)%s*>>", "{%1}")
+
+    -- Convert $var to {var}
+    content = content:gsub("%$([%w_]+)", "{%1}")
+
+    -- Convert [[Text|Target]] to * [Text] -> Target
+    content = content:gsub("%[%[([^%]|]+)%|([^%]]+)%]%]", function(text, target)
+      target = target:gsub("%s+", "_")
+      return "* [" .. text .. "] -> " .. target
+    end)
+
+    -- Convert [[Target]] to * [Target] -> Target
+    content = content:gsub("%[%[([^%]|]+)%]%]", function(target)
+      local ink_target = target:gsub("%s+", "_")
+      return "* [" .. target .. "] -> " .. ink_target
+    end)
+
+    table.insert(result, content)
+    table.insert(result, "")
+  end
+
+  return table.concat(result, "\n")
+end
+
+-- Features incompatible with Ink
+local INK_INCOMPATIBLE = {
+  {pattern = "<<%s*widget%s+", feature = "widget", description = "Widgets not supported in Ink"},
+  {pattern = "<<%s*repeat%s+", feature = "repeat", description = "Timed repeats not supported in Ink"},
+  {pattern = "<<%s*for%s+", feature = "for-loop", description = "For loops converted to manual iteration"},
+}
+
+--- Convert SugarCube to Ink with detailed report
+-- @param parsed_story table The parsed SugarCube story
+-- @return string, Report The converted content and conversion report
+function M.to_ink_with_report(parsed_story)
+  local report = Report.new("sugarcube", "ink")
+  report:set_passage_count(#parsed_story.passages)
+
+  for _, passage in ipairs(parsed_story.passages) do
+    local content = passage.content
+
+    -- Track converted features
+    if content:match("<<%s*set%s+") then
+      for _ in content:gmatch("<<%s*set%s+") do
+        report:add_converted("set", passage.name, {
+          original = "<<set>>",
+          result = "~ var = value"
+        })
+      end
+    end
+
+    if content:match("<<%s*if%s+") then
+      for _ in content:gmatch("<<%s*if%s+") do
+        report:add_converted("if", passage.name, {
+          original = "<<if>>",
+          result = "{condition: ...}"
+        })
+      end
+    end
+
+    if content:match("%[%[.-%|") or content:match("%[%[[^%]|]+%]%]") then
+      for _ in content:gmatch("%[%[") do
+        report:add_converted("link", passage.name, {
+          original = "[[...]]",
+          result = "* [...] -> target"
+        })
+      end
+    end
+
+    -- Track incompatible features
+    for _, incomp in ipairs(INK_INCOMPATIBLE) do
+      if content:match(incomp.pattern) then
+        for _ in content:gmatch(incomp.pattern) do
+          report:add_lost(incomp.feature, passage.name, incomp.description, {})
+        end
+      end
+    end
+  end
+
+  local result = M.to_ink(parsed_story)
   return result, report
 end
 

@@ -469,4 +469,119 @@ function M.to_chapbook_with_report(parsed_story)
   return result, report
 end
 
+-- Convert Snowman to Ink format
+function M.to_ink(parsed_story)
+  local result = {}
+
+  -- Add variable declarations at the top
+  local var_declarations = {}
+
+  for _, passage in ipairs(parsed_story.passages) do
+    for var, value in passage.content:gmatch("<%%%s*s%.([%w_]+)%s*=%s*([^;%%]+)") do
+      if not var_declarations[var] then
+        table.insert(result, "VAR " .. var .. " = " .. value)
+        var_declarations[var] = true
+      end
+    end
+  end
+
+  if next(var_declarations) then
+    table.insert(result, "")
+  end
+
+  -- Convert each passage to a knot
+  for _, passage in ipairs(parsed_story.passages) do
+    local knot_name = passage.name:gsub("%s+", "_")
+    table.insert(result, "=== " .. knot_name .. " ===")
+
+    local content = passage.content
+
+    -- Convert <% s.var = value; %> to ~ var = value
+    content = content:gsub("<%%%s*s%.([%w_]+)%s*=%s*([^;%%]+);?%s*%%>", function(var, value)
+      return "~ " .. var .. " = " .. value
+    end)
+
+    -- Convert <%= s.var %> to {var}
+    content = content:gsub("<%%=%s*s%.([%w_]+)%s*%%>", "{%1}")
+
+    -- Convert <% if (cond) { %>body<% } %> to {cond: body}
+    content = content:gsub("<%%%s*if%s*%((.-)%)%s*{%s*%%>(.-)<%% }%s*%%>", function(cond, body)
+      -- Convert s.var to var in condition
+      cond = cond:gsub("s%.([%w_]+)", "%1")
+      return "{" .. cond .. ": " .. body .. "}"
+    end)
+
+    -- Convert [Text](Target) to * [Text] -> Target
+    content = content:gsub("%[([^%]]+)%]%(([^%)]+)%)", function(text, target)
+      target = target:gsub("%s+", "_")
+      return "* [" .. text .. "] -> " .. target
+    end)
+
+    table.insert(result, content)
+    table.insert(result, "")
+  end
+
+  return table.concat(result, "\n")
+end
+
+-- Features incompatible with Ink
+local INK_INCOMPATIBLE = {
+  {pattern = "window%.", feature = "window-object", description = "Direct DOM access not available in Ink"},
+  {pattern = "document%.", feature = "document-object", description = "Direct DOM access not available in Ink"},
+  {pattern = "setInterval", feature = "setInterval", description = "Timed callbacks not supported in Ink"},
+  {pattern = "setTimeout", feature = "setTimeout", description = "Delayed callbacks not supported in Ink"},
+}
+
+--- Convert Snowman to Ink with detailed report
+-- @param parsed_story table The parsed Snowman story
+-- @return string, Report The converted content and conversion report
+function M.to_ink_with_report(parsed_story)
+  local report = Report.new("snowman", "ink")
+  report:set_passage_count(#parsed_story.passages)
+
+  for _, passage in ipairs(parsed_story.passages) do
+    local content = passage.content
+
+    -- Track converted features
+    if content:match("<%%%s*s%.") then
+      for _ in content:gmatch("<%%%s*s%.") do
+        report:add_converted("set", passage.name, {
+          original = "<% s.var = value %>",
+          result = "~ var = value"
+        })
+      end
+    end
+
+    if content:match("<%%=") then
+      for _ in content:gmatch("<%%=") do
+        report:add_converted("variable", passage.name, {
+          original = "<%= s.var %>",
+          result = "{var}"
+        })
+      end
+    end
+
+    if content:match("%[.-%]%(.-%)") then
+      for _ in content:gmatch("%[.-%]%(.-%)") do
+        report:add_converted("link", passage.name, {
+          original = "[text](target)",
+          result = "* [...] -> target"
+        })
+      end
+    end
+
+    -- Track incompatible features
+    for _, incomp in ipairs(INK_INCOMPATIBLE) do
+      if content:match(incomp.pattern) then
+        for _ in content:gmatch(incomp.pattern) do
+          report:add_lost(incomp.feature, passage.name, incomp.description, {})
+        end
+      end
+    end
+  end
+
+  local result = M.to_ink(parsed_story)
+  return result, report
+end
+
 return M
