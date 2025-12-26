@@ -9,6 +9,7 @@ ConvertCommand._dependencies = {"file_system", "console"}
 local _parsers = nil
 local _converters = nil
 local _json_parser = nil
+local _ink_converter = nil
 
 --- Get parsers for each format
 local function get_parsers()
@@ -21,6 +22,14 @@ local function get_parsers()
     }
   end
   return _parsers
+end
+
+--- Get Ink converter
+local function get_ink_converter()
+  if not _ink_converter then
+    _ink_converter = require("whisker.format.converters.ink")
+  end
+  return _ink_converter
 end
 
 --- Get JSON parser
@@ -51,6 +60,7 @@ local VALID_FORMATS = {
   sugarcube = true,
   snowman = true,
   json = true,
+  ink = true,
 }
 
 --- Create a new ConvertCommand
@@ -172,6 +182,7 @@ FORMATS:
   chapbook    Chapbook format
   snowman     Snowman format
   json        JSON story format (for import/export)
+  ink         Ink narrative scripting language
 
 EXAMPLES:
   whisker convert story.tw --from harlowe --to sugarcube
@@ -179,6 +190,8 @@ EXAMPLES:
   whisker convert story.tw -t snowman -o output.tw --json-report report.json
   whisker convert story.json -t harlowe -o story.tw
   whisker convert story.tw -f harlowe -t json -o story.json
+  whisker convert story.ink -t harlowe -o story.tw
+  whisker convert story.tw -f harlowe -t ink -o story.ink
 
 NOTES:
   - Format is auto-detected from file content if --from is not specified
@@ -206,6 +219,14 @@ function ConvertCommand:detect_format_from_content(content)
   local json_parser = get_json_parser()
   if json_parser.is_json_story(content) then
     return "json"
+  end
+
+  -- Check for Ink patterns: === knots ===, VAR, ->, * choices
+  if content:match("^%s*===%s*[%w_]+%s*===") or
+     content:match("\n%s*===%s*[%w_]+%s*===") or
+     content:match("^VAR%s+") or
+     content:match("^%s*%*%s*%[") then
+    return "ink"
   end
 
   -- Check for Harlowe patterns: (set:, (if:, (print:
@@ -344,7 +365,7 @@ function ConvertCommand:execute(args)
   local target_format = parsed.to:lower()
   if not self:validate_format(target_format) then
     print("Error: Invalid target format: " .. parsed.to)
-    print("Valid formats: harlowe, sugarcube, chapbook, snowman, json")
+    print("Valid formats: harlowe, sugarcube, chapbook, snowman, json, ink")
     return 1
   end
 
@@ -361,7 +382,7 @@ function ConvertCommand:execute(args)
     source_format = source_format:lower()
     if not self:validate_format(source_format) then
       print("Error: Invalid source format: " .. parsed.from)
-      print("Valid formats: harlowe, sugarcube, chapbook, snowman, json")
+      print("Valid formats: harlowe, sugarcube, chapbook, snowman, json, ink")
       return 1
     end
   else
@@ -489,6 +510,77 @@ function ConvertCommand:execute(args)
     end
 
     result = json_parser.to_json(story, {pretty = true, validate = false})
+
+  -- Handle Ink source format
+  elseif source_format == "ink" then
+    local ink_converter = get_ink_converter()
+
+    -- Parse Ink content
+    parsed_story = ink_converter.parse(content)
+    if not parsed_story then
+      print("Error: Failed to parse Ink story")
+      return 1
+    end
+
+    -- Convert to target format
+    local convert_fn_name = "to_" .. target_format .. "_with_report"
+    local convert_fn = ink_converter[convert_fn_name]
+    if not convert_fn then
+      convert_fn_name = "to_" .. target_format
+      convert_fn = ink_converter[convert_fn_name]
+    end
+
+    if not convert_fn then
+      print("Error: No conversion from ink to " .. target_format)
+      return 1
+    end
+
+    if convert_fn_name:match("_with_report$") then
+      result, report = convert_fn(parsed_story)
+    else
+      result = convert_fn(parsed_story)
+    end
+
+  -- Handle Ink target format
+  elseif target_format == "ink" then
+    local parser = parsers[source_format]
+    local converter = converters[source_format]
+
+    if not parser then
+      print("Error: No parser available for format: " .. source_format)
+      return 1
+    end
+
+    if not converter then
+      print("Error: No converter available for format: " .. source_format)
+      return 1
+    end
+
+    -- Parse the story
+    parsed_story = parser.parse(content)
+    if not parsed_story then
+      print("Error: Failed to parse story")
+      return 1
+    end
+
+    -- Convert to Ink
+    local convert_fn_name = "to_ink_with_report"
+    local convert_fn = converter[convert_fn_name]
+    if not convert_fn then
+      convert_fn_name = "to_ink"
+      convert_fn = converter[convert_fn_name]
+    end
+
+    if not convert_fn then
+      print("Error: No conversion from " .. source_format .. " to ink")
+      return 1
+    end
+
+    if convert_fn_name:match("_with_report$") then
+      result, report = convert_fn(parsed_story)
+    else
+      result = convert_fn(parsed_story)
+    end
 
   -- Handle normal Twine format to Twine format conversion
   else

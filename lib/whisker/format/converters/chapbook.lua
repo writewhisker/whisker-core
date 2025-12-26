@@ -590,4 +590,130 @@ function M.to_snowman_with_report(parsed_story)
   return result, report
 end
 
+-- Convert Chapbook to Ink format
+function M.to_ink(parsed_story)
+  local result = {}
+
+  -- Add variable declarations at the top
+  local var_declarations = {}
+
+  for _, passage in ipairs(parsed_story.passages) do
+    -- Extract vars section
+    local vars_section = passage.content:match("^(.-)%-%-")
+    if vars_section then
+      for var, value in vars_section:gmatch("([%w_]+):%s*([^\n]+)") do
+        if not var_declarations[var] then
+          table.insert(result, "VAR " .. var .. " = " .. value)
+          var_declarations[var] = true
+        end
+      end
+    end
+  end
+
+  if next(var_declarations) then
+    table.insert(result, "")
+  end
+
+  -- Convert each passage to a knot
+  for _, passage in ipairs(parsed_story.passages) do
+    local knot_name = passage.name:gsub("%s+", "_")
+    table.insert(result, "=== " .. knot_name .. " ===")
+
+    local content = passage.content
+
+    -- Remove vars section
+    content = content:gsub("^.-%-%-\n?", "")
+
+    -- Convert variable assignments in content
+    content = content:gsub("([%w_]+):%s*([^\n]+)", function(var, value)
+      return "~ " .. var .. " = " .. value
+    end)
+
+    -- Convert [if cond]body[continue] to {cond: body}
+    content = content:gsub("%[if%s+(.-)%](.-)%[continue%]", function(cond, body)
+      return "{" .. cond .. ": " .. body .. "}"
+    end)
+
+    -- Convert {var} to {var} (same in Ink)
+
+    -- Convert [[Text->Target]] to * [Text] -> Target
+    content = content:gsub("%[%[([^%]>]+)%->([^%]]+)%]%]", function(text, target)
+      target = target:gsub("%s+", "_")
+      return "* [" .. text .. "] -> " .. target
+    end)
+
+    -- Convert [[Target]] to * [Target] -> Target
+    content = content:gsub("%[%[([^%]|>]+)%]%]", function(target)
+      local ink_target = target:gsub("%s+", "_")
+      return "* [" .. target .. "] -> " .. ink_target
+    end)
+
+    table.insert(result, content)
+    table.insert(result, "")
+  end
+
+  return table.concat(result, "\n")
+end
+
+-- Features incompatible with Ink
+local INK_INCOMPATIBLE = {
+  {pattern = "%[after%s+", feature = "after", description = "Timed delays not supported in Ink"},
+  {pattern = "{cycling%s+link", feature = "cycling-link", description = "Cycling links converted to choices"},
+  {pattern = "{dropdown", feature = "dropdown", description = "Dropdowns converted to choices"},
+  {pattern = "{text%s+input", feature = "text-input", description = "Text input not supported in Ink"},
+  {pattern = "{reveal%s+link", feature = "reveal-link", description = "Reveal links approximated as choices"},
+}
+
+--- Convert Chapbook to Ink with detailed report
+-- @param parsed_story table The parsed Chapbook story
+-- @return string, Report The converted content and conversion report
+function M.to_ink_with_report(parsed_story)
+  local report = Report.new("chapbook", "ink")
+  report:set_passage_count(#parsed_story.passages)
+
+  for _, passage in ipairs(parsed_story.passages) do
+    local content = passage.content
+
+    -- Track converted features
+    if content:match("([%w_]+):%s*") then
+      for _ in content:gmatch("([%w_]+):%s*[^\n]+") do
+        report:add_converted("variable", passage.name, {
+          original = "var: value",
+          result = "VAR var = value"
+        })
+      end
+    end
+
+    if content:match("%[if%s+") then
+      for _ in content:gmatch("%[if%s+") do
+        report:add_converted("if", passage.name, {
+          original = "[if ...]",
+          result = "{condition: ...}"
+        })
+      end
+    end
+
+    if content:match("%[%[") then
+      for _ in content:gmatch("%[%[") do
+        report:add_converted("link", passage.name, {
+          original = "[[...]]",
+          result = "* [...] -> target"
+        })
+      end
+    end
+
+    -- Track incompatible features
+    for _, incomp in ipairs(INK_INCOMPATIBLE) do
+      if content:match(incomp.pattern) then
+        for _ in content:gmatch(incomp.pattern) do
+          report:add_lost(incomp.feature, passage.name, incomp.description, {})
+        end
+      end
+    end
+  end
+
+  local result = M.to_ink(parsed_story)
+  return result, report
+end
+
 return M
