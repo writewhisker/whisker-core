@@ -5,6 +5,7 @@
 -- @license MIT
 
 local HTMLParser = require("whisker.security.html_parser")
+local SHA256 = require("whisker.security.sha256")
 
 local CSPGenerator = {}
 
@@ -136,14 +137,16 @@ function CSPGenerator.is_valid_nonce(nonce)
   return true
 end
 
---- Generate SHA-256 hash of content (simple implementation)
--- Note: For production, use a proper crypto library
+--- Generate SHA-256 hash of content for CSP
 -- @param content string Content to hash
 -- @return string Hash in CSP format (sha256-base64hash)
 function CSPGenerator.generate_hash(content)
-  -- This is a placeholder - real implementation needs SHA-256
-  -- For now, return a warning
-  return nil, "SHA-256 hashing requires crypto library"
+  if type(content) ~= "string" then
+    return nil, "Content must be a string"
+  end
+
+  local hash_base64 = SHA256.base64(content)
+  return "sha256-" .. hash_base64
 end
 
 --- Create default restrictive CSP policy
