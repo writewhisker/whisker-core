@@ -73,7 +73,7 @@ Welcome!
       assert.is_true(has_dropdown)
     end)
 
-    it("should track lost enchant macros", function()
+    it("should track approximated enchant macros", function()
       local story = [[
 :: Start
 (enchant: ?link, (text-style: "bold"))
@@ -81,12 +81,12 @@ Welcome!
       local parsed = harlowe_parser.parse(story)
       local _, report = converter.to_chapbook_with_report(parsed)
 
-      local lost = report:get_details(Report.ENTRY_TYPES.LOST)
-      assert.equals(1, #lost)
-      assert.equals("enchant", lost[1].feature)
+      local approximated = report:get_details(Report.ENTRY_TYPES.APPROXIMATED)
+      assert.equals(1, #approximated)
+      assert.equals("enchant", approximated[1].feature)
     end)
 
-    it("should track lost live macros", function()
+    it("should track approximated live macros", function()
       local story = [[
 :: Timer
 (live: 2s)[Time: $time]
@@ -94,9 +94,9 @@ Welcome!
       local parsed = harlowe_parser.parse(story)
       local _, report = converter.to_chapbook_with_report(parsed)
 
-      local lost = report:get_details(Report.ENTRY_TYPES.LOST)
+      local approximated = report:get_details(Report.ENTRY_TYPES.APPROXIMATED)
       local has_live = false
-      for _, entry in ipairs(lost) do
+      for _, entry in ipairs(approximated) do
         if entry.feature == "live" then
           has_live = true
           break
@@ -200,7 +200,7 @@ Welcome!
       assert.equals("live", approx[1].feature)
     end)
 
-    it("should track lost enchant macro", function()
+    it("should track approximated enchant macro", function()
       local story = [[
 :: Styled
 (enchant: ?hook, (text-style: "bold"))
@@ -208,9 +208,15 @@ Welcome!
       local parsed = harlowe_parser.parse(story)
       local _, report = converter.to_sugarcube_with_report(parsed)
 
-      local lost = report:get_details(Report.ENTRY_TYPES.LOST)
-      assert.equals(1, #lost)
-      assert.equals("enchant", lost[1].feature)
+      local approximated = report:get_details(Report.ENTRY_TYPES.APPROXIMATED)
+      local has_enchant = false
+      for _, entry in ipairs(approximated) do
+        if entry.feature == "enchant" then
+          has_enchant = true
+          break
+        end
+      end
+      assert.is_true(has_enchant)
     end)
 
     it("should achieve 100% quality for basic story", function()
@@ -279,7 +285,7 @@ Welcome, $name! You have $gold gold.
       assert.is_true(has_if)
     end)
 
-    it("should track lost interactive features", function()
+    it("should track lost and approximated interactive features", function()
       local story = [[
 :: Interactive
 (dropdown: bind $choice, "a", "b")
@@ -289,8 +295,20 @@ Welcome, $name! You have $gold gold.
       local parsed = harlowe_parser.parse(story)
       local _, report = converter.to_snowman_with_report(parsed)
 
+      -- dropdown and cycling-link are still lost (no approximation)
       local lost = report:get_details(Report.ENTRY_TYPES.LOST)
-      assert.is_true(#lost >= 3)
+      assert.is_true(#lost >= 2)
+
+      -- click is now approximated
+      local approximated = report:get_details(Report.ENTRY_TYPES.APPROXIMATED)
+      local has_click = false
+      for _, entry in ipairs(approximated) do
+        if entry.feature == "click" then
+          has_click = true
+          break
+        end
+      end
+      assert.is_true(has_click)
     end)
 
     it("should report lower quality for complex stories", function()
