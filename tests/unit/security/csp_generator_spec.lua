@@ -52,6 +52,60 @@ describe("CSPGenerator", function()
     end)
   end)
 
+  describe("generate_hash", function()
+    it("generates SHA-256 hash in CSP format", function()
+      local hash = CSPGenerator.generate_hash("alert('hello')")
+      assert.is_string(hash)
+      assert.matches("^sha256%-", hash)
+    end)
+
+    it("generates correct hash for known input", function()
+      -- SHA256("hello") in base64 is LPJNul+wow4m6DsqxbninhsWHlwfp0JecwQzYpOLmCQ=
+      local hash = CSPGenerator.generate_hash("hello")
+      assert.equals("sha256-LPJNul+wow4m6DsqxbninhsWHlwfp0JecwQzYpOLmCQ=", hash)
+    end)
+
+    it("generates different hashes for different content", function()
+      local hash1 = CSPGenerator.generate_hash("script1")
+      local hash2 = CSPGenerator.generate_hash("script2")
+      assert.is_not.equals(hash1, hash2)
+    end)
+
+    it("generates consistent hashes for same content", function()
+      local hash1 = CSPGenerator.generate_hash("same content")
+      local hash2 = CSPGenerator.generate_hash("same content")
+      assert.equals(hash1, hash2)
+    end)
+
+    it("handles empty string", function()
+      local hash = CSPGenerator.generate_hash("")
+      assert.is_string(hash)
+      assert.matches("^sha256%-", hash)
+    end)
+
+    it("returns error for non-string input", function()
+      local hash, err = CSPGenerator.generate_hash(nil)
+      assert.is_nil(hash)
+      assert.is_string(err)
+    end)
+
+    it("can be used in CSP policy", function()
+      local hash = CSPGenerator.generate_hash("console.log('test')")
+      local policy = CSPGenerator.create_default_policy({
+        script_hashes = {hash}
+      })
+
+      local has_hash = false
+      for _, source in ipairs(policy.script_src) do
+        if source:match("sha256%-") then
+          has_hash = true
+        end
+      end
+
+      assert.is_true(has_hash)
+    end)
+  end)
+
   describe("create_default_policy", function()
     it("creates restrictive default policy", function()
       local policy = CSPGenerator.create_default_policy()
