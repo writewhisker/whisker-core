@@ -2,6 +2,9 @@
 
 local M = {}
 
+-- Require the report module
+local Report = require("whisker.format.converters.report")
+
 function M.to_harlowe(parsed_story)
   local result = {}
 
@@ -255,6 +258,153 @@ function M.convert_to_harlowe_passage(sugarcube_text)
   text = M.convert_link_to_harlowe(text)
 
   return text
+end
+
+-- Features directly converted to Harlowe
+local HARLOWE_CONVERTED = {
+  {pattern = "<<%s*set%s+", feature = "set", converts_to = "(set: ...)"},
+  {pattern = "<<%s*if%s+", feature = "if", converts_to = "(if: ...)"},
+  {pattern = "<<%s*print%s+", feature = "print", converts_to = "(print: ...)"},
+  {pattern = "%[%[.-%|", feature = "link", converts_to = "[[...->...]]"},
+}
+
+-- Features incompatible with Harlowe
+local HARLOWE_INCOMPATIBLE = {
+  {pattern = "<<%s*widget%s+", feature = "widget", description = "Harlowe has no widget equivalent"},
+  {pattern = "<<%s*for%s+", feature = "for-loop", description = "Harlowe uses (for:) with different syntax"},
+  {pattern = "<<%s*silently%s*>>", feature = "silently", description = "Harlowe uses different approach"},
+}
+
+-- Features directly converted to Chapbook
+local CHAPBOOK_CONVERTED = {
+  {pattern = "<<%s*set%s+", feature = "set", converts_to = "vars section"},
+  {pattern = "%$[%w_]+", feature = "variable", converts_to = "{var}"},
+}
+
+-- Features incompatible with Chapbook
+local CHAPBOOK_INCOMPATIBLE = {
+  {pattern = "<<%s*widget%s+", feature = "widget", description = "Chapbook has no widget equivalent"},
+  {pattern = "<<%s*for%s+", feature = "for-loop", description = "Chapbook has no loop equivalent"},
+  {pattern = "<<%s*repeat%s+", feature = "repeat", description = "Timed repeats require JS in Chapbook"},
+}
+
+-- Features directly converted to Snowman
+local SNOWMAN_CONVERTED = {
+  {pattern = "<<%s*set%s+", feature = "set", converts_to = "<% s.var = value %>"},
+  {pattern = "%$[%w_]+", feature = "variable", converts_to = "<%= s.var %>"},
+  {pattern = "<<%s*if%s+", feature = "if", converts_to = "<% if () { %>"},
+  {pattern = "%[%[.-%|", feature = "link", converts_to = "[text](target)"},
+}
+
+-- Features incompatible with Snowman (none - Snowman is full JS)
+local SNOWMAN_INCOMPATIBLE = {}
+
+--- Convert SugarCube to Harlowe with detailed report
+-- @param parsed_story table The parsed SugarCube story
+-- @return string, Report The converted content and conversion report
+function M.to_harlowe_with_report(parsed_story)
+  local report = Report.new("sugarcube", "harlowe")
+  report:set_passage_count(#parsed_story.passages)
+
+  for _, passage in ipairs(parsed_story.passages) do
+    local content = passage.content
+
+    -- Track converted features
+    for _, conv in ipairs(HARLOWE_CONVERTED) do
+      if content:match(conv.pattern) then
+        for _ in content:gmatch(conv.pattern) do
+          report:add_converted(conv.feature, passage.name, {
+            original = conv.pattern,
+            result = conv.converts_to
+          })
+        end
+      end
+    end
+
+    -- Track incompatible features
+    for _, incomp in ipairs(HARLOWE_INCOMPATIBLE) do
+      if content:match(incomp.pattern) then
+        for _ in content:gmatch(incomp.pattern) do
+          report:add_lost(incomp.feature, passage.name, incomp.description, {})
+        end
+      end
+    end
+  end
+
+  local result = M.to_harlowe(parsed_story)
+  return result, report
+end
+
+--- Convert SugarCube to Chapbook with detailed report
+-- @param parsed_story table The parsed SugarCube story
+-- @return string, Report The converted content and conversion report
+function M.to_chapbook_with_report(parsed_story)
+  local report = Report.new("sugarcube", "chapbook")
+  report:set_passage_count(#parsed_story.passages)
+
+  for _, passage in ipairs(parsed_story.passages) do
+    local content = passage.content
+
+    -- Track converted features
+    for _, conv in ipairs(CHAPBOOK_CONVERTED) do
+      if content:match(conv.pattern) then
+        for _ in content:gmatch(conv.pattern) do
+          report:add_converted(conv.feature, passage.name, {
+            original = conv.pattern,
+            result = conv.converts_to
+          })
+        end
+      end
+    end
+
+    -- Track incompatible features
+    for _, incomp in ipairs(CHAPBOOK_INCOMPATIBLE) do
+      if content:match(incomp.pattern) then
+        for _ in content:gmatch(incomp.pattern) do
+          report:add_lost(incomp.feature, passage.name, incomp.description, {})
+        end
+      end
+    end
+  end
+
+  local result = M.to_chapbook(parsed_story)
+  return result, report
+end
+
+--- Convert SugarCube to Snowman with detailed report
+-- @param parsed_story table The parsed SugarCube story
+-- @return string, Report The converted content and conversion report
+function M.to_snowman_with_report(parsed_story)
+  local report = Report.new("sugarcube", "snowman")
+  report:set_passage_count(#parsed_story.passages)
+
+  for _, passage in ipairs(parsed_story.passages) do
+    local content = passage.content
+
+    -- Track converted features
+    for _, conv in ipairs(SNOWMAN_CONVERTED) do
+      if content:match(conv.pattern) then
+        for _ in content:gmatch(conv.pattern) do
+          report:add_converted(conv.feature, passage.name, {
+            original = conv.pattern,
+            result = conv.converts_to
+          })
+        end
+      end
+    end
+
+    -- Track incompatible features (none for Snowman)
+    for _, incomp in ipairs(SNOWMAN_INCOMPATIBLE) do
+      if content:match(incomp.pattern) then
+        for _ in content:gmatch(incomp.pattern) do
+          report:add_lost(incomp.feature, passage.name, incomp.description, {})
+        end
+      end
+    end
+  end
+
+  local result = M.to_snowman(parsed_story)
+  return result, report
 end
 
 return M

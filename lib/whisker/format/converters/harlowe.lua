@@ -3,6 +3,9 @@
 
 local M = {}
 
+-- Require the report module
+local Report = require("whisker.format.converters.report")
+
 -- Convert Harlowe to SugarCube
 function M.to_sugarcube(parsed_story)
   local result = {}
@@ -484,6 +487,272 @@ function M.convert_to_chapbook_passage(harlowe_text)
   table.insert(result, content)
 
   return table.concat(result, "\n")
+end
+
+-- Features that are directly converted to SugarCube (1:1 mapping)
+local SUGARCUBE_CONVERTED = {
+  {pattern = "%(set:", feature = "set", converts_to = "<<set>>"},
+  {pattern = "%(if:", feature = "if", converts_to = "<<if>>"},
+  {pattern = "%(print:", feature = "print", converts_to = "<<print>>"},
+  {pattern = "%(a:", feature = "array", converts_to = "[...]"},
+  {pattern = "%(dm:", feature = "datamap", converts_to = "{...}"},
+  {pattern = "%[%[.-%->", feature = "link", converts_to = "[[|]]"},
+}
+
+-- Features that are approximated when converting to SugarCube
+local SUGARCUBE_APPROXIMATED = {
+  {
+    pattern = "%(live:",
+    feature = "live",
+    converts_to = "<<repeat>>",
+    notes = "SugarCube repeat is similar but not identical to Harlowe live"
+  },
+  {
+    pattern = "%(dropdown:",
+    feature = "dropdown",
+    converts_to = "<<listbox>>",
+    notes = "Requires SugarCube listbox macro"
+  },
+  {
+    pattern = "%(cycling%-link:",
+    feature = "cycling-link",
+    converts_to = "<<cycle>>",
+    notes = "Requires SugarCube cycle macro"
+  },
+}
+
+-- Features incompatible with SugarCube
+local SUGARCUBE_INCOMPATIBLE = {
+  {
+    pattern = "%(enchant:",
+    feature = "enchant",
+    description = "Harlowe enchant has no direct SugarCube equivalent"
+  },
+  {
+    pattern = "%(transition:",
+    feature = "transition",
+    description = "Harlowe transitions need CSS implementation in SugarCube"
+  },
+}
+
+-- Features directly converted to Snowman
+local SNOWMAN_CONVERTED = {
+  {pattern = "%(set:", feature = "set", converts_to = "<% s.var = value %>"},
+  {pattern = "%$[%w_]+", feature = "variable", converts_to = "<%= s.var %>"},
+  {pattern = "%[%[.-%->", feature = "link", converts_to = "[text](target)"},
+}
+
+-- Features approximated in Snowman
+local SNOWMAN_APPROXIMATED = {
+  {
+    pattern = "%(if:",
+    feature = "if",
+    converts_to = "<% if () { %> ... <% } %>",
+    notes = "Condition syntax differs"
+  },
+}
+
+-- Features incompatible with Snowman
+local SNOWMAN_INCOMPATIBLE = {
+  {
+    pattern = "%(live:",
+    feature = "live",
+    description = "Snowman has no built-in live update support"
+  },
+  {
+    pattern = "%(enchant:",
+    feature = "enchant",
+    description = "Snowman has no enchant equivalent"
+  },
+  {
+    pattern = "%(dropdown:",
+    feature = "dropdown",
+    description = "Requires custom JavaScript in Snowman"
+  },
+  {
+    pattern = "%(cycling%-link:",
+    feature = "cycling-link",
+    description = "Requires custom JavaScript in Snowman"
+  },
+  {
+    pattern = "%(click:",
+    feature = "click",
+    description = "Requires custom JavaScript in Snowman"
+  },
+  {
+    pattern = "%(mouseover:",
+    feature = "mouseover",
+    description = "Requires custom JavaScript in Snowman"
+  },
+}
+
+--- Convert Harlowe to Chapbook with detailed report
+-- @param parsed_story table The parsed Harlowe story
+-- @return string, Report The converted content and conversion report
+function M.to_chapbook_with_report(parsed_story)
+  local report = Report.new("harlowe", "chapbook")
+  report:set_passage_count(#parsed_story.passages)
+
+  -- Track features as we convert
+  for _, passage in ipairs(parsed_story.passages) do
+    local content = passage.content
+
+    -- Track converted features
+    for _, conv in ipairs(CHAPBOOK_CONVERTED) do
+      if content:match(conv.pattern) then
+        -- Count occurrences
+        local count = 0
+        for _ in content:gmatch(conv.pattern) do
+          count = count + 1
+        end
+        for _ = 1, count do
+          report:add_converted(conv.feature, passage.name, {
+            original = conv.pattern,
+            result = conv.converts_to
+          })
+        end
+      end
+    end
+
+    -- Track set/if/print as converted
+    if content:match("%(set:") then
+      for _ in content:gmatch("%(set:") do
+        report:add_converted("set", passage.name, {
+          original = "(set: ...)",
+          result = "vars section"
+        })
+      end
+    end
+
+    if content:match("%(if:") then
+      for _ in content:gmatch("%(if:") do
+        report:add_converted("if", passage.name, {
+          original = "(if: ...)",
+          result = "[if ...]"
+        })
+      end
+    end
+
+    -- Track incompatible/lost features
+    for _, incomp in ipairs(CHAPBOOK_INCOMPATIBLE) do
+      if content:match(incomp.pattern) then
+        for _ in content:gmatch(incomp.pattern) do
+          report:add_lost(incomp.feature, passage.name, incomp.description, {
+            severity = incomp.severity or "warning"
+          })
+        end
+      end
+    end
+  end
+
+  -- Perform the actual conversion
+  local result = M.to_chapbook(parsed_story)
+
+  return result, report
+end
+
+--- Convert Harlowe to SugarCube with detailed report
+-- @param parsed_story table The parsed Harlowe story
+-- @return string, Report The converted content and conversion report
+function M.to_sugarcube_with_report(parsed_story)
+  local report = Report.new("harlowe", "sugarcube")
+  report:set_passage_count(#parsed_story.passages)
+
+  for _, passage in ipairs(parsed_story.passages) do
+    local content = passage.content
+
+    -- Track directly converted features
+    for _, conv in ipairs(SUGARCUBE_CONVERTED) do
+      if content:match(conv.pattern) then
+        for _ in content:gmatch(conv.pattern) do
+          report:add_converted(conv.feature, passage.name, {
+            original = conv.pattern,
+            result = conv.converts_to
+          })
+        end
+      end
+    end
+
+    -- Track approximated features
+    for _, approx in ipairs(SUGARCUBE_APPROXIMATED) do
+      if content:match(approx.pattern) then
+        for _ in content:gmatch(approx.pattern) do
+          report:add_approximated(
+            approx.feature,
+            passage.name,
+            approx.pattern,
+            approx.converts_to,
+            {notes = approx.notes}
+          )
+        end
+      end
+    end
+
+    -- Track incompatible features
+    for _, incomp in ipairs(SUGARCUBE_INCOMPATIBLE) do
+      if content:match(incomp.pattern) then
+        for _ in content:gmatch(incomp.pattern) do
+          report:add_lost(incomp.feature, passage.name, incomp.description, {})
+        end
+      end
+    end
+  end
+
+  local result = M.to_sugarcube(parsed_story)
+
+  return result, report
+end
+
+--- Convert Harlowe to Snowman with detailed report
+-- @param parsed_story table The parsed Harlowe story
+-- @return string, Report The converted content and conversion report
+function M.to_snowman_with_report(parsed_story)
+  local report = Report.new("harlowe", "snowman")
+  report:set_passage_count(#parsed_story.passages)
+
+  for _, passage in ipairs(parsed_story.passages) do
+    local content = passage.content
+
+    -- Track converted features
+    for _, conv in ipairs(SNOWMAN_CONVERTED) do
+      if content:match(conv.pattern) then
+        for _ in content:gmatch(conv.pattern) do
+          report:add_converted(conv.feature, passage.name, {
+            original = conv.pattern,
+            result = conv.converts_to
+          })
+        end
+      end
+    end
+
+    -- Track approximated features
+    for _, approx in ipairs(SNOWMAN_APPROXIMATED) do
+      if content:match(approx.pattern) then
+        for _ in content:gmatch(approx.pattern) do
+          report:add_approximated(
+            approx.feature,
+            passage.name,
+            approx.pattern,
+            approx.converts_to,
+            {notes = approx.notes}
+          )
+        end
+      end
+    end
+
+    -- Track incompatible features
+    for _, incomp in ipairs(SNOWMAN_INCOMPATIBLE) do
+      if content:match(incomp.pattern) then
+        for _ in content:gmatch(incomp.pattern) do
+          report:add_lost(incomp.feature, passage.name, incomp.description, {})
+        end
+      end
+    end
+  end
+
+  local result = M.to_snowman(parsed_story)
+
+  return result, report
 end
 
 return M
