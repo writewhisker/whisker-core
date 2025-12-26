@@ -50,6 +50,36 @@ function M.to_sugarcube(parsed_story)
       return "<<print " .. expr .. ">>"
     end)
 
+    -- Convert (live: Xs)[body] -> <<repeat Xs>>body<</repeat>> (approximation)
+    content = content:gsub("%(%s*live:%s*(%d+)s?%s*%)%[(.-)%]", function(seconds, body)
+      return "<<repeat " .. seconds .. "s>>" .. body .. "<</repeat>>"
+    end)
+
+    -- Convert (click: ?hook)[action] -> <<link "(click hook)">>action<</link>> (approximation)
+    content = content:gsub("%(%s*click:%s*%?([%w_]+)%s*%)%[(.-)%]", function(hook, body)
+      return '<<link "(click ' .. hook .. ')">><<run ' .. body .. '>><</link>>'
+    end)
+
+    -- Convert (mouseover: ?hook)[action] -> HTML comment (no good equivalent)
+    content = content:gsub("%(%s*mouseover:%s*%?([%w_]+)%s*%)%[(.-)%]", function(hook, body)
+      return "/* mouseover on " .. hook .. " not supported: " .. body .. " */"
+    end)
+
+    -- Convert (mouseout: ?hook)[action] -> HTML comment (no good equivalent)
+    content = content:gsub("%(%s*mouseout:%s*%?([%w_]+)%s*%)%[(.-)%]", function(hook, body)
+      return "/* mouseout on " .. hook .. " not supported: " .. body .. " */"
+    end)
+
+    -- Convert (enchant: ...) -> <<addclass>> approximation or warning
+    content = content:gsub("%(%s*enchant:%s*\"([^\"]+)\"%s*,%s*%(%s*css:%s*\"([^\"]+)\"%s*,%s*\"([^\"]+)\"%s*%)%s*%)", function(selector, prop, value)
+      -- Approximate CSS changes with addclass
+      return '<<addclass "' .. selector .. '" "enchant-' .. prop:gsub("%s+", "-") .. '">>'
+    end)
+    -- Generic enchant removal with warning
+    content = content:gsub("%(%s*enchant:%s*[^%)]+%)", function(match)
+      return "/* enchant removed: " .. match:sub(1, 50) .. " */"
+    end)
+
     table.insert(result, content)
     table.insert(result, "")
   end
@@ -139,6 +169,32 @@ function M.to_chapbook(parsed_story)
       return "[if " .. cond .. "]\n" .. body .. "\n[continued]"
     end)
 
+    -- Convert (live: Xs)[body] -> note about JS requirement (approximation)
+    content = content:gsub("%(%s*live:%s*(%d+)s?%s*%)%[(.-)%]", function(seconds, body)
+      return "[note]Live update every " .. seconds .. "s (requires JS)[continue]\n" .. body
+    end)
+
+    -- Convert (click: ?hook)[action] -> {reveal link} approximation
+    content = content:gsub("%(%s*click:%s*%?([%w_]+)%s*%)%[(.-)%]", function(hook, body)
+      local escaped_body = body:gsub("'", "\\'")
+      return "{reveal link: 'Click " .. hook .. "', text: '" .. escaped_body .. "'}"
+    end)
+
+    -- Convert (mouseover: ?hook)[action] -> note (no equivalent)
+    content = content:gsub("%(%s*mouseover:%s*%?([%w_]+)%s*%)%[(.-)%]", function(hook, body)
+      return "[note]Mouseover on " .. hook .. " not supported[continue]\n" .. body
+    end)
+
+    -- Convert (mouseout: ?hook)[action] -> note (no equivalent)
+    content = content:gsub("%(%s*mouseout:%s*%?([%w_]+)%s*%)%[(.-)%]", function(hook, body)
+      return "[note]Mouseout on " .. hook .. " not supported[continue]\n" .. body
+    end)
+
+    -- Convert (enchant: ...) -> stripped with note
+    content = content:gsub("%(%s*enchant:%s*[^%)]+%)", function(match)
+      return "[note]Enchant removed: " .. match:sub(1, 40) .. "...[continue]"
+    end)
+
     table.insert(result, content)
     table.insert(result, "")
   end
@@ -185,6 +241,32 @@ function M.to_snowman(parsed_story)
     -- Convert [[Target]] to [Target](Target)
     content = content:gsub("%[%[(.-)%]%]", function(target)
       return "[" .. target .. "](" .. target .. ")"
+    end)
+
+    -- Convert (live: Xs)[body] -> setInterval JavaScript (approximation)
+    content = content:gsub("%(%s*live:%s*(%d+)s?%s*%)%[(.-)%]", function(seconds, body)
+      local ms = tonumber(seconds) * 1000
+      return "<% setInterval(function() { %>" .. body .. "<% }, " .. ms .. "); %>"
+    end)
+
+    -- Convert (click: ?hook)[action] -> onclick handler
+    content = content:gsub("%(%s*click:%s*%?([%w_]+)%s*%)%[(.-)%]", function(hook, body)
+      return '<span onclick="<% ' .. body .. ' %>">[click ' .. hook .. ']</span>'
+    end)
+
+    -- Convert (mouseover: ?hook)[action] -> comment (limited support)
+    content = content:gsub("%(%s*mouseover:%s*%?([%w_]+)%s*%)%[(.-)%]", function(hook, body)
+      return "<!-- mouseover on " .. hook .. " not supported -->" .. body
+    end)
+
+    -- Convert (mouseout: ?hook)[action] -> comment (limited support)
+    content = content:gsub("%(%s*mouseout:%s*%?([%w_]+)%s*%)%[(.-)%]", function(hook, body)
+      return "<!-- mouseout on " .. hook .. " not supported -->" .. body
+    end)
+
+    -- Convert (enchant: ...) -> removed with comment
+    content = content:gsub("%(%s*enchant:%s*[^%)]+%)", function(match)
+      return "<!-- enchant removed: " .. match:sub(1, 50) .. "... -->"
     end)
 
     table.insert(result, content)
@@ -315,32 +397,42 @@ local CHAPBOOK_CONVERTED = {
   },
 }
 
--- Features that cannot be converted to Chapbook (no equivalent)
-local CHAPBOOK_INCOMPATIBLE = {
+-- Features that are approximated when converting to Chapbook
+local CHAPBOOK_APPROXIMATED = {
   {
     pattern = "%(live:",
     feature = "live",
-    description = "live macro (real-time updates) not supported in Chapbook",
-    severity = "warning"
-  },
-  {
-    pattern = "%(enchant:",
-    feature = "enchant",
-    description = "enchant macro (DOM manipulation) not available in Chapbook",
-    severity = "warning"
+    converts_to = "[note]...[continue]",
+    notes = "Live updates noted but require JavaScript implementation"
   },
   {
     pattern = "%(click:",
     feature = "click",
-    description = "click macro not directly available in Chapbook",
-    severity = "warning"
+    converts_to = "{reveal link}",
+    notes = "Click hooks converted to reveal links"
   },
   {
     pattern = "%(mouseover:",
     feature = "mouseover",
-    description = "mouseover interactions not available in Chapbook",
-    severity = "warning"
+    converts_to = "[note]...[continue]",
+    notes = "Mouseover not available, body preserved with note"
   },
+  {
+    pattern = "%(mouseout:",
+    feature = "mouseout",
+    converts_to = "[note]...[continue]",
+    notes = "Mouseout not available, body preserved with note"
+  },
+  {
+    pattern = "%(enchant:",
+    feature = "enchant",
+    converts_to = "[note]...[continue]",
+    notes = "Enchant removed with note"
+  },
+}
+
+-- Features that cannot be converted to Chapbook (no equivalent)
+local CHAPBOOK_INCOMPATIBLE = {
   {
     pattern = "%(alert:",
     feature = "alert",
@@ -365,6 +457,18 @@ function M.to_chapbook_with_warnings(parsed_story)
           feature = incompatible.feature,
           description = incompatible.description,
           severity = incompatible.severity
+        })
+      end
+    end
+
+    -- Also warn about approximated features (they're not perfect conversions)
+    for _, approx in ipairs(CHAPBOOK_APPROXIMATED) do
+      if passage.content:match(approx.pattern) then
+        table.insert(warnings, {
+          passage = passage.name,
+          feature = approx.feature,
+          description = approx.notes or ("Feature approximated: " .. approx.converts_to),
+          severity = "warning"
         })
       end
     end
@@ -601,15 +705,34 @@ local SUGARCUBE_APPROXIMATED = {
     converts_to = "<<cycle>>",
     notes = "Requires SugarCube cycle macro"
   },
-}
-
--- Features incompatible with SugarCube
-local SUGARCUBE_INCOMPATIBLE = {
+  {
+    pattern = "%(click:",
+    feature = "click",
+    converts_to = "<<link>>",
+    notes = "Click hook converted to link, loses hook targeting"
+  },
+  {
+    pattern = "%(mouseover:",
+    feature = "mouseover",
+    converts_to = "/* comment */",
+    notes = "Mouseover has no good SugarCube equivalent"
+  },
+  {
+    pattern = "%(mouseout:",
+    feature = "mouseout",
+    converts_to = "/* comment */",
+    notes = "Mouseout has no good SugarCube equivalent"
+  },
   {
     pattern = "%(enchant:",
     feature = "enchant",
-    description = "Harlowe enchant has no direct SugarCube equivalent"
+    converts_to = "<<addclass>>",
+    notes = "CSS enchants converted to addclass, complex enchants removed"
   },
+}
+
+-- Features incompatible with SugarCube (no approximation possible)
+local SUGARCUBE_INCOMPATIBLE = {
   {
     pattern = "%(transition:",
     feature = "transition",
@@ -632,20 +755,40 @@ local SNOWMAN_APPROXIMATED = {
     converts_to = "<% if () { %> ... <% } %>",
     notes = "Condition syntax differs"
   },
-}
-
--- Features incompatible with Snowman
-local SNOWMAN_INCOMPATIBLE = {
   {
     pattern = "%(live:",
     feature = "live",
-    description = "Snowman has no built-in live update support"
+    converts_to = "<% setInterval %>",
+    notes = "Converted to JavaScript setInterval"
+  },
+  {
+    pattern = "%(click:",
+    feature = "click",
+    converts_to = "onclick handler",
+    notes = "Converted to onclick attribute"
+  },
+  {
+    pattern = "%(mouseover:",
+    feature = "mouseover",
+    converts_to = "<!-- comment -->",
+    notes = "No good equivalent, body preserved with comment"
+  },
+  {
+    pattern = "%(mouseout:",
+    feature = "mouseout",
+    converts_to = "<!-- comment -->",
+    notes = "No good equivalent, body preserved with comment"
   },
   {
     pattern = "%(enchant:",
     feature = "enchant",
-    description = "Snowman has no enchant equivalent"
+    converts_to = "<!-- comment -->",
+    notes = "DOM manipulation removed with comment"
   },
+}
+
+-- Features incompatible with Snowman (no approximation possible)
+local SNOWMAN_INCOMPATIBLE = {
   {
     pattern = "%(dropdown:",
     feature = "dropdown",
@@ -654,16 +797,6 @@ local SNOWMAN_INCOMPATIBLE = {
   {
     pattern = "%(cycling%-link:",
     feature = "cycling-link",
-    description = "Requires custom JavaScript in Snowman"
-  },
-  {
-    pattern = "%(click:",
-    feature = "click",
-    description = "Requires custom JavaScript in Snowman"
-  },
-  {
-    pattern = "%(mouseover:",
-    feature = "mouseover",
     description = "Requires custom JavaScript in Snowman"
   },
 }
@@ -712,6 +845,21 @@ function M.to_chapbook_with_report(parsed_story)
           original = "(if: ...)",
           result = "[if ...]"
         })
+      end
+    end
+
+    -- Track approximated features
+    for _, approx in ipairs(CHAPBOOK_APPROXIMATED) do
+      if content:match(approx.pattern) then
+        for _ in content:gmatch(approx.pattern) do
+          report:add_approximated(
+            approx.feature,
+            passage.name,
+            approx.pattern,
+            approx.converts_to,
+            {notes = approx.notes}
+          )
+        end
       end
     end
 
