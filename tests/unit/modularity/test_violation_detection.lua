@@ -40,38 +40,34 @@ describe("Modularity Validation", function()
     for line in file:lines() do
       line_num = line_num + 1
 
-      -- Skip comments
-      if line:match("^%s*%-%-") then
-        goto continue
-      end
-
-      -- Check for require statements
-      if line:match('require%("whisker%.') or line:match("require%('whisker%.") then
-        -- Check if it's an allowed pattern
-        local is_allowed = false
-        for _, allowed in ipairs(allowed_patterns) do
-          if line:match(allowed) then
-            is_allowed = true
-            break
-          end
-        end
-
-        -- Check if it's a known violation pattern
-        if not is_allowed then
-          for _, pattern in ipairs(violation_patterns) do
-            if line:match(pattern) then
-              table.insert(violations, {
-                path = path,
-                line = line_num,
-                content = line:gsub("^%s+", ""),
-              })
+      -- Skip comments (use if-else instead of goto for Lua 5.1 compatibility)
+      if not line:match("^%s*%-%-") then
+        -- Check for require statements
+        if line:match('require%("whisker%.') or line:match("require%('whisker%.") then
+          -- Check if it's an allowed pattern
+          local is_allowed = false
+          for _, allowed in ipairs(allowed_patterns) do
+            if line:match(allowed) then
+              is_allowed = true
               break
+            end
+          end
+
+          -- Check if it's a known violation pattern
+          if not is_allowed then
+            for _, pattern in ipairs(violation_patterns) do
+              if line:match(pattern) then
+                table.insert(violations, {
+                  path = path,
+                  line = line_num,
+                  content = line:gsub("^%s+", ""),
+                })
+                break
+              end
             end
           end
         end
       end
-
-      ::continue::
     end
 
     file:close()

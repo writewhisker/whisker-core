@@ -1,10 +1,112 @@
 --- SHA-256 Implementation
 -- Pure Lua implementation of SHA-256 hash algorithm
+-- Compatible with Lua 5.1, 5.2, 5.3, 5.4, and LuaJIT
 -- @module whisker.security.sha256
 -- @author Whisker Core Team
 -- @license MIT
 
 local SHA256 = {}
+
+-- ============================================================================
+-- Bit operations compatibility layer
+-- ============================================================================
+
+local band, bor, bxor, bnot, rshift, lshift
+
+-- Try Lua 5.3+ native operators first
+if _VERSION >= "Lua 5.3" then
+  -- Use load to avoid parse errors in older Lua
+  band = load("return function(a, b) return a & b end")()
+  bor = load("return function(a, b) return a | b end")()
+  bxor = load("return function(a, b) return a ~ b end")()
+  bnot = load("return function(a) return ~a end")()
+  rshift = load("return function(a, n) return a >> n end")()
+  lshift = load("return function(a, n) return a << n end")()
+elseif bit32 then
+  -- Lua 5.2 bit32 library
+  band = bit32.band
+  bor = bit32.bor
+  bxor = bit32.bxor
+  bnot = bit32.bnot
+  rshift = bit32.rshift
+  lshift = bit32.lshift
+elseif bit then
+  -- LuaJIT bit library
+  band = bit.band
+  bor = bit.bor
+  bxor = bit.bxor
+  bnot = bit.bnot
+  rshift = bit.rshift
+  lshift = bit.lshift
+else
+  -- Pure Lua fallback for Lua 5.1 without bit library
+  local function normalize(n)
+    return n % 0x100000000
+  end
+
+  band = function(a, b)
+    local result = 0
+    local bit_val = 1
+    for _ = 1, 32 do
+      if a % 2 == 1 and b % 2 == 1 then
+        result = result + bit_val
+      end
+      a = math.floor(a / 2)
+      b = math.floor(b / 2)
+      bit_val = bit_val * 2
+    end
+    return result
+  end
+
+  bor = function(a, b)
+    local result = 0
+    local bit_val = 1
+    for _ = 1, 32 do
+      if a % 2 == 1 or b % 2 == 1 then
+        result = result + bit_val
+      end
+      a = math.floor(a / 2)
+      b = math.floor(b / 2)
+      bit_val = bit_val * 2
+    end
+    return result
+  end
+
+  bxor = function(a, b)
+    local result = 0
+    local bit_val = 1
+    for _ = 1, 32 do
+      if (a % 2 == 1) ~= (b % 2 == 1) then
+        result = result + bit_val
+      end
+      a = math.floor(a / 2)
+      b = math.floor(b / 2)
+      bit_val = bit_val * 2
+    end
+    return result
+  end
+
+  bnot = function(a)
+    return normalize(0xFFFFFFFF - normalize(a))
+  end
+
+  rshift = function(a, n)
+    return math.floor(normalize(a) / (2 ^ n))
+  end
+
+  lshift = function(a, n)
+    return normalize(a * (2 ^ n))
+  end
+end
+
+-- Mask to 32 bits
+local function mask32(x)
+  return band(x, 0xFFFFFFFF)
+end
+
+-- ============================================================================
+-- SHA-256 Constants and Functions
+-- ============================================================================
 
 -- SHA-256 constants (first 32 bits of the fractional parts of the cube roots of the first 64 primes)
 local K = {
@@ -29,37 +131,37 @@ local H0 = {
 -- @param n number Number of bits to rotate
 -- @return number Rotated value
 local function rotr(x, n)
-  return ((x >> n) | (x << (32 - n))) & 0xFFFFFFFF
+  return bor(rshift(x, n), mask32(lshift(x, 32 - n)))
 end
 
 --- SHA-256 Ch function
 local function ch(x, y, z)
-  return (x & y) ~ ((~x) & z)
+  return bxor(band(x, y), band(bnot(x), z))
 end
 
 --- SHA-256 Maj function
 local function maj(x, y, z)
-  return (x & y) ~ (x & z) ~ (y & z)
+  return bxor(bxor(band(x, y), band(x, z)), band(y, z))
 end
 
 --- SHA-256 Sigma0 function
 local function sigma0(x)
-  return rotr(x, 2) ~ rotr(x, 13) ~ rotr(x, 22)
+  return bxor(bxor(rotr(x, 2), rotr(x, 13)), rotr(x, 22))
 end
 
 --- SHA-256 Sigma1 function
 local function sigma1(x)
-  return rotr(x, 6) ~ rotr(x, 11) ~ rotr(x, 25)
+  return bxor(bxor(rotr(x, 6), rotr(x, 11)), rotr(x, 25))
 end
 
 --- SHA-256 sigma0 (lowercase) function for message schedule
 local function lsigma0(x)
-  return rotr(x, 7) ~ rotr(x, 18) ~ (x >> 3)
+  return bxor(bxor(rotr(x, 7), rotr(x, 18)), rshift(x, 3))
 end
 
 --- SHA-256 sigma1 (lowercase) function for message schedule
 local function lsigma1(x)
-  return rotr(x, 17) ~ rotr(x, 19) ~ (x >> 10)
+  return bxor(bxor(rotr(x, 17), rotr(x, 19)), rshift(x, 10))
 end
 
 --- Convert string to byte array
@@ -96,13 +198,13 @@ local function pad_message(msg)
 
   -- Append 64-bit length in big-endian
   -- Note: We only support messages up to 2^32 bits (536MB)
-  for i = 1, 4 do
+  for _ = 1, 4 do
     padded[#padded + 1] = 0
   end
-  padded[#padded + 1] = (bit_len >> 24) & 0xFF
-  padded[#padded + 1] = (bit_len >> 16) & 0xFF
-  padded[#padded + 1] = (bit_len >> 8) & 0xFF
-  padded[#padded + 1] = bit_len & 0xFF
+  padded[#padded + 1] = band(rshift(bit_len, 24), 0xFF)
+  padded[#padded + 1] = band(rshift(bit_len, 16), 0xFF)
+  padded[#padded + 1] = band(rshift(bit_len, 8), 0xFF)
+  padded[#padded + 1] = band(bit_len, 0xFF)
 
   return padded
 end
@@ -116,15 +218,16 @@ local function process_block(H, block)
 
   -- Copy block into first 16 words
   for i = 0, 15 do
-    W[i] = (block[i * 4 + 1] << 24) |
-           (block[i * 4 + 2] << 16) |
-           (block[i * 4 + 3] << 8) |
-           block[i * 4 + 4]
+    W[i] = bor(bor(bor(
+      lshift(block[i * 4 + 1], 24),
+      lshift(block[i * 4 + 2], 16)),
+      lshift(block[i * 4 + 3], 8)),
+      block[i * 4 + 4])
   end
 
   -- Extend to 64 words
   for i = 16, 63 do
-    W[i] = (lsigma1(W[i - 2]) + W[i - 7] + lsigma0(W[i - 15]) + W[i - 16]) & 0xFFFFFFFF
+    W[i] = mask32(lsigma1(W[i - 2]) + W[i - 7] + lsigma0(W[i - 15]) + W[i - 16])
   end
 
   -- Initialize working variables
@@ -132,28 +235,28 @@ local function process_block(H, block)
 
   -- Main loop
   for i = 0, 63 do
-    local T1 = (h + sigma1(e) + ch(e, f, g) + K[i + 1] + W[i]) & 0xFFFFFFFF
-    local T2 = (sigma0(a) + maj(a, b, c)) & 0xFFFFFFFF
+    local T1 = mask32(h + sigma1(e) + ch(e, f, g) + K[i + 1] + W[i])
+    local T2 = mask32(sigma0(a) + maj(a, b, c))
 
     h = g
     g = f
     f = e
-    e = (d + T1) & 0xFFFFFFFF
+    e = mask32(d + T1)
     d = c
     c = b
     b = a
-    a = (T1 + T2) & 0xFFFFFFFF
+    a = mask32(T1 + T2)
   end
 
   -- Add to hash state
-  H[1] = (H[1] + a) & 0xFFFFFFFF
-  H[2] = (H[2] + b) & 0xFFFFFFFF
-  H[3] = (H[3] + c) & 0xFFFFFFFF
-  H[4] = (H[4] + d) & 0xFFFFFFFF
-  H[5] = (H[5] + e) & 0xFFFFFFFF
-  H[6] = (H[6] + f) & 0xFFFFFFFF
-  H[7] = (H[7] + g) & 0xFFFFFFFF
-  H[8] = (H[8] + h) & 0xFFFFFFFF
+  H[1] = mask32(H[1] + a)
+  H[2] = mask32(H[2] + b)
+  H[3] = mask32(H[3] + c)
+  H[4] = mask32(H[4] + d)
+  H[5] = mask32(H[5] + e)
+  H[6] = mask32(H[6] + f)
+  H[7] = mask32(H[7] + g)
+  H[8] = mask32(H[8] + h)
 end
 
 --- Compute SHA-256 hash
@@ -182,10 +285,10 @@ function SHA256.hash(message)
   -- Convert hash to binary string
   local result = {}
   for i = 1, 8 do
-    result[#result + 1] = string.char((H[i] >> 24) & 0xFF)
-    result[#result + 1] = string.char((H[i] >> 16) & 0xFF)
-    result[#result + 1] = string.char((H[i] >> 8) & 0xFF)
-    result[#result + 1] = string.char(H[i] & 0xFF)
+    result[#result + 1] = string.char(band(rshift(H[i], 24), 0xFF))
+    result[#result + 1] = string.char(band(rshift(H[i], 16), 0xFF))
+    result[#result + 1] = string.char(band(rshift(H[i], 8), 0xFF))
+    result[#result + 1] = string.char(band(H[i], 0xFF))
   end
 
   return table.concat(result)
