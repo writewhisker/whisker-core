@@ -16,6 +16,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         lua-version: ['5.1', '5.2', '5.3', '5.4', 'luajit']
+        # Note: Lua 5.5 not yet released - add when available
 
     steps:
     - name: Checkout code

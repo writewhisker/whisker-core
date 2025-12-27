@@ -272,6 +272,7 @@ end
 -- @param expr string Expression to evaluate
 -- @return any Evaluated value
 function SnowmanEngine:_evaluate_expression(expr)
+  if not expr then return nil end
   local trimmed = expr:match("^%s*(.-)%s*$")
 
   -- Check for s.variable reference

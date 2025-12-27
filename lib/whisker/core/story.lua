@@ -139,6 +139,8 @@ function Story:get_all_passages()
     for id, passage in pairs(self.passages) do
         table.insert(list, passage)
     end
+    -- Sort by id for deterministic ordering (required for Lua 5.1/5.2 compatibility)
+    table.sort(list, function(a, b) return a.id < b.id end)
     return list
 end
 
@@ -150,16 +152,10 @@ function Story:set_start_passage(passage_id)
 end
 
 function Story:get_start_passage()
-    if self.start_passage then
-        return self.start_passage
-    end
-    -- Return the first passage if no start passage set
-    if self.passages then
-        for id, _ in pairs(self.passages) do
-            return id
-        end
-    end
-    return nil
+    -- Only return explicitly set start passage
+    -- Fallback logic should be handled by higher-level components (e.g., SpecialPassages)
+    -- that understand which passages are special and should be skipped
+    return self.start_passage
 end
 
 function Story:set_variable(key, value)
@@ -227,6 +223,8 @@ function Story:list_assets()
     for id, asset in pairs(self.assets) do
         table.insert(list, asset)
     end
+    -- Sort by id for deterministic ordering (required for Lua 5.1/5.2 compatibility)
+    table.sort(list, function(a, b) return a.id < b.id end)
     return list
 end
 
