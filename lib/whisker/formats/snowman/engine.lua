@@ -184,12 +184,14 @@ function SnowmanEngine:_process_content(content)
 
   -- Two-pass approach to handle <%= %> and <% %> correctly
   -- Step 1: Save <%= expr %> blocks with placeholders
+  -- Note: Using \001 (SOH) instead of \0 for Lua 5.1/LuaJIT compatibility
+  -- (Lua 5.1 pattern matching stops at null bytes)
   local output_blocks = {}
   local idx = 0
   result = result:gsub("<%%=(.-)%%>", function(expr)
     idx = idx + 1
     output_blocks[idx] = expr
-    return "\0OUTPUT_" .. idx .. "\0"
+    return "\001OUTPUT_" .. idx .. "\001"
   end)
 
   -- Step 2: Process <% code %> blocks (execute and remove)
@@ -199,7 +201,7 @@ function SnowmanEngine:_process_content(content)
   end)
 
   -- Step 3: Replace output placeholders with evaluated values
-  result = result:gsub("\0OUTPUT_(%d+)\0", function(idx_str)
+  result = result:gsub("\001OUTPUT_(%d+)\001", function(idx_str)
     local expr = output_blocks[tonumber(idx_str)]
     local value = self:_evaluate_expression(expr)
     if value ~= nil then
