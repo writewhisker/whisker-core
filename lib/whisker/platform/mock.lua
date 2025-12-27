@@ -12,8 +12,8 @@
 local IPlatform = require("whisker.platform.interface")
 local Serialization = require("whisker.platform.serialization")
 
-local MockPlatform = setmetatable({}
-MockPlatform._dependencies = {}, {__index = IPlatform})
+local MockPlatform = setmetatable({}, {__index = IPlatform})
+MockPlatform._dependencies = {}
 MockPlatform.__index = MockPlatform
 
 --- Create a new MockPlatform instance
