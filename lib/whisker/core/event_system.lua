@@ -35,7 +35,44 @@ EventSystem.EventType = {
     SCRIPT_EXECUTED = "script_executed",
 
     -- Custom events
-    CUSTOM = "custom"
+    CUSTOM = "custom",
+
+    -- Render events (Phase 1: Client-agnostic architecture)
+    RENDER_REQUESTED = "render_requested",
+    RENDER_COMPLETE = "render_complete",
+
+    -- Input events (Phase 1: Client-agnostic architecture)
+    INPUT_REQUESTED = "input_requested",
+    INPUT_RECEIVED = "input_received",
+    INPUT_CANCELLED = "input_cancelled",
+
+    -- Audio events (Phase 1: Client-agnostic architecture)
+    AUDIO_PLAY = "audio_play",
+    AUDIO_STOP = "audio_stop",
+    AUDIO_PAUSE = "audio_pause",
+    AUDIO_RESUME = "audio_resume",
+    AUDIO_COMPLETE = "audio_complete",
+
+    -- Timer events (Phase 1: Client-agnostic architecture)
+    TIMER_CREATED = "timer_created",
+    TIMER_FIRED = "timer_fired",
+    TIMER_CANCELLED = "timer_cancelled",
+    TIMER_PAUSED = "timer_paused",
+    TIMER_RESUMED = "timer_resumed",
+
+    -- Effect events (Phase 1: Client-agnostic architecture)
+    EFFECT_START = "effect_start",
+    EFFECT_COMPLETE = "effect_complete",
+    EFFECT_CANCELLED = "effect_cancelled",
+
+    -- Dialog events (Phase 1: Client-agnostic architecture)
+    DIALOG_OPEN = "dialog_open",
+    DIALOG_CLOSE = "dialog_close",
+    DIALOG_RESPONSE = "dialog_response",
+
+    -- Handler events (Phase 1: Client-agnostic architecture)
+    HANDLER_REGISTERED = "handler_registered",
+    HANDLER_UNREGISTERED = "handler_unregistered",
 }
 
 -- Create new event system
