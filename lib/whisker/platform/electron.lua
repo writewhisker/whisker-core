@@ -16,8 +16,8 @@
 local IPlatform = require("whisker.platform.interface")
 local Serialization = require("whisker.platform.serialization")
 
-local ElectronPlatform = setmetatable({}
-ElectronPlatform._dependencies = {}, {__index = IPlatform})
+local ElectronPlatform = setmetatable({}, {__index = IPlatform})
+ElectronPlatform._dependencies = {}
 ElectronPlatform.__index = ElectronPlatform
 
 --- Create a new ElectronPlatform instance

@@ -16,8 +16,8 @@
 local IPlatform = require("whisker.platform.interface")
 local Serialization = require("whisker.platform.serialization")
 
-local WebPlatform = setmetatable({}
-WebPlatform._dependencies = {}, {__index = IPlatform})
+local WebPlatform = setmetatable({}, {__index = IPlatform})
+WebPlatform._dependencies = {}
 WebPlatform.__index = WebPlatform
 
 --- Create a new WebPlatform instance

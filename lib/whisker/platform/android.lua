@@ -16,8 +16,8 @@
 local IPlatform = require("whisker.platform.interface")
 local Serialization = require("whisker.platform.serialization")
 
-local AndroidPlatform = setmetatable({}
-AndroidPlatform._dependencies = {}, {__index = IPlatform})
+local AndroidPlatform = setmetatable({}, {__index = IPlatform})
+AndroidPlatform._dependencies = {}
 AndroidPlatform.__index = AndroidPlatform
 
 --- Create a new AndroidPlatform instance

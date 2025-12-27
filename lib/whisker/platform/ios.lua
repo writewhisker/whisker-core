@@ -16,8 +16,8 @@
 local IPlatform = require("whisker.platform.interface")
 local Serialization = require("whisker.platform.serialization")
 
-local IOSPlatform = setmetatable({}
-IOSPlatform._dependencies = {}, {__index = IPlatform})
+local IOSPlatform = setmetatable({}, {__index = IPlatform})
+IOSPlatform._dependencies = {}
 IOSPlatform.__index = IOSPlatform
 
 --- Create a new IOSPlatform instance
