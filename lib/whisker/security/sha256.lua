@@ -1,6 +1,6 @@
 --- SHA-256 Implementation
 -- Pure Lua implementation of SHA-256 hash algorithm
--- Compatible with Lua 5.1, 5.2, 5.3, 5.4, and LuaJIT
+-- Compatible with Lua 5.1, 5.2, 5.3, 5.4, 5.5, and LuaJIT
 -- @module whisker.security.sha256
 -- @author Whisker Core Team
 -- @license MIT
