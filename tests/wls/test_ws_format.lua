@@ -479,6 +479,33 @@ Double gold: ${gold * 2}
                 assert.is_not_nil(result.warnings[1].message:match("NonExistent"))
             end)
 
+            it("should include error code for missing passage reference", function()
+                local input = [[
+:: Start
++ [Go somewhere] -> NonExistent
+]]
+                local result = parser:parse(input)
+                assert.is_true(result.success)
+                assert.equals(1, #result.warnings)
+                assert.equals("WLS-REF-001", result.warnings[1].code)
+                assert.is_not_nil(result.warnings[1].suggestion)
+            end)
+
+            it("should warn about duplicate passages with error code", function()
+                local input = [[
+:: Start
+Hello
+
+:: Start
+Duplicate!
+]]
+                local result = parser:parse(input)
+                assert.is_true(result.success)
+                assert.equals(1, #result.warnings)
+                assert.equals("WLS-STR-001", result.warnings[1].code)
+                assert.is_not_nil(result.warnings[1].suggestion)
+            end)
+
             it("should not warn about special targets", function()
                 local input = [[
 :: Start

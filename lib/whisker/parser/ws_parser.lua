@@ -264,7 +264,11 @@ function WSParser:parse_passage()
     passage_name = passage_name:match("^%s*(.-)%s*$") -- Trim
 
     if passage_name == "" then
-        self:add_error("Expected passage name after ::")
+        self:add_error("Expected passage name after '::'", {
+            code = WSParser.ERROR_CODES.EXPECTED_PASSAGE_NAME,
+            suggestion = "Add a passage name like: :: MyPassage"
+        })
+        self:skip_to_next_line()
         return
     end
 
@@ -282,7 +286,10 @@ function WSParser:parse_passage()
     end
 
     if has_duplicate then
-        self:add_warning("Duplicate passage: " .. passage_name)
+        self:add_warning("Duplicate passage name: '" .. passage_name .. "'", {
+            code = WSParser.ERROR_CODES.DUPLICATE_PASSAGE,
+            suggestion = "Rename one of the passages with the same name"
+        })
         -- Track duplicate for validator
         if not self.story_data.duplicate_passages[passage_name] then
             self.story_data.duplicate_passages[passage_name] = 2  -- First + current
@@ -526,7 +533,14 @@ function WSParser:parse_choice()
 
         -- Track reference (unless special target)
         if target ~= "END" and target ~= "BACK" and target ~= "RESTART" then
-            self.referenced_passages[target] = true
+            local token = self:peek()
+            if not self.referenced_passages[target] then
+                self.referenced_passages[target] = {}
+            end
+            table.insert(self.referenced_passages[target], {
+                line = token.line,
+                column = token.column
+            })
         end
     end
 
@@ -650,9 +664,18 @@ function WSParser:validate_references()
     end
 
     -- Validate referenced passage names exist
-    for passage_name, _ in pairs(self.referenced_passages) do
+    for passage_name, locations in pairs(self.referenced_passages) do
         if not name_to_id[passage_name] then
-            self:add_warning("Referenced passage does not exist: " .. passage_name)
+            -- Get a sample location for the warning
+            local sample_location = locations[1] or {}
+            self:add_warning("Referenced passage '" .. passage_name .. "' does not exist", {
+                code = WSParser.ERROR_CODES.UNDEFINED_PASSAGE,
+                suggestion = "Create a passage named '" .. passage_name .. "' or fix the link",
+                token = {
+                    line = sample_location.line or 1,
+                    column = sample_location.column or 1
+                }
+            })
         end
     end
 end
@@ -687,22 +710,68 @@ function WSParser:skip_newlines()
     end
 end
 
-function WSParser:add_error(message)
-    local token = self:peek()
+-- Error codes for parser errors
+WSParser.ERROR_CODES = {
+    -- Syntax errors (SYN)
+    EXPECTED_PASSAGE_NAME = "WLS-SYN-001",
+    EXPECTED_PASSAGE_MARKER = "WLS-SYN-002",
+    EXPECTED_CHOICE_TARGET = "WLS-SYN-003",
+    EXPECTED_EXPRESSION = "WLS-SYN-004",
+    EXPECTED_CLOSING_BRACE = "WLS-SYN-005",
+    UNEXPECTED_TOKEN = "WLS-SYN-006",
+    -- Reference errors (REF)
+    UNDEFINED_PASSAGE = "WLS-REF-001",
+    -- Structure errors (STR)
+    DUPLICATE_PASSAGE = "WLS-STR-001"
+}
+
+function WSParser:add_error(message, opts)
+    opts = opts or {}
+    local token = opts.token or self:peek()
     table.insert(self.errors, {
         message = message,
+        code = opts.code,
         line = token.line,
-        column = token.column
+        column = token.column,
+        suggestion = opts.suggestion,
+        severity = "error"
     })
 end
 
-function WSParser:add_warning(message)
-    local token = self:peek()
+function WSParser:add_warning(message, opts)
+    opts = opts or {}
+    local token = opts.token or self:peek()
     table.insert(self.warnings, {
         message = message,
+        code = opts.code,
         line = token.line,
-        column = token.column
+        column = token.column,
+        suggestion = opts.suggestion,
+        severity = "warning"
     })
+end
+
+-- Error recovery: skip to the next synchronization point (passage or end)
+function WSParser:synchronize()
+    -- Skip until we find a passage marker or EOF
+    while not self:is_at_end() do
+        -- If previous token was a newline and current is passage marker, we're synchronized
+        local prev = self.tokens[self.current - 1]
+        if prev and prev.type == "NEWLINE" and self:check("PASSAGE_MARKER") then
+            return
+        end
+        self:advance()
+    end
+end
+
+-- Skip to end of current line for minor error recovery
+function WSParser:skip_to_next_line()
+    while not self:is_at_end() and not self:check("NEWLINE") do
+        self:advance()
+    end
+    if self:check("NEWLINE") then
+        self:advance()
+    end
 end
 
 -- Build Story object from parsed data
