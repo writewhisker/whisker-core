@@ -50,6 +50,18 @@ WSLexer.TOKEN = {
     ARRAY = "ARRAY",                     -- ARRAY name = ...
     MAP = "MAP",                         -- MAP name = ...
 
+    -- Module keywords (WLS 1.0 - Gap 4)
+    INCLUDE = "INCLUDE",                 -- INCLUDE "path"
+    FUNCTION = "FUNCTION",               -- FUNCTION name(params)
+    RETURN = "RETURN",                   -- RETURN value
+    END = "END",                         -- END (function/namespace)
+    NAMESPACE = "NAMESPACE",             -- NAMESPACE Name
+    SCOPE_OP = "SCOPE_OP",               -- :: (namespace separator)
+
+    -- Presentation keywords (WLS 1.0 - Gap 5)
+    THEME = "THEME",                     -- THEME "name"
+    STYLE = "STYLE",                     -- STYLE { ... }
+
     -- Collection delimiters
     LBRACKET = "LBRACKET",               -- [
     RBRACKET = "RBRACKET",               -- ]
@@ -122,10 +134,14 @@ function WSLexer:scan_token()
     local char = self:peek()
     local remaining = self.input:sub(self.position)
 
-    -- Passage marker ::
+    -- Passage marker :: at line start, or scope operator :: elsewhere
     if remaining:match("^::") then
         self:advance(2)
-        self:add_token(WSLexer.TOKEN.PASSAGE_MARKER, "::")
+        if self:is_line_start_context() then
+            self:add_token(WSLexer.TOKEN.PASSAGE_MARKER, "::")
+        else
+            self:add_token(WSLexer.TOKEN.SCOPE_OP, "::")
+        end
         return
     end
 
@@ -169,8 +185,9 @@ function WSLexer:scan_token()
         return
     end
 
-    -- Collection keywords at line start (LIST, ARRAY, MAP)
+    -- Keywords at line start (LIST, ARRAY, MAP, INCLUDE, FUNCTION, NAMESPACE, END, RETURN)
     if self:is_line_start_context() then
+        -- Collection keywords (WLS 1.0 - Gap 3)
         if remaining:match("^LIST%s") then
             self:advance(4)
             self:add_token(WSLexer.TOKEN.LIST, "LIST")
@@ -184,6 +201,43 @@ function WSLexer:scan_token()
         if remaining:match("^MAP%s") then
             self:advance(3)
             self:add_token(WSLexer.TOKEN.MAP, "MAP")
+            return
+        end
+        -- Module keywords (WLS 1.0 - Gap 4)
+        if remaining:match("^INCLUDE%s") then
+            self:advance(7)
+            self:add_token(WSLexer.TOKEN.INCLUDE, "INCLUDE")
+            return
+        end
+        if remaining:match("^FUNCTION%s") then
+            self:advance(8)
+            self:add_token(WSLexer.TOKEN.FUNCTION, "FUNCTION")
+            return
+        end
+        if remaining:match("^NAMESPACE%s") then
+            self:advance(9)
+            self:add_token(WSLexer.TOKEN.NAMESPACE, "NAMESPACE")
+            return
+        end
+        if remaining:match("^END%s") or remaining:match("^END[\r\n]") or remaining:match("^END$") then
+            self:advance(3)
+            self:add_token(WSLexer.TOKEN.END, "END")
+            return
+        end
+        if remaining:match("^RETURN%s") or remaining:match("^RETURN[\r\n]") or remaining:match("^RETURN$") then
+            self:advance(6)
+            self:add_token(WSLexer.TOKEN.RETURN, "RETURN")
+            return
+        end
+        -- Presentation keywords (WLS 1.0 - Gap 5)
+        if remaining:match("^THEME%s") then
+            self:advance(5)
+            self:add_token(WSLexer.TOKEN.THEME, "THEME")
+            return
+        end
+        if remaining:match("^STYLE%s") or remaining:match("^STYLE{") then
+            self:advance(5)
+            self:add_token(WSLexer.TOKEN.STYLE, "STYLE")
             return
         end
     end
