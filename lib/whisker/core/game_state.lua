@@ -25,10 +25,12 @@ function GameState.new(deps)
   deps = deps or {}
     local instance = {
         -- Core state
-        variables = {},
+        variables = {},           -- Story-scoped variables ($var)
+        temp_variables = {},      -- Temporary variables (_var) - cleared on passage change
         current_passage = nil,
         visited_passages = {},
         choice_history = {},
+        selected_choices = {},    -- WLS 1.0: Track selected once-only choices by ID
 
         -- Undo system
         history_stack = {},
@@ -49,9 +51,11 @@ function GameState:initialize(story)
     self.story_id = story.metadata and story.metadata.uuid or story.metadata and story.metadata.ifid or nil
     self.start_time = os.time()
     self.variables = {}
+    self.temp_variables = {}  -- WLS 1.0: Clear temp variables on init
     self.current_passage = nil
     self.visited_passages = {}
     self.choice_history = {}
+    self.selected_choices = {}  -- WLS 1.0: Reset selected once-only choices
     self.history_stack = {}
 
     -- Initialize default variables from story
@@ -67,6 +71,9 @@ function GameState:set_current_passage(passage_id)
     if self.current_passage then
         self:push_to_history()
     end
+
+    -- WLS 1.0: Clear temporary variables on passage change
+    self.temp_variables = {}
 
     -- Update current passage
     self.current_passage = passage_id
@@ -102,6 +109,92 @@ function GameState:get(key, default_value)
         return default_value
     end
     return value
+end
+
+-- WLS 1.0: Temporary variable methods (_var scope)
+
+--- Set a temporary variable (cleared on passage change)
+---@param key string Variable name (without _ prefix)
+---@param value any The value to set
+---@return any|nil old_value, string|nil error
+function GameState:set_temp(key, value)
+    -- WLS 1.0: Check for shadowing - temp cannot shadow story variable
+    if self.variables[key] ~= nil then
+        return nil, "Cannot shadow story variable $" .. key .. " with temporary variable _" .. key
+    end
+    local old_value = self.temp_variables[key]
+    self.temp_variables[key] = value
+    return old_value
+end
+
+--- Get a temporary variable
+---@param key string Variable name (without _ prefix)
+---@param default_value any Optional default value
+---@return any
+function GameState:get_temp(key, default_value)
+    local value = self.temp_variables[key]
+    if value == nil then
+        return default_value
+    end
+    return value
+end
+
+--- Check if a temporary variable exists
+---@param key string Variable name (without _ prefix)
+---@return boolean
+function GameState:has_temp(key)
+    return self.temp_variables[key] ~= nil
+end
+
+--- Delete a temporary variable
+---@param key string Variable name (without _ prefix)
+---@return any old_value
+function GameState:delete_temp(key)
+    local old_value = self.temp_variables[key]
+    self.temp_variables[key] = nil
+    return old_value
+end
+
+--- Get all temporary variables
+---@return table
+function GameState:get_all_temp_variables()
+    return self.temp_variables
+end
+
+-- WLS 1.0: Once-only choice tracking
+
+--- Mark a choice as selected (for once-only choices)
+---@param choice_id string The choice ID
+function GameState:mark_choice_selected(choice_id)
+    self.selected_choices[choice_id] = true
+end
+
+--- Check if a choice has been selected
+---@param choice_id string The choice ID
+---@return boolean
+function GameState:is_choice_selected(choice_id)
+    return self.selected_choices[choice_id] == true
+end
+
+--- Clear the selected state for a choice
+---@param choice_id string The choice ID
+function GameState:clear_choice_selected(choice_id)
+    self.selected_choices[choice_id] = nil
+end
+
+--- Get all selected choice IDs
+---@return table
+function GameState:get_all_selected_choices()
+    local ids = {}
+    for id, _ in pairs(self.selected_choices) do
+        table.insert(ids, id)
+    end
+    return ids
+end
+
+--- Clear all selected choices (on story restart)
+function GameState:clear_all_selected_choices()
+    self.selected_choices = {}
 end
 
 function GameState:increment(key, amount)
@@ -204,7 +297,8 @@ function GameState:serialize()
         current_passage = self.current_passage,
         variables = self.variables,
         visited_passages = self.visited_passages,
-        choice_history = self.choice_history
+        choice_history = self.choice_history,
+        selected_choices = self.selected_choices  -- WLS 1.0: Persist selected once-only choices
     }
 
     return data
@@ -220,8 +314,10 @@ function GameState:deserialize(data)
     self.save_time = data.save_time
     self.current_passage = data.current_passage
     self.variables = data.variables or {}
+    self.temp_variables = {}  -- WLS 1.0: Temp variables are NOT persisted
     self.visited_passages = data.visited_passages or {}
     self.choice_history = data.choice_history or {}
+    self.selected_choices = data.selected_choices or {}  -- WLS 1.0: Restore selected choices
     self.history_stack = {}
 
     return true
@@ -229,9 +325,11 @@ end
 
 function GameState:reset()
     self.variables = {}
+    self.temp_variables = {}  -- WLS 1.0: Clear temp variables on reset
     self.current_passage = nil
     self.visited_passages = {}
     self.choice_history = {}
+    self.selected_choices = {}  -- WLS 1.0: Clear selected choices on reset
     self.history_stack = {}
     self.start_time = os.time()
 end

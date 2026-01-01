@@ -5,12 +5,13 @@ local Engine = {}
 Engine.__index = Engine
 
 -- Dependencies for DI pattern
-Engine._dependencies = {"story_factory", "game_state_factory", "lua_interpreter_factory", "event_bus"}
+Engine._dependencies = {"story_factory", "game_state_factory", "lua_interpreter_factory", "event_bus", "control_flow_factory"}
 
 -- Cached factories for backward compatibility (lazy loaded)
 local _story_factory_cache = nil
 local _game_state_factory_cache = nil
 local _interpreter_factory_cache = nil
+local _control_flow_cache = nil
 
 --- Get the story factory (supports both DI and backward compatibility)
 local function get_story_factory(deps)
@@ -46,6 +47,18 @@ local function get_interpreter_factory(deps)
     _interpreter_factory_cache = InterpreterFactory.new()
   end
   return _interpreter_factory_cache
+end
+
+--- Get the control flow factory (lazy loaded for backward compatibility)
+local function get_control_flow_factory(deps)
+  if deps and deps.control_flow_factory then
+    return deps.control_flow_factory
+  end
+  if not _control_flow_cache then
+    local ControlFlowFactory = require("whisker.core.factories.control_flow_factory")
+    _control_flow_cache = ControlFlowFactory.new()
+  end
+  return _control_flow_cache
 end
 
 --- Create a new Engine instance via DI container
@@ -229,6 +242,13 @@ function Engine:navigate_to_passage(passage_id)
     return self.current_content
 end
 
+-- WLS 1.0 Special Targets
+local SPECIAL_TARGETS = {
+    END = "END",
+    BACK = "BACK",
+    RESTART = "RESTART"
+}
+
 function Engine:make_choice(choice_index)
     if not self.current_content or not self.current_content.choices then
         error("No choices available")
@@ -246,25 +266,101 @@ function Engine:make_choice(choice_index)
         self:execute_passage_code(choice:get_action(), "choice_action")
     end
 
+    -- WLS 1.0: Mark once-only choices as selected
+    if choice:is_once_only() then
+        self.game_state:mark_choice_selected(choice.id)
+    end
+
     -- Track choice made
     self.performance_stats.choices_made = self.performance_stats.choices_made + 1
 
-    -- Navigate to target passage
-    return self:navigate_to_passage(choice:get_target())
+    -- WLS 1.0: Handle special targets
+    local target = choice:get_target()
+
+    if target == SPECIAL_TARGETS.END then
+        -- End the story
+        self.story_ended = true
+        return {
+            text = "",
+            choices = {},
+            ended = true
+        }
+    elseif target == SPECIAL_TARGETS.BACK then
+        -- Go back in history
+        if self.game_state:can_undo() then
+            self.game_state:undo()
+            local passage_id = self.game_state:get_current_passage()
+            if passage_id then
+                return self:navigate_to_passage(passage_id)
+            end
+        end
+        -- If can't go back, stay on current passage
+        return self.current_content
+    elseif target == SPECIAL_TARGETS.RESTART then
+        -- Restart the story
+        self.game_state:reset()
+        return self:start_story()
+    else
+        -- Normal navigation
+        return self:navigate_to_passage(target)
+    end
 end
 
 function Engine:render_passage_content(passage)
     local content = passage:get_content()
+    local control_flow_factory = get_control_flow_factory(self._control_flow_factory)
 
-    -- Process embedded Lua expressions {{...}}
-    -- But skip template directives ({{#if}}, {{else}}, {{/if}}, etc.)
+    -- Build WLS 1.0 context for expression evaluation
+    local context = {
+        story = self.current_story,
+        engine = self,
+        passage_id = passage.id or passage.name or "unknown"
+    }
+
+    -- 1. Process escaped characters first (protect them)
+    local escapes = {}
+    local escape_count = 0
+    content = content:gsub("\\([%$%{%}|:])", function(char)
+        escape_count = escape_count + 1
+        local placeholder = "\0ESC" .. escape_count .. "\0"
+        escapes[placeholder] = char
+        return placeholder
+    end)
+
+    -- 2. WLS 1.0: Control flow (conditionals and alternatives)
+    local control_flow = control_flow_factory:create(self.interpreter, self.game_state, context)
+    content = control_flow:process(content)
+
+    -- 3. WLS 1.0: ${expression} - full expression interpolation
+    content = content:gsub("%${([^}]+)}", function(expr)
+        expr = expr:match("^%s*(.-)%s*$") -- Trim whitespace
+
+        local success, result = self.interpreter:evaluate_expression(expr, self.game_state, context)
+        if success then
+            return tostring(result)
+        else
+            return "${ERROR: " .. tostring(result) .. "}"
+        end
+    end)
+
+    -- 4. WLS 1.0: $varName - simple variable interpolation
+    content = content:gsub("%$([%a_][%w_]*)", function(var_name)
+        local value = self.game_state:get(var_name)
+        if value ~= nil then
+            return tostring(value)
+        else
+            return "$" .. var_name -- Keep as-is if undefined
+        end
+    end)
+
+    -- 5. Legacy: {{expression}} - deprecated but still supported
     content = content:gsub("{{%s*([^#/%s].-)}}", function(code)
         -- Skip template keywords
         if code:match("^%s*else%s*$") or code:match("^%s*each%s") then
             return "{{" .. code .. "}}"
         end
 
-        local success, result = self.interpreter:evaluate_expression(code, self.game_state)
+        local success, result = self.interpreter:evaluate_expression(code, self.game_state, context)
         if success then
             return tostring(result)
         else
@@ -272,20 +368,37 @@ function Engine:render_passage_content(passage)
         end
     end)
 
+    -- 6. Restore escaped characters
+    for placeholder, char in pairs(escapes) do
+        content = content:gsub(placeholder, char)
+    end
+
     return content
 end
 
 function Engine:get_available_choices(passage)
     local available = {}
 
+    -- Build WLS 1.0 context for condition evaluation
+    local context = {
+        story = self.current_story,
+        engine = self
+    }
+
     for _, choice in ipairs(passage:get_choices()) do
-        -- Check if choice condition is met
         local is_available = true
 
-        if choice:has_condition() then
+        -- WLS 1.0: Skip once-only choices that have already been selected
+        if choice:is_once_only() and self.game_state:is_choice_selected(choice.id) then
+            is_available = false
+        end
+
+        -- Check if choice condition is met
+        if is_available and choice:has_condition() then
             local success, result = self.interpreter:evaluate_condition(
                 choice:get_condition(),
-                self.game_state
+                self.game_state,
+                context
             )
 
             if success then
@@ -304,17 +417,42 @@ function Engine:get_available_choices(passage)
     return available
 end
 
-function Engine:execute_passage_code(code, context)
+function Engine:execute_passage_code(code, context_name)
     if not code or code == "" then
         return true, nil
     end
 
-    local success, result, details = self.interpreter:execute_code(code, self.game_state)
+    -- Build WLS 1.0 context with engine reference
+    local context = {
+        story = self.current_story,
+        engine = self,
+        _pending_navigation = nil,
+        _pending_back = nil,
+        _pending_choice = nil
+    }
+
+    local success, result, details = self.interpreter:execute_code(code, self.game_state, context)
 
     if not success then
         -- Log error but don't crash
-        print("Error in " .. context .. ": " .. tostring(result))
+        print("Error in " .. context_name .. ": " .. tostring(result))
         return false, result
+    end
+
+    -- Handle deferred navigation from whisker.passage.go()
+    if context._pending_navigation then
+        -- Store for caller to handle after script execution
+        self._pending_navigation = context._pending_navigation
+    end
+
+    -- Handle deferred back from whisker.history.back()
+    if context._pending_back then
+        self._pending_back = context._pending_back
+    end
+
+    -- Handle deferred choice from whisker.choice.select()
+    if context._pending_choice then
+        self._pending_choice = context._pending_choice
     end
 
     return true, result

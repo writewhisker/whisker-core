@@ -26,6 +26,10 @@ function Choice.create(deps)
     end
 end
 
+-- WLS 1.0 Choice Types
+Choice.TYPE_ONCE = "once"    -- + marker: disappears after selection
+Choice.TYPE_STICKY = "sticky" -- * marker: always available
+
 function Choice.new(text_or_options, target)
     -- Support both old table-based and new parameter patterns
     local options = {}
@@ -42,7 +46,9 @@ function Choice.new(text_or_options, target)
         target_passage = options.target or options.target_passage or nil,
         condition = options.condition or nil,
         action = options.action or nil,
-        metadata = options.metadata or {}
+        metadata = options.metadata or {},
+        -- WLS 1.0: Choice type (once-only vs sticky)
+        choice_type = options.choice_type or options.type or Choice.TYPE_ONCE
     }
 
     setmetatable(instance, Choice)
@@ -87,6 +93,32 @@ end
 
 function Choice:has_action()
     return self.action ~= nil and self.action ~= ""
+end
+
+-- WLS 1.0: Choice type methods
+
+--- Get the choice type
+---@return string "once" or "sticky"
+function Choice:get_type()
+    return self.choice_type or Choice.TYPE_ONCE
+end
+
+--- Set the choice type
+---@param choice_type string "once" or "sticky"
+function Choice:set_type(choice_type)
+    self.choice_type = choice_type
+end
+
+--- Check if this is a once-only choice
+---@return boolean
+function Choice:is_once_only()
+    return self:get_type() == Choice.TYPE_ONCE
+end
+
+--- Check if this is a sticky choice
+---@return boolean
+function Choice:is_sticky()
+    return self:get_type() == Choice.TYPE_STICKY
 end
 
 function Choice:set_metadata(key, value)
@@ -146,7 +178,8 @@ function Choice:serialize()
         target = self.target_passage,  -- Alias for backwards compatibility
         condition = self.condition,
         action = self.action,
-        metadata = self.metadata
+        metadata = self.metadata,
+        choice_type = self.choice_type  -- WLS 1.0: Include choice type
     }
 end
 
@@ -157,6 +190,7 @@ function Choice:deserialize(data)
     self.condition = data.condition
     self.action = data.action
     self.metadata = data.metadata or {}
+    self.choice_type = data.choice_type or data.type or Choice.TYPE_ONCE  -- WLS 1.0
 end
 
 -- Provide target as an alias for target_passage for backwards compatibility
@@ -194,10 +228,11 @@ function Choice.from_table(data)
     return Choice.new({
         id = data.id,  -- NEW: Preserve ID if present
         text = data.text,
-        target = data.target_passage,
+        target = data.target_passage or data.target,
         condition = data.condition,
         action = data.action,
-        metadata = data.metadata
+        metadata = data.metadata,
+        choice_type = data.choice_type or data.type  -- WLS 1.0
     })
 end
 

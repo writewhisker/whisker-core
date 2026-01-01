@@ -16,8 +16,13 @@ Renderer.FormatTokens = {
     UNDERLINE_END = "__",
     CODE_START = "`",
     CODE_END = "`",
-    VARIABLE_START = "{{",
-    VARIABLE_END = "}}"
+    -- WLS 1.0 interpolation
+    VARIABLE_PREFIX = "$",
+    EXPRESSION_START = "${",
+    EXPRESSION_END = "}",
+    -- Legacy (deprecated)
+    LEGACY_VAR_START = "{{",
+    LEGACY_VAR_END = "}}"
 }
 
 -- Platform-specific tags
@@ -108,25 +113,88 @@ function Renderer:render_passage(passage, game_state)
 end
 
 -- Evaluate Lua expressions in text
-function Renderer:evaluate_expressions(text, game_state)
+-- WLS 1.0 syntax: $var for simple variables, ${expr} for expressions
+-- Legacy syntax: {{expr}} (deprecated but supported)
+function Renderer:evaluate_expressions(text, game_state, context)
     if not self.interpreter then
         return text
     end
 
-    -- Match {{expression}}
-    local result = text:gsub("{{(.-)}}",  function(expr)
+    local result = text
+
+    -- 1. Process escaped characters first (protect them)
+    -- \$ -> placeholder, \{ -> placeholder
+    local escapes = {}
+    local escape_count = 0
+    result = result:gsub("\\([%$%{%}])", function(char)
+        escape_count = escape_count + 1
+        local placeholder = "\0ESC" .. escape_count .. "\0"
+        escapes[placeholder] = char
+        return placeholder
+    end)
+
+    -- 2. WLS 1.0: ${expression} - full expression interpolation
+    result = result:gsub("%${([^}]+)}", function(expr)
         expr = expr:match("^%s*(.-)%s*$") -- Trim whitespace
 
-        local success, value = self.interpreter:evaluate_expression(expr, game_state)
+        local success, value = self.interpreter:evaluate_expression(expr, game_state, context)
 
         if success then
             self.stats.variables_evaluated = self.stats.variables_evaluated + 1
             return tostring(value)
         else
-            -- Return error marker or empty string
             return "[ERROR: " .. tostring(value) .. "]"
         end
     end)
+
+    -- 3. WLS 1.0: $varName - simple variable interpolation
+    -- Match $identifier (letter/underscore followed by alphanumeric/underscore)
+    -- WLS 1.0: $_var refers to temporary (passage-scoped) variables
+    result = result:gsub("%$([%a_][%w_]*)", function(var_name)
+        local value
+
+        -- WLS 1.0: Check if this is a temp variable (starts with _)
+        if var_name:sub(1, 1) == "_" then
+            -- Temp variable: strip the leading _ and look in temp_variables
+            local temp_key = var_name:sub(2)
+            value = game_state:get_temp(temp_key)
+        else
+            -- Story variable: look in regular variables
+            value = game_state:get(var_name)
+        end
+
+        if value ~= nil then
+            self.stats.variables_evaluated = self.stats.variables_evaluated + 1
+            return tostring(value)
+        else
+            -- Variable not found - leave as is or show error
+            return "$" .. var_name
+        end
+    end)
+
+    -- 4. Legacy: {{expression}} - deprecated but still supported
+    result = result:gsub("{{(.-)}}",  function(expr)
+        expr = expr:match("^%s*(.-)%s*$") -- Trim whitespace
+
+        -- Skip template directives
+        if expr:match("^#") or expr:match("^/") or expr == "else" then
+            return "{{" .. expr .. "}}"
+        end
+
+        local success, value = self.interpreter:evaluate_expression(expr, game_state, context)
+
+        if success then
+            self.stats.variables_evaluated = self.stats.variables_evaluated + 1
+            return tostring(value)
+        else
+            return "[ERROR: " .. tostring(value) .. "]"
+        end
+    end)
+
+    -- 5. Restore escaped characters
+    for placeholder, char in pairs(escapes) do
+        result = result:gsub(placeholder, char)
+    end
 
     return result
 end

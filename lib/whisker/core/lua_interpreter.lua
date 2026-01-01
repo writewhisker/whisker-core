@@ -133,43 +133,230 @@ function LuaInterpreter:create_sandbox()
     self.sandbox_env.debug = nil
 end
 
+--- Create the WLS 1.0 whisker API for story scripts
+-- Uses dot notation: whisker.state.get(), whisker.passage.current(), etc.
 function LuaInterpreter:create_story_api(game_state, context)
-    return {
+    local story = context and context.story or nil
+    local engine = context and context.engine or nil
+
+    -- WLS 1.0 whisker namespace with dot notation
+    local whisker = {
+        -- whisker.state module
+        state = {
+            get = function(key)
+                return game_state:get(key)
+            end,
+            set = function(key, value)
+                return game_state:set(key, value)
+            end,
+            has = function(key)
+                return game_state:has(key)
+            end,
+            delete = function(key)
+                return game_state:delete(key)
+            end,
+            all = function()
+                return game_state:get_all_variables()
+            end,
+            reset = function()
+                game_state:reset()
+            end,
+            -- WLS 1.0: Temporary variable methods (_var scope)
+            get_temp = function(key)
+                return game_state:get_temp(key)
+            end,
+            set_temp = function(key, value)
+                local old, err = game_state:set_temp(key, value)
+                if err then
+                    error(err)
+                end
+                return old
+            end,
+            has_temp = function(key)
+                return game_state:has_temp(key)
+            end,
+            delete_temp = function(key)
+                return game_state:delete_temp(key)
+            end,
+            all_temp = function()
+                return game_state:get_all_temp_variables()
+            end
+        },
+
+        -- whisker.passage module
+        passage = {
+            current = function()
+                local passage_id = game_state:get_current_passage()
+                if not passage_id or not story then
+                    return nil
+                end
+                return story:get_passage(passage_id)
+            end,
+            get = function(id)
+                if not story then return nil end
+                return story:get_passage(id)
+            end,
+            go = function(id)
+                -- Store target for deferred navigation
+                if context then
+                    context._pending_navigation = id
+                end
+                return true
+            end,
+            exists = function(id)
+                if not story then return false end
+                return story:get_passage(id) ~= nil
+            end,
+            all = function()
+                if not story then return {} end
+                local ids = {}
+                local passages = story:get_all_passages()
+                for id, _ in pairs(passages) do
+                    table.insert(ids, id)
+                end
+                return ids
+            end,
+            tags = function(tag)
+                if not story then return {} end
+                local matching = {}
+                local passages = story:get_all_passages()
+                for id, passage in pairs(passages) do
+                    local passage_tags = passage.tags or {}
+                    for _, t in ipairs(passage_tags) do
+                        if t == tag then
+                            table.insert(matching, id)
+                            break
+                        end
+                    end
+                end
+                return matching
+            end
+        },
+
+        -- whisker.history module
+        history = {
+            back = function()
+                if context then
+                    context._pending_back = true
+                end
+                return game_state:can_undo()
+            end,
+            canBack = function()
+                return game_state:can_undo()
+            end,
+            list = function()
+                local passages = {}
+                for id, count in pairs(game_state.visited_passages or {}) do
+                    if count > 0 then
+                        table.insert(passages, id)
+                    end
+                end
+                return passages
+            end,
+            count = function()
+                local count = 0
+                for _, visits in pairs(game_state.visited_passages or {}) do
+                    if visits > 0 then
+                        count = count + 1
+                    end
+                end
+                return count
+            end,
+            contains = function(id)
+                return game_state:has_visited(id)
+            end,
+            clear = function()
+                game_state.history_stack = {}
+            end
+        },
+
+        -- whisker.choice module
+        choice = {
+            available = function()
+                if not engine then return {} end
+                local content = engine:get_current_content()
+                if not content or not content.choices then
+                    return {}
+                end
+                return content.choices
+            end,
+            select = function(index)
+                if context then
+                    context._pending_choice = index
+                end
+                return true
+            end,
+            count = function()
+                if not engine then return 0 end
+                local content = engine:get_current_content()
+                if not content or not content.choices then
+                    return 0
+                end
+                return #content.choices
+            end
+        }
+    }
+
+    -- Top-level WLS 1.0 functions
+    local api = {
+        whisker = whisker,
+
+        -- visited(passage?) - check if passage visited, returns visit count
+        visited = function(passage_id)
+            if passage_id == nil then
+                passage_id = game_state:get_current_passage()
+            end
+            return game_state:get_visit_count(passage_id)
+        end,
+
+        -- random(min, max) - generate random integer
+        random = function(min, max)
+            if max == nil then
+                max = min
+                min = 1
+            end
+            return math.random(min, max)
+        end,
+
+        -- pick(...) - pick random from arguments
+        pick = function(...)
+            local items = {...}
+            if #items == 0 then return nil end
+            return items[math.random(1, #items)]
+        end,
+
+        -- print(...) - output (already in sandbox, but kept for consistency)
+        -- Note: print is already added to sandbox_env
+
+        -- DEPRECATED: Legacy API for backward compatibility
+        -- These produce deprecation warnings
         get = function(key, default)
             return game_state:get(key, default)
         end,
-
         set = function(key, value)
             return game_state:set(key, value)
         end,
-
         inc = function(key, amount)
             return game_state:increment(key, amount)
         end,
-
         dec = function(key, amount)
             return game_state:decrement(key, amount)
         end,
-
         del = function(key)
             return game_state:delete(key)
         end,
-
         has = function(key)
             return game_state:has(key)
         end,
-
-        visited = function(passage_id)
-            return game_state:has_visited(passage_id)
-        end,
-
         visit_count = function(passage_id)
             return game_state:get_visit_count(passage_id)
         end,
 
         -- Story context access (if provided)
-        story = context and context.story or nil
+        story = story
     }
+
+    return api
 end
 
 function LuaInterpreter:setup_instruction_counting(chunk)
@@ -244,10 +431,32 @@ function LuaInterpreter:execute_code(code, game_state, context)
 end
 
 function LuaInterpreter:evaluate_condition(condition_code, game_state, context)
+    -- Make game state variables directly accessible in sandbox
+    if game_state then
+        -- Story variables (accessible as varName)
+        for k, v in pairs(game_state.variables or {}) do
+            self.sandbox_env[k] = v
+        end
+        -- WLS 1.0: Temp variables (accessible as _varName)
+        for k, v in pairs(game_state.temp_variables or {}) do
+            self.sandbox_env["_" .. k] = v
+        end
+    end
+
     -- Wrap condition in return statement
     local code = "return (" .. condition_code .. ")"
 
     local success, result, details = self:execute_code(code, game_state, context)
+
+    -- Clean up direct variable access
+    if game_state then
+        for k, _ in pairs(game_state.variables or {}) do
+            self.sandbox_env[k] = nil
+        end
+        for k, _ in pairs(game_state.temp_variables or {}) do
+            self.sandbox_env["_" .. k] = nil
+        end
+    end
 
     if not success then
         return false, result, details
@@ -260,8 +469,13 @@ end
 function LuaInterpreter:evaluate_expression(expression_code, game_state, context)
     -- Make game state variables directly accessible in sandbox
     if game_state then
+        -- Story variables (accessible as varName)
         for k, v in pairs(game_state.variables or {}) do
             self.sandbox_env[k] = v
+        end
+        -- WLS 1.0: Temp variables (accessible as _varName)
+        for k, v in pairs(game_state.temp_variables or {}) do
+            self.sandbox_env["_" .. k] = v
         end
     end
 
@@ -274,6 +488,9 @@ function LuaInterpreter:evaluate_expression(expression_code, game_state, context
     if game_state then
         for k, _ in pairs(game_state.variables or {}) do
             self.sandbox_env[k] = nil
+        end
+        for k, _ in pairs(game_state.temp_variables or {}) do
+            self.sandbox_env["_" .. k] = nil
         end
     end
 
