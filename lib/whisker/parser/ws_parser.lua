@@ -314,6 +314,9 @@ function WSParser:parse_passage()
         title = passage_name,  -- For compatibility with validators
         content = "",
         choices = {},
+        gathers = {},          -- WLS 1.0: Gather points for flow reconvergence
+        tunnel_calls = {},     -- WLS 1.0: Tunnel calls within passage
+        has_tunnel_return = false,  -- WLS 1.0: Whether passage ends with <-
         tags = {},
         metadata = {},
         on_enter_script = nil,
@@ -355,6 +358,7 @@ function WSParser:parse_passage()
 
     -- Parse passage content and choices
     local content_parts = {}
+    local current_choice_depth = 0  -- Track nesting depth for gather points
 
     while not self:is_at_end() do
         -- Check for next passage
@@ -362,11 +366,101 @@ function WSParser:parse_passage()
             break
         end
 
-        -- Parse choice
+        -- Parse choice (increases nesting depth)
         if self:check("CHOICE_ONCE") or self:check("CHOICE_STICKY") then
             local choice = self:parse_choice()
             if choice then
                 table.insert(passage_data.choices, choice)
+                current_choice_depth = math.max(current_choice_depth, 1)
+            end
+        -- Parse gather point (WLS 1.0)
+        elseif self:check("GATHER") then
+            local gather_depth = 0
+            local gather_start = self:peek()
+            -- Count gather depth (number of consecutive - tokens)
+            while self:check("GATHER") do
+                gather_depth = gather_depth + 1
+                self:advance()
+            end
+            -- Collect gather content until next choice, gather, or passage
+            local gather_content_parts = {}
+            while not self:is_at_end() and
+                  not self:check("PASSAGE_MARKER") and
+                  not self:check("CHOICE_ONCE") and
+                  not self:check("CHOICE_STICKY") and
+                  not self:check("GATHER") do
+                if self:check("TEXT") then
+                    table.insert(gather_content_parts, self:advance().value)
+                elseif self:check("VAR_INTERP") then
+                    table.insert(gather_content_parts, "$" .. self:advance().value)
+                elseif self:check("NEWLINE") then
+                    table.insert(gather_content_parts, "\n")
+                    self:advance()
+                    break  -- Stop at end of line for gather
+                else
+                    break
+                end
+            end
+            table.insert(passage_data.gathers, {
+                depth = gather_depth,
+                content = table.concat(gather_content_parts):match("^%s*(.-)%s*$") or "",
+                location = gather_start.location
+            })
+            -- Add gather marker to content for runtime processing
+            table.insert(content_parts, string.rep("-", gather_depth) .. " ")
+            table.insert(content_parts, table.concat(gather_content_parts))
+        -- Parse tunnel return <- (WLS 1.0)
+        elseif self:check("TUNNEL_RETURN") then
+            self:advance()
+            passage_data.has_tunnel_return = true
+            table.insert(content_parts, "<-")
+        -- Parse arrow -> which might be a tunnel call -> Name ->
+        elseif self:check("ARROW") then
+            self:advance()
+            -- Look ahead for tunnel call pattern: -> Name ->
+            local target_parts = {}
+            while not self:is_at_end() and
+                  not self:check("NEWLINE") and
+                  not self:check("ARROW") and
+                  not self:check("PASSAGE_MARKER") do
+                local token = self:advance()
+                if token.type == "TEXT" then
+                    table.insert(target_parts, token.value)
+                end
+            end
+            local target = table.concat(target_parts):match("^%s*(.-)%s*$")
+
+            if self:check("ARROW") then
+                -- This is a tunnel call: -> Target ->
+                self:advance()  -- consume second ->
+                table.insert(passage_data.tunnel_calls, {
+                    target = target,
+                    position = #content_parts + 1
+                })
+                -- Track reference
+                if target ~= "" then
+                    if not self.referenced_passages[target] then
+                        self.referenced_passages[target] = {}
+                    end
+                    table.insert(self.referenced_passages[target], {
+                        line = self:peek().line,
+                        column = self:peek().column
+                    })
+                end
+                table.insert(content_parts, "-> " .. target .. " ->")
+            else
+                -- Regular navigation: -> Target (no choices context here)
+                table.insert(content_parts, "-> " .. target)
+                -- Track reference
+                if target ~= "" and target ~= "END" and target ~= "BACK" and target ~= "RESTART" then
+                    if not self.referenced_passages[target] then
+                        self.referenced_passages[target] = {}
+                    end
+                    table.insert(self.referenced_passages[target], {
+                        line = self:peek().line,
+                        column = self:peek().column
+                    })
+                end
             end
         -- Parse content
         elseif self:check("TEXT") then

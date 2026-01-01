@@ -210,6 +210,68 @@ describe("WLS 1.0 .ws Format", function()
                 assert.is_true(found_exclamation)
             end)
         end)
+
+        describe("Advanced Flow Control", function()
+            it("should tokenize gather point - at line start", function()
+                local result = lexer:tokenize("+ [Choice]\n  Content\n- Gather content")
+                assert.is_true(result.success)
+                local found_gather = false
+                for _, token in ipairs(result.tokens) do
+                    if token.type == "GATHER" then
+                        found_gather = true
+                        break
+                    end
+                end
+                assert.is_true(found_gather)
+            end)
+
+            it("should not tokenize - in arrow as gather", function()
+                local result = lexer:tokenize("-> Target")
+                assert.is_true(result.success)
+                -- Should have ARROW, not GATHER
+                assert.equals("ARROW", result.tokens[1].type)
+                for _, token in ipairs(result.tokens) do
+                    assert.is_not_equal("GATHER", token.type)
+                end
+            end)
+
+            it("should tokenize tunnel return <-", function()
+                local result = lexer:tokenize("Some content\n<-")
+                assert.is_true(result.success)
+                local found_return = false
+                for _, token in ipairs(result.tokens) do
+                    if token.type == "TUNNEL_RETURN" then
+                        found_return = true
+                        break
+                    end
+                end
+                assert.is_true(found_return)
+            end)
+
+            it("should tokenize tunnel call -> Target ->", function()
+                local result = lexer:tokenize("-> Target ->")
+                assert.is_true(result.success)
+                local arrow_count = 0
+                for _, token in ipairs(result.tokens) do
+                    if token.type == "ARROW" then
+                        arrow_count = arrow_count + 1
+                    end
+                end
+                assert.equals(2, arrow_count)
+            end)
+
+            it("should tokenize nested gather points", function()
+                local result = lexer:tokenize("+ [A]\n  + + [B]\n  - - Inner gather\n- Outer gather")
+                assert.is_true(result.success)
+                local gather_count = 0
+                for _, token in ipairs(result.tokens) do
+                    if token.type == "GATHER" then
+                        gather_count = gather_count + 1
+                    end
+                end
+                assert.equals(3, gather_count)  -- "- -" is two GATHER tokens, "- Outer" is one
+            end)
+        end)
     end)
 
     describe("Parser", function()
@@ -464,6 +526,118 @@ Double gold: ${gold * 2}
                 assert.is_not_nil(content:match("{"))
                 assert.is_not_nil(content:match("{else}"))
                 assert.is_not_nil(content:match("{/}"))
+            end)
+        end)
+
+        describe("Advanced Flow Control", function()
+            it("should parse gather points", function()
+                local input = [[
+:: Start
+"Choose wisely."
++ [Option A]
+  Response A
++ [Option B]
+  Response B
+- Continuing after the choice.
+]]
+                local result = parser:parse(input)
+                assert.is_true(result.success)
+                local passage = result.story.passage_by_name["Start"]
+                assert.equals(1, #passage.gathers)
+                assert.equals(1, passage.gathers[1].depth)
+            end)
+
+            it("should parse nested gather points", function()
+                local input = [[
+:: Start
++ [Outer A]
+  + + [Inner 1]
+    Deep content
+  + + [Inner 2]
+    More deep content
+  - - Inner gather point
++ [Outer B]
+  Just B content
+- Outer gather point
+]]
+                local result = parser:parse(input)
+                assert.is_true(result.success)
+                local passage = result.story.passage_by_name["Start"]
+                assert.equals(2, #passage.gathers)  -- One depth-2, one depth-1
+                assert.equals(2, passage.gathers[1].depth)
+                assert.equals(1, passage.gathers[2].depth)
+            end)
+
+            it("should parse tunnel calls", function()
+                local input = [[
+:: Start
+Before tunnel.
+-> SubRoutine ->
+After tunnel.
+
+:: SubRoutine
+Tunnel content.
+<-
+]]
+                local result = parser:parse(input)
+                assert.is_true(result.success)
+                local start_passage = result.story.passage_by_name["Start"]
+                assert.equals(1, #start_passage.tunnel_calls)
+                assert.equals("SubRoutine", start_passage.tunnel_calls[1].target)
+            end)
+
+            it("should parse tunnel return", function()
+                local input = [[
+:: SubRoutine
+This is tunnel content.
+<-
+]]
+                local result = parser:parse(input)
+                assert.is_true(result.success)
+                local passage = result.story.passage_by_name["SubRoutine"]
+                assert.is_true(passage.has_tunnel_return)
+            end)
+
+            it("should track tunnel target references", function()
+                local input = [[
+:: Start
+-> NonExistent ->
+]]
+                local result = parser:parse(input)
+                assert.is_true(result.success)
+                -- Should warn about undefined passage
+                assert.equals(1, #result.warnings)
+                assert.is_not_nil(result.warnings[1].message:match("NonExistent"))
+            end)
+
+            it("should parse multiple tunnel calls in one passage", function()
+                local input = [[
+:: Morning
+Wake up.
+-> BrushTeeth ->
+-> GetDressed ->
+-> HaveBreakfast ->
+Ready for the day!
+
+:: BrushTeeth
+Brushing...
+<-
+
+:: GetDressed
+Getting dressed...
+<-
+
+:: HaveBreakfast
+Eating breakfast...
+<-
+]]
+                local result = parser:parse(input)
+                assert.is_true(result.success)
+                local morning = result.story.passage_by_name["Morning"]
+                assert.equals(3, #morning.tunnel_calls)
+                assert.equals("BrushTeeth", morning.tunnel_calls[1].target)
+                assert.equals("GetDressed", morning.tunnel_calls[2].target)
+                assert.equals("HaveBreakfast", morning.tunnel_calls[3].target)
             end)
         end)
 
