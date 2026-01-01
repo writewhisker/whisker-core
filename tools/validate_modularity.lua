@@ -50,6 +50,7 @@ local RULES = {
       "core%.story",          -- Core types needed by factories
       "core%.game_state",     -- Core types needed by factories
       "core%.lua_interpreter", -- Core types needed by factories
+      "core%.control_flow",   -- Control flow needed by factories
       "core%.engine",         -- Engine is core infrastructure
       "core%.factories%..*",  -- Factories can be required
       -- Intra-module requires are allowed (same module can require its own files)
