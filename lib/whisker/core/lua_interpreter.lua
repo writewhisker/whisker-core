@@ -180,6 +180,142 @@ function LuaInterpreter:create_story_api(game_state, context)
             end,
             all_temp = function()
                 return game_state:get_all_temp_variables()
+            end,
+
+            -- ============================================
+            -- WLS 1.0 Gap 3: LIST Operations
+            -- ============================================
+
+            -- Get list data: { values = {...}, active = {...} }
+            get_list = function(name)
+                return game_state:get_list(name)
+            end,
+            -- Check if list exists
+            has_list = function(name)
+                return game_state:has_list(name)
+            end,
+            -- Get possible values in a list
+            list_values = function(name)
+                return game_state:get_list_values(name)
+            end,
+            -- Get active values in a list
+            list_active = function(name)
+                return game_state:get_list_active(name)
+            end,
+            -- Check if value is active in list (contains check)
+            list_contains = function(list_name, value)
+                return game_state:list_contains(list_name, value)
+            end,
+            -- Add/activate value in list
+            list_add = function(list_name, value)
+                return game_state:list_add(list_name, value)
+            end,
+            -- Remove/deactivate value from list
+            list_remove = function(list_name, value)
+                return game_state:list_remove(list_name, value)
+            end,
+            -- Toggle value in list
+            list_toggle = function(list_name, value)
+                return game_state:list_toggle(list_name, value)
+            end,
+            -- Get count of active values
+            list_count = function(name)
+                return game_state:list_count(name)
+            end,
+
+            -- ============================================
+            -- WLS 1.0 Gap 3: ARRAY Operations
+            -- ============================================
+
+            -- Get array by name
+            get_array = function(name)
+                return game_state:get_array(name)
+            end,
+            -- Check if array exists
+            has_array = function(name)
+                return game_state:has_array(name)
+            end,
+            -- Get array element (0-based index)
+            array_get = function(name, index)
+                return game_state:array_get(name, index)
+            end,
+            -- Set array element (0-based index)
+            array_set = function(name, index, value)
+                return game_state:array_set(name, index, value)
+            end,
+            -- Get array length
+            array_length = function(name)
+                return game_state:array_length(name)
+            end,
+            -- Append to array
+            array_push = function(name, value)
+                return game_state:array_push(name, value)
+            end,
+            -- Pop from array
+            array_pop = function(name)
+                return game_state:array_pop(name)
+            end,
+            -- Insert at index
+            array_insert = function(name, index, value)
+                return game_state:array_insert(name, index, value)
+            end,
+            -- Remove at index
+            array_remove = function(name, index)
+                return game_state:array_remove(name, index)
+            end,
+            -- Check if array contains value
+            array_contains = function(name, value)
+                return game_state:array_contains(name, value)
+            end,
+            -- Find index of value (returns 0-based, -1 if not found)
+            array_index_of = function(name, value)
+                return game_state:array_index_of(name, value)
+            end,
+
+            -- ============================================
+            -- WLS 1.0 Gap 3: MAP Operations
+            -- ============================================
+
+            -- Get map by name
+            get_map = function(name)
+                return game_state:get_map(name)
+            end,
+            -- Check if map exists
+            has_map = function(name)
+                return game_state:has_map(name)
+            end,
+            -- Get map value by key
+            map_get = function(name, key)
+                return game_state:map_get(name, key)
+            end,
+            -- Set map value by key
+            map_set = function(name, key, value)
+                return game_state:map_set(name, key, value)
+            end,
+            -- Check if map has key
+            map_has = function(name, key)
+                return game_state:map_has(name, key)
+            end,
+            -- Delete key from map
+            map_delete = function(name, key)
+                return game_state:map_delete(name, key)
+            end,
+            -- Get all keys in map
+            map_keys = function(name)
+                return game_state:map_keys(name)
+            end,
+            -- Get all values in map
+            map_values = function(name)
+                return game_state:map_values(name)
+            end,
+            -- Get entry count in map
+            map_size = function(name)
+                return game_state:map_size(name)
+            end,
+
+            -- Get all collections (for debugging)
+            all_collections = function()
+                return game_state:get_all_collections()
             end
         },
 
@@ -441,6 +577,19 @@ function LuaInterpreter:evaluate_condition(condition_code, game_state, context)
         for k, v in pairs(game_state.temp_variables or {}) do
             self.sandbox_env["_" .. k] = v
         end
+        -- WLS 1.0 Gap 3: Lists (accessible as listName - returns active values table)
+        for name, list in pairs(game_state.lists or {}) do
+            -- Expose list as a table that can be checked for membership
+            self.sandbox_env[name] = list.active
+        end
+        -- WLS 1.0 Gap 3: Arrays (accessible as arrayName)
+        for name, arr in pairs(game_state.arrays or {}) do
+            self.sandbox_env[name] = arr
+        end
+        -- WLS 1.0 Gap 3: Maps (accessible as mapName)
+        for name, map in pairs(game_state.maps or {}) do
+            self.sandbox_env[name] = map
+        end
     end
 
     -- Wrap condition in return statement
@@ -455,6 +604,15 @@ function LuaInterpreter:evaluate_condition(condition_code, game_state, context)
         end
         for k, _ in pairs(game_state.temp_variables or {}) do
             self.sandbox_env["_" .. k] = nil
+        end
+        for name, _ in pairs(game_state.lists or {}) do
+            self.sandbox_env[name] = nil
+        end
+        for name, _ in pairs(game_state.arrays or {}) do
+            self.sandbox_env[name] = nil
+        end
+        for name, _ in pairs(game_state.maps or {}) do
+            self.sandbox_env[name] = nil
         end
     end
 
@@ -477,6 +635,18 @@ function LuaInterpreter:evaluate_expression(expression_code, game_state, context
         for k, v in pairs(game_state.temp_variables or {}) do
             self.sandbox_env["_" .. k] = v
         end
+        -- WLS 1.0 Gap 3: Lists (accessible as listName - returns active values table)
+        for name, list in pairs(game_state.lists or {}) do
+            self.sandbox_env[name] = list.active
+        end
+        -- WLS 1.0 Gap 3: Arrays (accessible as arrayName)
+        for name, arr in pairs(game_state.arrays or {}) do
+            self.sandbox_env[name] = arr
+        end
+        -- WLS 1.0 Gap 3: Maps (accessible as mapName)
+        for name, map in pairs(game_state.maps or {}) do
+            self.sandbox_env[name] = map
+        end
     end
 
     -- Wrap expression in return statement
@@ -491,6 +661,15 @@ function LuaInterpreter:evaluate_expression(expression_code, game_state, context
         end
         for k, _ in pairs(game_state.temp_variables or {}) do
             self.sandbox_env["_" .. k] = nil
+        end
+        for name, _ in pairs(game_state.lists or {}) do
+            self.sandbox_env[name] = nil
+        end
+        for name, _ in pairs(game_state.arrays or {}) do
+            self.sandbox_env[name] = nil
+        end
+        for name, _ in pairs(game_state.maps or {}) do
+            self.sandbox_env[name] = nil
         end
     end
 
