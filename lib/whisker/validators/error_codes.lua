@@ -494,6 +494,90 @@ M.WLS_ERROR_CODES = {
     message = 'Large script ({size})',
     description = 'Script size exceeds threshold.',
   },
+
+  -- ============================================================================
+  -- Collections (COL) - WLS 1.0 Gap 3
+  -- ============================================================================
+  ['WLS-COL-001'] = {
+    code = 'WLS-COL-001',
+    name = 'duplicate_list_value',
+    category = 'collections',
+    severity = 'error',
+    message = 'Duplicate value "{value}" in LIST "{listName}"',
+    description = 'LIST declarations cannot have duplicate values.',
+  },
+  ['WLS-COL-002'] = {
+    code = 'WLS-COL-002',
+    name = 'empty_list',
+    category = 'collections',
+    severity = 'warning',
+    message = 'LIST "{listName}" has no values',
+    description = 'A LIST declaration should have at least one value.',
+  },
+  ['WLS-COL-003'] = {
+    code = 'WLS-COL-003',
+    name = 'invalid_list_value',
+    category = 'collections',
+    severity = 'error',
+    message = 'Invalid value name "{value}" in LIST "{listName}"',
+    description = 'LIST values must be valid identifiers.',
+  },
+  ['WLS-COL-004'] = {
+    code = 'WLS-COL-004',
+    name = 'duplicate_array_index',
+    category = 'collections',
+    severity = 'error',
+    message = 'Duplicate index {index} in ARRAY "{arrayName}"',
+    description = 'ARRAY declarations cannot have duplicate explicit indices.',
+  },
+  ['WLS-COL-005'] = {
+    code = 'WLS-COL-005',
+    name = 'negative_array_index',
+    category = 'collections',
+    severity = 'error',
+    message = 'Negative index {index} in ARRAY "{arrayName}"',
+    description = 'ARRAY indices must be non-negative.',
+  },
+  ['WLS-COL-006'] = {
+    code = 'WLS-COL-006',
+    name = 'duplicate_map_key',
+    category = 'collections',
+    severity = 'error',
+    message = 'Duplicate key "{key}" in MAP "{mapName}"',
+    description = 'MAP declarations cannot have duplicate keys.',
+  },
+  ['WLS-COL-007'] = {
+    code = 'WLS-COL-007',
+    name = 'invalid_map_key',
+    category = 'collections',
+    severity = 'error',
+    message = 'Invalid key "{key}" in MAP "{mapName}"',
+    description = 'MAP keys must be valid identifiers or strings.',
+  },
+  ['WLS-COL-008'] = {
+    code = 'WLS-COL-008',
+    name = 'undefined_list',
+    category = 'collections',
+    severity = 'error',
+    message = 'Undefined LIST: "{listName}"',
+    description = 'Referenced LIST is not defined.',
+  },
+  ['WLS-COL-009'] = {
+    code = 'WLS-COL-009',
+    name = 'undefined_array',
+    category = 'collections',
+    severity = 'error',
+    message = 'Undefined ARRAY: "{arrayName}"',
+    description = 'Referenced ARRAY is not defined.',
+  },
+  ['WLS-COL-010'] = {
+    code = 'WLS-COL-010',
+    name = 'undefined_map',
+    category = 'collections',
+    severity = 'error',
+    message = 'Undefined MAP: "{mapName}"',
+    description = 'Referenced MAP is not defined.',
+  },
 }
 
 --- Get error code definition
