@@ -67,12 +67,18 @@ function WSParser:parse(input)
         lists = {},       -- WLS 1.0 Gap 3: LIST declarations
         arrays = {},      -- WLS 1.0 Gap 3: ARRAY declarations
         maps = {},        -- WLS 1.0 Gap 3: MAP declarations
+        includes = {},    -- WLS 1.0 Gap 4: INCLUDE declarations
+        functions = {},   -- WLS 1.0 Gap 4: FUNCTION definitions
+        namespaces = {},  -- WLS 1.0 Gap 4: NAMESPACE names seen
+        theme = nil,      -- WLS 1.0 Gap 5: Theme name
+        styles = {},      -- WLS 1.0 Gap 5: Custom CSS properties
         passages = {},
         start_passage = nil,
         duplicate_passages = {}  -- Track duplicate passage names
     }
     self.passage_counter = 0  -- Counter for generating unique passage IDs
     self.referenced_passages = {}
+    self.namespace_stack = {}  -- WLS 1.0 Gap 4: Current namespace context
 
     -- Parse header directives
     self:parse_header()
@@ -82,6 +88,9 @@ function WSParser:parse(input)
 
     -- Parse collection declarations at header level (LIST, ARRAY, MAP)
     self:parse_collection_declarations()
+
+    -- Parse presentation directives (THEME, STYLE) - WLS 1.0 Gap 5
+    self:parse_presentation_directives()
 
     -- Parse passages
     while not self:is_at_end() do
@@ -274,19 +283,31 @@ function WSParser:parse_vars_block()
     end
 end
 
--- Parse collection declarations at header level (LIST, ARRAY, MAP)
--- WLS 1.0 Gap 3: Data Structures
+-- Parse header-level declarations (collections and modules)
+-- WLS 1.0 Gap 3: Data Structures (LIST, ARRAY, MAP)
+-- WLS 1.0 Gap 4: Modules (INCLUDE, FUNCTION, NAMESPACE)
 function WSParser:parse_collection_declarations()
     while not self:is_at_end() do
         self:skip_newlines()
         if self:is_at_end() then break end
 
+        -- WLS 1.0 Gap 3: Collections
         if self:check("LIST") then
             self:parse_list_declaration()
         elseif self:check("ARRAY") then
             self:parse_array_declaration()
         elseif self:check("MAP") then
             self:parse_map_declaration()
+        -- WLS 1.0 Gap 4: Modules
+        elseif self:check("INCLUDE") then
+            self:parse_include_declaration()
+        elseif self:check("FUNCTION") then
+            self:parse_function_declaration()
+        elseif self:check("NAMESPACE") then
+            self:parse_namespace_block()
+        elseif self:check("END") then
+            -- END NAMESPACE
+            self:parse_end_namespace()
         elseif self:check("PASSAGE_MARKER") then
             -- End of header, start of passages
             break
@@ -295,6 +316,288 @@ function WSParser:parse_collection_declarations()
             break
         end
     end
+end
+
+-- Parse presentation directives (THEME, STYLE)
+-- WLS 1.0 Gap 5: Presentation Layer
+function WSParser:parse_presentation_directives()
+    while not self:is_at_end() do
+        self:skip_newlines()
+        if self:is_at_end() then break end
+
+        if self:check("THEME") then
+            self:parse_theme_directive()
+        elseif self:check("STYLE") then
+            self:parse_style_block()
+        elseif self:check("PASSAGE_MARKER") then
+            -- End of header, start of passages
+            break
+        else
+            -- Unknown token, stop
+            break
+        end
+    end
+end
+
+-- Parse THEME directive: THEME "theme-name"
+-- WLS 1.0 Gap 5: Presentation Layer
+function WSParser:parse_theme_directive()
+    self:advance() -- consume THEME
+
+    -- Get the theme name
+    local theme_name = nil
+    if self:check("STRING") then
+        theme_name = self:advance().value
+    elseif self:check("TEXT") then
+        local text = self:advance().value:match("^%s*(.-)%s*$")
+        if text:match('^".-"$') or text:match("^'.-'$") then
+            theme_name = text:sub(2, -2)
+        else
+            theme_name = text
+        end
+    end
+
+    if not theme_name or theme_name == "" then
+        self:add_error("Expected theme name after THEME keyword", {
+            code = "WLS-PRS-004",
+            suggestion = 'Use: THEME "dark" or THEME "default"'
+        })
+        self:skip_to_next_line()
+        return
+    end
+
+    self.story_data.theme = theme_name
+    self:skip_to_next_line()
+end
+
+-- Parse STYLE block: STYLE { --property: value; ... }
+-- WLS 1.0 Gap 5: Presentation Layer
+function WSParser:parse_style_block()
+    self:advance() -- consume STYLE
+
+    -- Skip whitespace/newlines
+    self:skip_newlines()
+
+    -- Expect opening brace
+    if not self:check("LBRACE") then
+        self:add_error("Expected '{' after STYLE keyword", {
+            code = "WLS-PRS-007",
+            suggestion = 'Use: STYLE { --bg-color: #000; }'
+        })
+        self:skip_to_next_line()
+        return
+    end
+    self:advance() -- consume {
+
+    -- Parse CSS properties until closing brace
+    local properties = {}
+    local depth = 1
+
+    while not self:is_at_end() and depth > 0 do
+        self:skip_newlines()
+
+        if self:check("RBRACE") then
+            depth = depth - 1
+            self:advance()
+        elseif self:check("LBRACE") then
+            depth = depth + 1
+            self:advance()
+        elseif self:check("TEXT") then
+            -- Parse CSS property: --name: value;
+            local text = self:advance().value
+            -- Match CSS custom property pattern
+            for prop, value in text:gmatch("%-%-([%w%-]+)%s*:%s*([^;]+)") do
+                properties["--" .. prop] = value:match("^%s*(.-)%s*$")
+            end
+            -- Also match standard properties like passage-font, choice-style
+            for prop, value in text:gmatch("([%w%-]+)%s*:%s*([^;]+)") do
+                if not prop:match("^%-%-") then
+                    properties[prop] = value:match("^%s*(.-)%s*$")
+                end
+            end
+        else
+            self:advance() -- skip unknown tokens
+        end
+    end
+
+    self.story_data.styles = properties
+end
+
+-- Parse INCLUDE declaration: INCLUDE "path/to/file.ws"
+-- WLS 1.0 Gap 4: Modules
+function WSParser:parse_include_declaration()
+    self:advance() -- consume INCLUDE
+
+    -- Get the path string
+    local path = nil
+    if self:check("STRING") then
+        path = self:advance().value
+    elseif self:check("TEXT") then
+        -- Path might be in TEXT token if quotes weren't recognized
+        local text = self:advance().value:match("^%s*(.-)%s*$")
+        if text:match('^".-"$') or text:match("^'.-'$") then
+            path = text:sub(2, -2)
+        else
+            path = text
+        end
+    end
+
+    if not path or path == "" then
+        self:add_error("Expected path string after INCLUDE keyword", {
+            code = "WLS-MOD-001",
+            suggestion = 'Use: INCLUDE "path/to/file.ws"'
+        })
+        self:skip_to_next_line()
+        return
+    end
+
+    -- Store include declaration
+    table.insert(self.story_data.includes, {
+        path = path,
+        resolved = false  -- Will be resolved by loader
+    })
+
+    self:skip_to_next_line()
+end
+
+-- Parse FUNCTION declaration: FUNCTION name(param1, param2) ... END
+-- WLS 1.0 Gap 4: Modules
+function WSParser:parse_function_declaration()
+    local start_token = self:peek()
+    self:advance() -- consume FUNCTION
+
+    -- Get function name
+    local func_name = nil
+    if self:check("TEXT") then
+        func_name = self:advance().value:match("^%s*([%a_][%w_]*)%s*$")
+    end
+
+    if not func_name then
+        self:add_error("Expected function name after FUNCTION keyword", {
+            code = "WLS-MOD-006",
+            suggestion = "Use: FUNCTION myFunction(param1, param2)"
+        })
+        self:skip_to_next_line()
+        return
+    end
+
+    -- Parse parameters (optional)
+    local params = {}
+    if self:check("LPAREN") then
+        self:advance() -- consume (
+        while not self:is_at_end() and not self:check("RPAREN") do
+            if self:check("TEXT") then
+                local param = self:advance().value:match("^%s*([%a_][%w_]*)%s*$")
+                if param then
+                    table.insert(params, param)
+                end
+            end
+            if self:check("COMMA") then
+                self:advance()
+            elseif not self:check("RPAREN") and not self:check("TEXT") then
+                break
+            end
+        end
+        if self:check("RPAREN") then
+            self:advance() -- consume )
+        end
+    end
+
+    self:skip_newlines()
+
+    -- Parse function body until END
+    local body_lines = {}
+    local depth = 1
+    while not self:is_at_end() and depth > 0 do
+        if self:check("FUNCTION") or self:check("NAMESPACE") then
+            depth = depth + 1
+        elseif self:check("END") then
+            depth = depth - 1
+            if depth == 0 then
+                self:advance() -- consume END
+                break
+            end
+        end
+
+        -- Collect token for body
+        local token = self:advance()
+        if token.type ~= "NEWLINE" then
+            table.insert(body_lines, token.value)
+        else
+            table.insert(body_lines, "\n")
+        end
+    end
+
+    -- Store function declaration
+    self.story_data.functions[func_name] = {
+        name = func_name,
+        params = params,
+        body = table.concat(body_lines, " "),
+        type = "function"
+    }
+
+    self:skip_newlines()
+end
+
+-- Parse NAMESPACE block: NAMESPACE Name ... END NAMESPACE
+-- WLS 1.0 Gap 4: Modules
+function WSParser:parse_namespace_block()
+    self:advance() -- consume NAMESPACE
+
+    -- Get namespace name
+    local ns_name = nil
+    if self:check("TEXT") then
+        ns_name = self:advance().value:match("^%s*([%a_][%w_]*)%s*$")
+    end
+
+    if not ns_name then
+        self:add_error("Expected namespace name after NAMESPACE keyword", {
+            code = "WLS-MOD-007",
+            suggestion = "Use: NAMESPACE MyNamespace"
+        })
+        self:skip_to_next_line()
+        return
+    end
+
+    -- Push namespace onto stack
+    table.insert(self.namespace_stack, ns_name)
+
+    -- Record namespace
+    table.insert(self.story_data.namespaces, ns_name)
+
+    self:skip_to_next_line()
+end
+
+-- Parse END NAMESPACE
+-- WLS 1.0 Gap 4: Modules
+function WSParser:parse_end_namespace()
+    self:advance() -- consume END
+
+    -- Check for NAMESPACE keyword after END
+    self:skip_newlines()
+    if self:check("NAMESPACE") then
+        self:advance() -- consume NAMESPACE
+    end
+
+    -- Pop namespace from stack
+    if #self.namespace_stack > 0 then
+        table.remove(self.namespace_stack)
+    else
+        self:add_error("END NAMESPACE without matching NAMESPACE", {
+            code = "WLS-MOD-008"
+        })
+    end
+
+    self:skip_to_next_line()
+end
+
+-- Get current fully qualified namespace prefix
+-- WLS 1.0 Gap 4: Modules
+function WSParser:get_namespace_prefix()
+    if #self.namespace_stack == 0 then
+        return ""
+    end
+    return table.concat(self.namespace_stack, "::") .. "::"
 end
 
 -- Parse LIST declaration: LIST name = value1, (value2), value3
@@ -724,29 +1027,44 @@ function WSParser:parse_passage()
         return
     end
 
+    -- WLS 1.0 Gap 4: Handle namespace prefixing
+    -- If the passage name starts with ::, it's a global reference (no prefix)
+    -- Otherwise, apply current namespace prefix
+    local qualified_name = passage_name
+    if passage_name:sub(1, 2) == "::" then
+        -- Global namespace - strip the :: prefix
+        qualified_name = passage_name:sub(3)
+    elseif #self.namespace_stack > 0 then
+        -- Apply namespace prefix
+        qualified_name = self:get_namespace_prefix() .. passage_name
+    end
+
+    -- Store both original and qualified name
+    local original_name = passage_name
+
     -- Generate unique ID for this passage
-    local passage_id = string.format("passage_%d_%s", self.passage_counter, passage_name)
+    local passage_id = string.format("passage_%d_%s", self.passage_counter, qualified_name)
     self.passage_counter = self.passage_counter + 1
 
-    -- Check for duplicate name (different from ID)
+    -- Check for duplicate name (different from ID) - use qualified name
     local has_duplicate = false
     for _, existing in pairs(self.story_data.passages) do
-        if existing.name == passage_name then
+        if existing.name == qualified_name then
             has_duplicate = true
             break
         end
     end
 
     if has_duplicate then
-        self:add_warning("Duplicate passage name: '" .. passage_name .. "'", {
+        self:add_warning("Duplicate passage name: '" .. qualified_name .. "'", {
             code = WSParser.ERROR_CODES.DUPLICATE_PASSAGE,
             suggestion = "Rename one of the passages with the same name"
         })
         -- Track duplicate for validator
-        if not self.story_data.duplicate_passages[passage_name] then
-            self.story_data.duplicate_passages[passage_name] = 2  -- First + current
+        if not self.story_data.duplicate_passages[qualified_name] then
+            self.story_data.duplicate_passages[qualified_name] = 2  -- First + current
         else
-            self.story_data.duplicate_passages[passage_name] = self.story_data.duplicate_passages[passage_name] + 1
+            self.story_data.duplicate_passages[qualified_name] = self.story_data.duplicate_passages[qualified_name] + 1
         end
     end
 
@@ -754,8 +1072,10 @@ function WSParser:parse_passage()
 
     local passage_data = {
         id = passage_id,
-        name = passage_name,
-        title = passage_name,  -- For compatibility with validators
+        name = qualified_name,            -- WLS 1.0 Gap 4: Fully qualified name
+        original_name = original_name,    -- WLS 1.0 Gap 4: Name as written in source
+        namespace = #self.namespace_stack > 0 and table.concat(self.namespace_stack, "::") or nil,
+        title = qualified_name,  -- For compatibility with validators
         content = "",
         choices = {},
         gathers = {},          -- WLS 1.0: Gather points for flow reconvergence

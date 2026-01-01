@@ -20,6 +20,8 @@ local assets = require("whisker.validators.assets")
 local metadata = require("whisker.validators.metadata")
 local scripts = require("whisker.validators.scripts")
 local collections = require("whisker.validators.collections")  -- WLS 1.0 Gap 3
+local modules = require("whisker.validators.modules")  -- WLS 1.0 Gap 4
+local presentation = require("whisker.validators.presentation")  -- WLS 1.0 Gap 5
 
 --- Special targets for navigation
 M.SPECIAL_TARGETS = {
@@ -107,6 +109,8 @@ function M.validate(story, options)
   add_issues(variables.validate(story))
   add_issues(flow.validate(story))
   add_issues(collections.validate(story))  -- WLS 1.0 Gap 3: Collection validators
+  add_issues(modules.validate(story))  -- WLS 1.0 Gap 4: Module validators
+  add_issues(presentation.validate(story))  -- WLS 1.0 Gap 5: Presentation validators
 
   -- Extended validators (optional)
   local run_extended = options.extended
@@ -173,5 +177,7 @@ M.assets = assets
 M.metadata = metadata
 M.scripts = scripts
 M.collections = collections  -- WLS 1.0 Gap 3
+M.modules = modules  -- WLS 1.0 Gap 4
+M.presentation = presentation  -- WLS 1.0 Gap 5
 
 return M

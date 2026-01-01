@@ -578,6 +578,186 @@ M.WLS_ERROR_CODES = {
     message = 'Undefined MAP: "{mapName}"',
     description = 'Referenced MAP is not defined.',
   },
+
+  -- ============================================================================
+  -- Modules (MOD) - 8 codes (WLS 1.0 Gap 4)
+  -- ============================================================================
+  ['WLS-MOD-001'] = {
+    code = 'WLS-MOD-001',
+    name = 'include_not_found',
+    category = 'modules',
+    severity = 'error',
+    message = 'Include file not found: "{path}"',
+    description = 'The file specified in INCLUDE directive does not exist.',
+  },
+  ['WLS-MOD-002'] = {
+    code = 'WLS-MOD-002',
+    name = 'circular_include',
+    category = 'modules',
+    severity = 'error',
+    message = 'Circular include detected: "{path}"',
+    description = 'The include chain creates a circular dependency.',
+  },
+  ['WLS-MOD-003'] = {
+    code = 'WLS-MOD-003',
+    name = 'undefined_function',
+    category = 'modules',
+    severity = 'error',
+    message = 'Undefined function: "{functionName}"',
+    description = 'Called function is not defined.',
+  },
+  ['WLS-MOD-004'] = {
+    code = 'WLS-MOD-004',
+    name = 'namespace_conflict',
+    category = 'modules',
+    severity = 'error',
+    message = 'Duplicate qualified passage name: "{passageName}"',
+    description = 'Two passages have the same fully qualified name.',
+  },
+  ['WLS-MOD-005'] = {
+    code = 'WLS-MOD-005',
+    name = 'stack_overflow',
+    category = 'modules',
+    severity = 'error',
+    message = 'Function call stack overflow: "{functionName}"',
+    description = 'Recursion depth exceeded maximum limit.',
+  },
+  ['WLS-MOD-006'] = {
+    code = 'WLS-MOD-006',
+    name = 'invalid_function_name',
+    category = 'modules',
+    severity = 'error',
+    message = 'Invalid function name: "{functionName}"',
+    description = 'Function name must be a valid identifier.',
+  },
+  ['WLS-MOD-007'] = {
+    code = 'WLS-MOD-007',
+    name = 'invalid_namespace_name',
+    category = 'modules',
+    severity = 'error',
+    message = 'Invalid namespace name: "{namespaceName}"',
+    description = 'Namespace name must be a valid identifier.',
+  },
+  ['WLS-MOD-008'] = {
+    code = 'WLS-MOD-008',
+    name = 'unmatched_end_namespace',
+    category = 'modules',
+    severity = 'error',
+    message = 'END NAMESPACE without matching NAMESPACE',
+    description = 'Found END NAMESPACE without a corresponding NAMESPACE declaration.',
+  },
+
+  -- ============================================================================
+  -- Presentation (PRS) - 8 codes (WLS 1.0 Gap 5)
+  -- ============================================================================
+  ['WLS-PRS-001'] = {
+    code = 'WLS-PRS-001',
+    name = 'invalid_markdown',
+    category = 'presentation',
+    severity = 'error',
+    message = 'Invalid markdown syntax: {detail}',
+    description = 'The markdown formatting is malformed.',
+  },
+  ['WLS-PRS-002'] = {
+    code = 'WLS-PRS-002',
+    name = 'invalid_css_class',
+    category = 'presentation',
+    severity = 'error',
+    message = 'Invalid CSS class name: "{className}"',
+    description = 'CSS class names must start with a letter or hyphen and contain only alphanumerics, hyphens, and underscores.',
+  },
+  ['WLS-PRS-003'] = {
+    code = 'WLS-PRS-003',
+    name = 'missing_media_asset',
+    category = 'presentation',
+    severity = 'warning',
+    message = 'Missing media asset: "{path}"',
+    description = 'The referenced media file was not found.',
+  },
+  ['WLS-PRS-004'] = {
+    code = 'WLS-PRS-004',
+    name = 'invalid_theme',
+    category = 'presentation',
+    severity = 'error',
+    message = 'Invalid theme: "{themeName}"',
+    description = 'Unknown or invalid theme name.',
+  },
+  ['WLS-PRS-005'] = {
+    code = 'WLS-PRS-005',
+    name = 'invalid_media_attribute',
+    category = 'presentation',
+    severity = 'warning',
+    message = 'Invalid media attribute: "{attribute}"',
+    description = 'Unknown media attribute specified.',
+  },
+  ['WLS-PRS-006'] = {
+    code = 'WLS-PRS-006',
+    name = 'unclosed_formatting',
+    category = 'presentation',
+    severity = 'error',
+    message = 'Unclosed formatting: {marker}',
+    description = 'Formatting markers like ** or * must be closed.',
+  },
+  ['WLS-PRS-007'] = {
+    code = 'WLS-PRS-007',
+    name = 'invalid_style_property',
+    category = 'presentation',
+    severity = 'warning',
+    message = 'Invalid style property: "{property}"',
+    description = 'Unknown CSS custom property in STYLE block.',
+  },
+  ['WLS-PRS-008'] = {
+    code = 'WLS-PRS-008',
+    name = 'nested_blockquote_depth',
+    category = 'presentation',
+    severity = 'warning',
+    message = 'Blockquote nesting exceeds recommended depth ({depth})',
+    description = 'Deeply nested blockquotes may affect readability.',
+  },
+
+  -- ============================================================================
+  -- Developer Experience (DEV) - WLS 1.0 Gap 6
+  -- ============================================================================
+  ['WLS-DEV-001'] = {
+    code = 'WLS-DEV-001',
+    name = 'lsp_connection_failed',
+    category = 'structure',
+    severity = 'error',
+    message = 'Failed to connect to language server',
+    description = 'The language server could not be started or connected to.',
+  },
+  ['WLS-DEV-002'] = {
+    code = 'WLS-DEV-002',
+    name = 'debug_adapter_error',
+    category = 'structure',
+    severity = 'error',
+    message = 'Debug adapter protocol error: {detail}',
+    description = 'An error occurred in the debug adapter.',
+  },
+  ['WLS-DEV-003'] = {
+    code = 'WLS-DEV-003',
+    name = 'format_parse_error',
+    category = 'syntax',
+    severity = 'error',
+    message = 'Cannot format: file has parse errors',
+    description = 'The file cannot be formatted because it contains syntax errors.',
+  },
+  ['WLS-DEV-004'] = {
+    code = 'WLS-DEV-004',
+    name = 'preview_runtime_error',
+    category = 'content',
+    severity = 'warning',
+    message = 'Error during story preview: {detail}',
+    description = 'A runtime error occurred while previewing the story.',
+  },
+  ['WLS-DEV-005'] = {
+    code = 'WLS-DEV-005',
+    name = 'breakpoint_invalid_location',
+    category = 'content',
+    severity = 'warning',
+    message = 'Breakpoint at invalid location: line {line}',
+    description = 'A breakpoint was set at a location that cannot be executed.',
+  },
 }
 
 --- Get error code definition
