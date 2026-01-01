@@ -248,6 +248,14 @@ end
 
 -- Parse a single passage
 function WSParser:parse_passage()
+    -- Capture start location before consuming ::
+    local start_token = self:peek()
+    local start_location = start_token.location and start_token.location.start or {
+        line = start_token.line,
+        column = start_token.column,
+        offset = start_token.position - 1
+    }
+
     self:advance() -- consume ::
 
     -- Get passage name
@@ -398,6 +406,20 @@ function WSParser:parse_passage()
 
     passage_data.content = table.concat(content_parts)
 
+    -- Capture end location
+    local end_token = self.tokens[self.current - 1] or self:peek()
+    local end_location = end_token.location and end_token.location["end"] or {
+        line = end_token.line,
+        column = end_token.column,
+        offset = end_token.position - 1
+    }
+
+    -- Store location span
+    passage_data.location = {
+        start = start_location,
+        ["end"] = end_location
+    }
+
     -- Store passage using unique ID
     self.story_data.passages[passage_id] = passage_data
 end
@@ -406,6 +428,14 @@ end
 function WSParser:parse_choice()
     local Choice = get_choice()
     local choice_type = Choice.TYPE_ONCE
+
+    -- Capture start location
+    local start_token = self:peek()
+    local choice_start_location = start_token.location and start_token.location.start or {
+        line = start_token.line,
+        column = start_token.column,
+        offset = start_token.position - 1
+    }
 
     if self:check("CHOICE_STICKY") then
         choice_type = Choice.TYPE_STICKY
@@ -578,6 +608,20 @@ function WSParser:parse_choice()
     if not choice_data.target then
         choice_data.target = ""
     end
+
+    -- Capture end location
+    local end_token = self.tokens[self.current - 1] or self:peek()
+    local choice_end_location = end_token.location and end_token.location["end"] or {
+        line = end_token.line,
+        column = end_token.column,
+        offset = end_token.position - 1
+    }
+
+    -- Store location span
+    choice_data.location = {
+        start = choice_start_location,
+        ["end"] = choice_end_location
+    }
 
     return choice_data
 end

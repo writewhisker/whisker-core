@@ -519,6 +519,55 @@ Duplicate!
             end)
         end)
 
+        describe("Source Location Tracking", function()
+            it("should include location span in passages", function()
+                local input = [[
+:: Start
+Hello world!
+]]
+                local result = parser:parse(input)
+                assert.is_true(result.success)
+                local passage = result.story.passage_by_name["Start"]
+                assert.is_not_nil(passage.location)
+                assert.is_not_nil(passage.location.start)
+                assert.is_not_nil(passage.location["end"])
+                assert.is_number(passage.location.start.line)
+                assert.is_number(passage.location.start.column)
+            end)
+
+            it("should include location span in choices", function()
+                local input = [[
+:: Start
+Make a choice:
++ [Option A] -> A
++ [Option B] -> B
+]]
+                local result = parser:parse(input)
+                assert.is_true(result.success)
+                local passage = result.story.passage_by_name["Start"]
+                assert.equals(2, #passage.choices)
+                local choice = passage.choices[1]
+                assert.is_not_nil(choice.location)
+                assert.is_not_nil(choice.location.start)
+                assert.is_not_nil(choice.location["end"])
+            end)
+
+            it("should track correct line numbers", function()
+                local input = [[
+:: First
+Content
+
+:: Second
+More content
+]]
+                local result = parser:parse(input)
+                assert.is_true(result.success)
+                local first = result.story.passage_by_name["First"]
+                local second = result.story.passage_by_name["Second"]
+                assert.is_true(first.location.start.line < second.location.start.line)
+            end)
+        end)
+
         describe("Story Building", function()
             it("should build Story object from parsed data", function()
                 local input = [[
