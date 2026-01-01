@@ -489,9 +489,17 @@ function Lexer:scan_token()
     return
   end
 
+  -- WLS 1.0: Use ~= for not-equal (Lua-style)
+  if self:check_string("~=") then
+    self:match_string("~=")
+    self:emit_token("NEQ", nil)
+    return
+  end
+
+  -- WLS 1.0: Reject C-style != with helpful error
   if self:check_string("!=") then
     self:match_string("!=")
-    self:emit_token("NEQ", nil)
+    self:emit_error("Use '~=' instead of '!=' for not-equal (WLS 1.0 uses Lua-style operators)")
     return
   end
 
@@ -507,15 +515,17 @@ function Lexer:scan_token()
     return
   end
 
+  -- WLS 1.0: Reject C-style && with helpful error (use 'and' instead)
   if self:check_string("&&") then
     self:match_string("&&")
-    self:emit_token("AND", nil)
+    self:emit_error("Use 'and' instead of '&&' (WLS 1.0 uses Lua-style operators)")
     return
   end
 
+  -- WLS 1.0: Reject C-style || with helpful error (use 'or' instead)
   if self:check_string("||") then
     self:match_string("||")
-    self:emit_token("OR", nil)
+    self:emit_error("Use 'or' instead of '||' (WLS 1.0 uses Lua-style operators)")
     return
   end
 
@@ -632,9 +642,10 @@ function Lexer:scan_token()
     return
   end
 
+  -- WLS 1.0: Reject C-style ! with helpful error (use 'not' instead)
   if char == "!" then
     self:advance()
-    self:emit_token("NOT", nil)
+    self:emit_error("Use 'not' instead of '!' (WLS 1.0 uses Lua-style operators)")
     return
   end
 
@@ -662,6 +673,13 @@ function Lexer:scan_token()
       self:emit_token("TRUE", true)
     elseif ident == "false" then
       self:emit_token("FALSE", false)
+    -- WLS 1.0: Lua-style logical operators as keywords
+    elseif ident == "and" then
+      self:emit_token("AND", nil)
+    elseif ident == "or" then
+      self:emit_token("OR", nil)
+    elseif ident == "not" then
+      self:emit_token("NOT", nil)
     else
       self:emit_token("IDENTIFIER", ident)
     end
