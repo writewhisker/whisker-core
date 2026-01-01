@@ -4,6 +4,11 @@ Complete API documentation for the whisker Interactive Fiction Engine.
 
 ## Table of Contents
 
+- [WLS 1.0 API](#wls-10-api)
+  - [whisker.state](#whiskerstate)
+  - [whisker.passage](#whiskerpassage)
+  - [whisker.history](#whiskerhistory)
+  - [whisker.choice](#whiskerchoice)
 - [Core Classes](#core-classes)
   - [Story](#story)
   - [Passage](#passage)
@@ -13,6 +18,328 @@ Complete API documentation for the whisker Interactive Fiction Engine.
 - [UI and Platform](#ui-and-platform)
 - [Tools](#tools)
 - [Utilities](#utilities)
+
+---
+
+## WLS 1.0 API
+
+The WLS 1.0 (Whisker Language Specification) defines a standard API namespace accessible from story scripts. All methods use **dot notation** (not colon notation).
+
+### whisker.state
+
+Manages story variables with two scopes:
+- **Story variables** (`$varName`): Persist for the entire playthrough and are saved
+- **Temporary variables** (`_varName`): Cleared on passage change, not saved
+
+#### `whisker.state.get(name, default)`
+
+Gets a story variable value.
+
+```lua
+local gold = whisker.state.get("gold")
+local health = whisker.state.get("health", 100)  -- with default
+```
+
+#### `whisker.state.set(name, value)`
+
+Sets a story variable value.
+
+```lua
+whisker.state.set("gold", 50)
+whisker.state.set("playerName", "Hero")
+```
+
+#### `whisker.state.has(name)`
+
+Checks if a story variable exists.
+
+```lua
+if whisker.state.has("hasKey") then
+    -- player has the key
+end
+```
+
+#### `whisker.state.delete(name)`
+
+Deletes a story variable.
+
+```lua
+whisker.state.delete("tempFlag")
+```
+
+#### `whisker.state.inc(name, amount)`
+
+Increments a numeric variable.
+
+```lua
+whisker.state.inc("gold", 10)  -- add 10
+whisker.state.inc("score")      -- add 1 (default)
+```
+
+#### `whisker.state.dec(name, amount)`
+
+Decrements a numeric variable.
+
+```lua
+whisker.state.dec("health", 5)  -- subtract 5
+whisker.state.dec("lives")       -- subtract 1 (default)
+```
+
+#### `whisker.state.all()`
+
+Gets all story variables.
+
+```lua
+local vars = whisker.state.all()
+for name, value in pairs(vars) do
+    print(name, value)
+end
+```
+
+#### Temporary Variables
+
+```lua
+-- Set temporary variable (cleared on passage change)
+whisker.state.set_temp("counter", 0)
+
+-- Get temporary variable
+local count = whisker.state.get_temp("counter", 0)
+
+-- Check if temp variable exists
+if whisker.state.has_temp("flag") then
+    -- ...
+end
+
+-- Delete temp variable
+whisker.state.delete_temp("counter")
+
+-- Get all temp variables
+local temps = whisker.state.all_temp()
+```
+
+**Note:** Temporary variables cannot shadow story variables with the same name.
+
+---
+
+### whisker.passage
+
+Provides passage information and navigation.
+
+#### `whisker.passage.current()`
+
+Gets the current passage ID.
+
+```lua
+local id = whisker.passage.current()
+```
+
+#### `whisker.passage.name()`
+
+Gets the current passage name.
+
+```lua
+local name = whisker.passage.name()
+```
+
+#### `whisker.passage.tags()`
+
+Gets the current passage tags.
+
+```lua
+local tags = whisker.passage.tags()
+for _, tag in ipairs(tags) do
+    print(tag)
+end
+```
+
+#### `whisker.passage.go(target)`
+
+Navigates to a passage (deferred until script completes).
+
+```lua
+whisker.passage.go("NextScene")
+```
+
+#### `whisker.passage.visited(passage_id)`
+
+Gets the visit count for a passage.
+
+```lua
+local visits = whisker.passage.visited("Shop")
+if visits > 0 then
+    print("You've been here before!")
+end
+```
+
+---
+
+### whisker.history
+
+Manages navigation history.
+
+#### `whisker.history.back()`
+
+Goes back to the previous passage (deferred).
+
+```lua
+whisker.history.back()
+```
+
+#### `whisker.history.can_back()`
+
+Checks if back navigation is possible.
+
+```lua
+if whisker.history.can_back() then
+    -- show back button
+end
+```
+
+#### `whisker.history.length()`
+
+Gets the history length.
+
+```lua
+local count = whisker.history.length()
+```
+
+---
+
+### whisker.choice
+
+Provides choice-related functions.
+
+#### `whisker.choice.select(index)`
+
+Selects a choice by index (deferred).
+
+```lua
+whisker.choice.select(1)  -- select first choice
+```
+
+#### `whisker.choice.count()`
+
+Gets the number of available choices.
+
+```lua
+local num = whisker.choice.count()
+```
+
+---
+
+### Variable Interpolation
+
+WLS 1.0 supports two interpolation syntaxes in passage content:
+
+#### Simple Variable: `$varName`
+
+```
+You have $gold gold coins.
+Welcome, $playerName!
+```
+
+#### Expression: `${expression}`
+
+```
+Double gold: ${gold * 2}
+Status: ${health > 50 and "healthy" or "injured"}
+```
+
+#### Temporary Variable: `$_varName`
+
+```
+Counter: $_counter
+```
+
+---
+
+### Choice Types
+
+WLS 1.0 supports two choice types:
+
+#### Once-Only (`+`)
+
+Choices marked with `+` disappear after being selected.
+
+```whisker
++ [Take the key] -> HasKey
++ [Open the door] -> Door
+```
+
+#### Sticky (`*`)
+
+Choices marked with `*` remain available after selection.
+
+```whisker
+* [Look around] -> LookAround
+* [Check inventory] -> Inventory
+```
+
+---
+
+### Special Targets
+
+WLS 1.0 defines special navigation targets:
+
+| Target | Description |
+|--------|-------------|
+| `END` | End the story |
+| `BACK` | Go back to previous passage |
+| `RESTART` | Restart the story |
+
+```whisker
++ [End game] -> END
++ [Go back] -> BACK
++ [Start over] -> RESTART
+```
+
+---
+
+### Operators
+
+WLS 1.0 uses Lua-style operators:
+
+| Operator | Description |
+|----------|-------------|
+| `and` | Logical AND |
+| `or` | Logical OR |
+| `not` | Logical NOT |
+| `~=` | Not equal |
+| `==` | Equal |
+| `<`, `>`, `<=`, `>=` | Comparison |
+
+**Note:** C-style operators (`&&`, `||`, `!`, `!=`) are not supported.
+
+---
+
+### Conditionals
+
+#### Block Conditional
+
+```whisker
+{ gold >= 100 }
+  You're rich!
+{elif gold >= 50}
+  You have some savings.
+{else}
+  You're broke.
+{/}
+```
+
+#### Inline Conditional
+
+```whisker
+{hasKey: The door opens. | The door is locked.}
+```
+
+#### Text Alternatives
+
+```whisker
+{| First visit | Second visit | Third or more }
+{~| Random option A | Random option B | Random option C }
+{&| Cycles | Through | Options }
+{!| Shows once only }
+```
 
 ---
 
@@ -632,9 +959,10 @@ local choice = Choice.new(config)
 **Parameters:**
 - `config` (table) - Choice configuration
   - `text` (string) - Choice text displayed to player
-  - `target` (string) - ID of target passage
+  - `target` (string) - ID of target passage (or special: `"END"`, `"BACK"`, `"RESTART"`)
   - `condition` (string, optional) - Lua expression that must be true
   - `action` (string, optional) - Lua code to run when selected
+  - `choice_type` (string, optional) - `"once"` (default) or `"sticky"`
   - `visible` (boolean, optional) - Whether choice is visible (default: true)
   - `enabled` (boolean, optional) - Whether choice is selectable (default: true)
 
@@ -691,6 +1019,31 @@ Checks if the choice is visible.
 Checks if the choice is enabled.
 
 **Returns:** `boolean` - True if enabled
+
+##### `choice:get_type()`
+
+Gets the choice type.
+
+**Returns:** `string` - `"once"` or `"sticky"`
+
+##### `choice:is_once_only()`
+
+Checks if this is a once-only choice.
+
+**Returns:** `boolean` - True if once-only
+
+##### `choice:is_sticky()`
+
+Checks if this is a sticky choice.
+
+**Returns:** `boolean` - True if sticky
+
+##### `choice:set_type(choice_type)`
+
+Sets the choice type.
+
+**Parameters:**
+- `choice_type` (string) - `"once"` or `"sticky"`
 
 ##### `choice:set_metadata(key, value)`
 
@@ -784,12 +1137,18 @@ end
 
 - `choice.id` (string) - Unique choice identifier
 - `choice.text` (string) - Choice text
-- `choice.target` (string) - Target passage ID
+- `choice.target` (string) - Target passage ID (or `"END"`, `"BACK"`, `"RESTART"`)
 - `choice.condition` (string) - Condition expression
 - `choice.action` (string) - Action script
+- `choice.choice_type` (string) - `"once"` or `"sticky"` (WLS 1.0)
 - `choice.visible` (boolean) - Visibility flag
 - `choice.enabled` (boolean) - Enabled flag
 - `choice.metadata` (table) - Custom metadata key-value pairs
+
+#### Constants
+
+- `Choice.TYPE_ONCE` - Value: `"once"` - Default choice type
+- `Choice.TYPE_STICKY` - Value: `"sticky"` - Always-available choice
 
 ---
 
@@ -1118,7 +1477,12 @@ local rendered = renderer:render_passage(passage, game_state)
 - `*text*` - Italic
 - `__text__` - Underline
 - `` `text` `` - Code
-- `{{variable}}` - Variable substitution
+
+**WLS 1.0 Interpolation:**
+- `$varName` - Simple variable substitution
+- `${expression}` - Expression evaluation
+- `$_varName` - Temporary variable substitution
+- `{{expression}}` - Legacy syntax (still supported)
 
 ### SaveSystem
 

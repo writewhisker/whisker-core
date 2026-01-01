@@ -2,6 +2,19 @@
 
 This directory contains working examples for each Whisker runtime platform.
 
+## WLS 1.0 Examples
+
+For canonical WLS 1.0 text format examples (`.ws` files), see the specification submodule:
+
+```
+spec/examples/
+├── beginner/           # Start here - simple stories
+├── intermediate/       # Core features - conditionals, choices
+└── advanced/          # Complex games and API demos
+```
+
+The `.whisker` files in this directory are the legacy JSON format (Format 2.0).
+
 ## 📁 Directory Structure
 
 ```
