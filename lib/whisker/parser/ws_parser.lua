@@ -98,11 +98,17 @@ function WSParser:parse(input)
     -- If not, look for a passage named "Start"
     local start_name = self.story_data.start_passage or "Start"
     self.story_data.start_passage = nil  -- Reset to find the actual ID
+    self.story_data.start_passage_name = start_name  -- Preserve the name for backwards compatibility
 
+    -- Build name-to-ID lookup and find start passage
+    self.story_data.passage_by_name = {}
     for passage_id, passage in pairs(self.story_data.passages) do
         if passage.name == start_name then
             self.story_data.start_passage = passage_id
-            break
+        end
+        -- Store first occurrence of each name for backward compatibility
+        if not self.story_data.passage_by_name[passage.name] then
+            self.story_data.passage_by_name[passage.name] = passage
         end
     end
 

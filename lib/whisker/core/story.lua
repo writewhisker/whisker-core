@@ -130,6 +130,15 @@ function Story:get_passage(passage_id)
     return self.passages[passage_id]
 end
 
+function Story:get_passage_by_name(name)
+    for _, passage in pairs(self.passages) do
+        if passage.name == name then
+            return passage
+        end
+    end
+    return nil
+end
+
 function Story:remove_passage(passage_id)
     self.passages[passage_id] = nil
 end
