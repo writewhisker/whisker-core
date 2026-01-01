@@ -45,6 +45,23 @@ WSLexer.TOKEN = {
     NUMBER = "NUMBER",                   -- 123, 3.14
     BOOLEAN = "BOOLEAN",                 -- true, false
 
+    -- Collection keywords (WLS 1.0 - Gap 3)
+    LIST = "LIST",                       -- LIST name = ...
+    ARRAY = "ARRAY",                     -- ARRAY name = ...
+    MAP = "MAP",                         -- MAP name = ...
+
+    -- Collection delimiters
+    LBRACKET = "LBRACKET",               -- [
+    RBRACKET = "RBRACKET",               -- ]
+    COLON = "COLON",                     -- : (map key separator)
+    COMMA = "COMMA",                     -- , (element separator)
+    LPAREN = "LPAREN",                   -- ( (list active marker)
+    RPAREN = "RPAREN",                   -- )
+    QUESTION = "QUESTION",               -- ? (contains operator)
+
+    -- Identifiers
+    IDENTIFIER = "IDENTIFIER",           -- variable/list value names
+
     -- Comments
     LINE_COMMENT = "LINE_COMMENT",       -- //
     BLOCK_COMMENT = "BLOCK_COMMENT",     -- /* ... */
@@ -150,6 +167,25 @@ function WSLexer:scan_token()
         self:advance(2)
         self:add_token(WSLexer.TOKEN.ARROW, "->")
         return
+    end
+
+    -- Collection keywords at line start (LIST, ARRAY, MAP)
+    if self:is_line_start_context() then
+        if remaining:match("^LIST%s") then
+            self:advance(4)
+            self:add_token(WSLexer.TOKEN.LIST, "LIST")
+            return
+        end
+        if remaining:match("^ARRAY%s") then
+            self:advance(5)
+            self:add_token(WSLexer.TOKEN.ARRAY, "ARRAY")
+            return
+        end
+        if remaining:match("^MAP%s") then
+            self:advance(3)
+            self:add_token(WSLexer.TOKEN.MAP, "MAP")
+            return
+        end
     end
 
     -- Directives starting with @
@@ -276,6 +312,49 @@ function WSLexer:scan_token()
         return
     end
 
+    -- Collection delimiters (WLS 1.0 - Gap 3)
+    if char == "[" then
+        self:advance(1)
+        self:add_token(WSLexer.TOKEN.LBRACKET, "[")
+        return
+    end
+
+    if char == "]" then
+        self:advance(1)
+        self:add_token(WSLexer.TOKEN.RBRACKET, "]")
+        return
+    end
+
+    if char == "(" then
+        self:advance(1)
+        self:add_token(WSLexer.TOKEN.LPAREN, "(")
+        return
+    end
+
+    if char == ")" then
+        self:advance(1)
+        self:add_token(WSLexer.TOKEN.RPAREN, ")")
+        return
+    end
+
+    if char == ":" then
+        self:advance(1)
+        self:add_token(WSLexer.TOKEN.COLON, ":")
+        return
+    end
+
+    if char == "," then
+        self:advance(1)
+        self:add_token(WSLexer.TOKEN.COMMA, ",")
+        return
+    end
+
+    if char == "?" then
+        self:advance(1)
+        self:add_token(WSLexer.TOKEN.QUESTION, "?")
+        return
+    end
+
     -- Newline
     if char == "\n" then
         self:advance(1)
@@ -387,7 +466,7 @@ end
 
 function WSLexer:scan_text()
     local text = ""
-    local stop_chars = "{}|$@\r\n\"&~!"
+    local stop_chars = "{}|$@\r\n\"&~![]():,?"
 
     while self.position <= #self.input do
         local char = self:peek()
@@ -441,6 +520,17 @@ function WSLexer:is_choice_context()
            prev.type == WSLexer.TOKEN.CHOICE_ONCE or
            prev.type == WSLexer.TOKEN.CHOICE_STICKY or
            prev.type == WSLexer.TOKEN.GATHER
+end
+
+function WSLexer:is_line_start_context()
+    -- Check if we're at the start of a line for LIST/ARRAY/MAP keywords
+    if #self.tokens == 0 then
+        return true
+    end
+
+    local prev = self.tokens[#self.tokens]
+    return prev.type == WSLexer.TOKEN.NEWLINE or
+           prev.type == WSLexer.TOKEN.INDENT
 end
 
 function WSLexer:peek(offset)

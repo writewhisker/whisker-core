@@ -219,7 +219,7 @@ function WSParser:parse_vars_block()
 
         self:advance() -- consume indent
 
-        -- Expect varName: value
+        -- Expect varName: value (may be TEXT with colon, or TEXT + COLON + value)
         if self:check("TEXT") then
             local text = self:advance().value
             -- Check for name: pattern (value may be in next token for strings)
@@ -236,6 +236,28 @@ function WSParser:parse_vars_block()
                     type = type(value),
                     value = value
                 }
+            else
+                -- New tokenization: TEXT (name) + COLON + value tokens
+                -- The text is just the variable name without colon
+                local var_name = text:match("^([%a_][%w_]*)%s*$")
+                if var_name and self:check("COLON") then
+                    self:advance() -- consume COLON
+                    local value
+                    if self:check("STRING") then
+                        value = self:advance().value
+                    elseif self:check("NUMBER") then
+                        value = tonumber(self:advance().value)
+                    elseif self:check("TEXT") then
+                        local val_text = self:advance().value:match("^%s*(.-)%s*$")
+                        value = self:parse_literal_value(val_text)
+                    end
+                    if var_name and value ~= nil then
+                        self.story_data.variables[var_name] = {
+                            type = type(value),
+                            value = value
+                        }
+                    end
+                end
             end
         end
 
