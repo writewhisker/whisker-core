@@ -64,6 +64,9 @@ function WSParser:parse(input)
     self.story_data = {
         metadata = {},
         variables = {},
+        lists = {},       -- WLS 1.0 Gap 3: LIST declarations
+        arrays = {},      -- WLS 1.0 Gap 3: ARRAY declarations
+        maps = {},        -- WLS 1.0 Gap 3: MAP declarations
         passages = {},
         start_passage = nil,
         duplicate_passages = {}  -- Track duplicate passage names
@@ -76,6 +79,9 @@ function WSParser:parse(input)
 
     -- Parse @vars block if present
     self:parse_vars_block()
+
+    -- Parse collection declarations at header level (LIST, ARRAY, MAP)
+    self:parse_collection_declarations()
 
     -- Parse passages
     while not self:is_at_end() do
@@ -266,6 +272,422 @@ function WSParser:parse_vars_block()
             self:advance()
         end
     end
+end
+
+-- Parse collection declarations at header level (LIST, ARRAY, MAP)
+-- WLS 1.0 Gap 3: Data Structures
+function WSParser:parse_collection_declarations()
+    while not self:is_at_end() do
+        self:skip_newlines()
+        if self:is_at_end() then break end
+
+        if self:check("LIST") then
+            self:parse_list_declaration()
+        elseif self:check("ARRAY") then
+            self:parse_array_declaration()
+        elseif self:check("MAP") then
+            self:parse_map_declaration()
+        elseif self:check("PASSAGE_MARKER") then
+            -- End of header, start of passages
+            break
+        else
+            -- Unknown token, stop
+            break
+        end
+    end
+end
+
+-- Parse LIST declaration: LIST name = value1, (value2), value3
+function WSParser:parse_list_declaration()
+    self:advance() -- consume LIST
+
+    -- Get list name
+    local list_name = nil
+    if self:check("TEXT") then
+        list_name = self:advance().value:match("^%s*([%a_][%w_]*)%s*$")
+    end
+
+    if not list_name then
+        self:add_error("Expected list name after LIST keyword", {
+            code = "WLS-SYN-010",
+            suggestion = "Add a list name: LIST moods = happy, sad"
+        })
+        self:skip_to_next_line()
+        return
+    end
+
+    -- Expect = sign
+    local has_equals = false
+    if self:check("TEXT") then
+        local text = self:peek().value
+        if text:match("^%s*=%s*") then
+            self:advance()
+            has_equals = true
+        end
+    end
+
+    if not has_equals then
+        self:add_error("Expected '=' after list name", {
+            code = "WLS-SYN-011",
+            suggestion = "Use: LIST " .. list_name .. " = value1, value2"
+        })
+        self:skip_to_next_line()
+        return
+    end
+
+    -- Parse list values (comma-separated, with optional parentheses for active values)
+    local values = {}
+    local active = {}
+
+    while not self:is_at_end() and not self:check("NEWLINE") do
+        local is_active = false
+
+        -- Check for opening paren (active marker)
+        if self:check("LPAREN") then
+            self:advance()
+            is_active = true
+        end
+
+        -- Get value name
+        local value_name = nil
+        if self:check("TEXT") then
+            value_name = self:advance().value:match("^%s*([%a_][%w_]*)%s*$")
+        end
+
+        if value_name then
+            table.insert(values, value_name)
+            if is_active then
+                active[value_name] = true
+            end
+        end
+
+        -- Check for closing paren
+        if is_active and self:check("RPAREN") then
+            self:advance()
+        end
+
+        -- Check for comma (more values)
+        if self:check("COMMA") then
+            self:advance()
+        elseif self:check("TEXT") then
+            -- Could be comma in text
+            local text = self:peek().value
+            if text:match("^%s*,%s*") then
+                self:advance()
+            else
+                break
+            end
+        else
+            break
+        end
+    end
+
+    -- Store list declaration
+    self.story_data.lists[list_name] = {
+        name = list_name,
+        values = values,
+        active = active,
+        type = "list"
+    }
+
+    -- Also create a variable for the list
+    self.story_data.variables[list_name] = {
+        name = list_name,
+        value = active,
+        type = "list",
+        list_values = values
+    }
+
+    self:skip_to_next_line()
+end
+
+-- Parse ARRAY declaration: ARRAY name = [value1, value2, value3]
+function WSParser:parse_array_declaration()
+    self:advance() -- consume ARRAY
+
+    -- Get array name
+    local array_name = nil
+    if self:check("TEXT") then
+        array_name = self:advance().value:match("^%s*([%a_][%w_]*)%s*$")
+    end
+
+    if not array_name then
+        self:add_error("Expected array name after ARRAY keyword", {
+            code = "WLS-SYN-012",
+            suggestion = "Add an array name: ARRAY items = [1, 2, 3]"
+        })
+        self:skip_to_next_line()
+        return
+    end
+
+    -- Expect = sign
+    local has_equals = false
+    if self:check("TEXT") then
+        local text = self:peek().value
+        if text:match("^%s*=%s*") then
+            self:advance()
+            has_equals = true
+        end
+    end
+
+    if not has_equals then
+        self:add_error("Expected '=' after array name", {
+            code = "WLS-SYN-013",
+            suggestion = "Use: ARRAY " .. array_name .. " = [value1, value2]"
+        })
+        self:skip_to_next_line()
+        return
+    end
+
+    -- Expect opening bracket [
+    if not self:check("LBRACKET") then
+        self:add_error("Expected '[' for array literal", {
+            code = "WLS-SYN-014",
+            suggestion = "Use square brackets: ARRAY " .. array_name .. " = [1, 2, 3]"
+        })
+        self:skip_to_next_line()
+        return
+    end
+    self:advance() -- consume [
+
+    -- Parse array elements
+    local elements = {}
+
+    while not self:is_at_end() and not self:check("RBRACKET") and not self:check("NEWLINE") do
+        local element = self:parse_array_element()
+        if element ~= nil then
+            table.insert(elements, element)
+        end
+
+        -- Check for comma (more elements)
+        if self:check("COMMA") then
+            self:advance()
+        elseif self:check("TEXT") then
+            local text = self:peek().value
+            if text:match("^%s*,%s*") then
+                self:advance()
+            elseif not self:check("RBRACKET") then
+                break
+            end
+        elseif not self:check("RBRACKET") then
+            break
+        end
+    end
+
+    -- Expect closing bracket ]
+    if self:check("RBRACKET") then
+        self:advance()
+    else
+        self:add_error("Expected ']' to close array literal", {
+            code = "WLS-SYN-015"
+        })
+    end
+
+    -- Store array declaration
+    self.story_data.arrays[array_name] = {
+        name = array_name,
+        elements = elements,
+        type = "array"
+    }
+
+    -- Also create a variable for the array
+    self.story_data.variables[array_name] = {
+        name = array_name,
+        value = elements,
+        type = "array"
+    }
+
+    self:skip_to_next_line()
+end
+
+-- Parse a single array element
+function WSParser:parse_array_element()
+    if self:check("NUMBER") then
+        return tonumber(self:advance().value)
+    elseif self:check("STRING") then
+        return self:advance().value
+    elseif self:check("TEXT") then
+        local text = self:advance().value:match("^%s*(.-)%s*$")
+        -- Try to parse as number or boolean
+        local num = tonumber(text)
+        if num then return num end
+        if text == "true" then return true end
+        if text == "false" then return false end
+        if text == "nil" then return nil end
+        return text
+    end
+    return nil
+end
+
+-- Parse MAP declaration: MAP name = { key: value, key2: value2 }
+function WSParser:parse_map_declaration()
+    self:advance() -- consume MAP
+
+    -- Get map name
+    local map_name = nil
+    if self:check("TEXT") then
+        map_name = self:advance().value:match("^%s*([%a_][%w_]*)%s*$")
+    end
+
+    if not map_name then
+        self:add_error("Expected map name after MAP keyword", {
+            code = "WLS-SYN-016",
+            suggestion = "Add a map name: MAP player = { name: \"Hero\" }"
+        })
+        self:skip_to_next_line()
+        return
+    end
+
+    -- Expect = sign
+    local has_equals = false
+    if self:check("TEXT") then
+        local text = self:peek().value
+        if text:match("^%s*=%s*") then
+            self:advance()
+            has_equals = true
+        end
+    end
+
+    if not has_equals then
+        self:add_error("Expected '=' after map name", {
+            code = "WLS-SYN-017",
+            suggestion = "Use: MAP " .. map_name .. " = { key: value }"
+        })
+        self:skip_to_next_line()
+        return
+    end
+
+    -- Expect opening brace {
+    if not self:check("BLOCK_START") then
+        self:add_error("Expected '{' for map literal", {
+            code = "WLS-SYN-018",
+            suggestion = "Use curly braces: MAP " .. map_name .. " = { key: value }"
+        })
+        self:skip_to_next_line()
+        return
+    end
+    self:advance() -- consume {
+
+    -- Parse map key-value pairs
+    local entries = {}
+
+    while not self:is_at_end() and not self:check("BLOCK_END") and not self:check("NEWLINE") do
+        local key, value = self:parse_map_entry()
+        if key ~= nil then
+            entries[key] = value
+        end
+
+        -- Check for comma (more entries)
+        if self:check("COMMA") then
+            self:advance()
+        elseif self:check("TEXT") then
+            local text = self:peek().value
+            if text:match("^%s*,%s*") then
+                self:advance()
+            elseif not self:check("BLOCK_END") then
+                break
+            end
+        elseif not self:check("BLOCK_END") then
+            break
+        end
+    end
+
+    -- Expect closing brace }
+    if self:check("BLOCK_END") then
+        self:advance()
+    else
+        self:add_error("Expected '}' to close map literal", {
+            code = "WLS-SYN-019"
+        })
+    end
+
+    -- Store map declaration
+    self.story_data.maps[map_name] = {
+        name = map_name,
+        entries = entries,
+        type = "map"
+    }
+
+    -- Also create a variable for the map
+    self.story_data.variables[map_name] = {
+        name = map_name,
+        value = entries,
+        type = "map"
+    }
+
+    self:skip_to_next_line()
+end
+
+-- Parse a single map key:value entry
+function WSParser:parse_map_entry()
+    local key = nil
+
+    -- Get key (identifier or string)
+    if self:check("TEXT") then
+        key = self:advance().value:match("^%s*([%a_][%w_]*)%s*$")
+    elseif self:check("STRING") then
+        key = self:advance().value
+    end
+
+    if not key then
+        return nil, nil
+    end
+
+    -- Expect colon
+    if self:check("COLON") then
+        self:advance()
+    elseif self:check("TEXT") then
+        local text = self:peek().value
+        if text:match("^%s*:%s*") then
+            self:advance()
+        else
+            return key, nil
+        end
+    else
+        return key, nil
+    end
+
+    -- Get value
+    local value = nil
+    if self:check("NUMBER") then
+        value = tonumber(self:advance().value)
+    elseif self:check("STRING") then
+        value = self:advance().value
+    elseif self:check("TEXT") then
+        local text = self:advance().value:match("^%s*(.-)%s*$")
+        local num = tonumber(text)
+        if num then
+            value = num
+        elseif text == "true" then
+            value = true
+        elseif text == "false" then
+            value = false
+        elseif text == "nil" then
+            value = nil
+        else
+            value = text
+        end
+    elseif self:check("LBRACKET") then
+        -- Nested array
+        self:advance()
+        value = {}
+        while not self:is_at_end() and not self:check("RBRACKET") do
+            local elem = self:parse_array_element()
+            if elem ~= nil then
+                table.insert(value, elem)
+            end
+            if self:check("COMMA") then
+                self:advance()
+            else
+                break
+            end
+        end
+        if self:check("RBRACKET") then
+            self:advance()
+        end
+    end
+
+    return key, value
 end
 
 -- Parse a single passage
