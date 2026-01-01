@@ -32,6 +32,11 @@ function GameState.new(deps)
         choice_history = {},
         selected_choices = {},    -- WLS 1.0: Track selected once-only choices by ID
 
+        -- WLS 1.0 Gap 3: Collection types
+        lists = {},               -- LIST declarations: { name = { values = {...}, active = {...} } }
+        arrays = {},              -- ARRAY declarations: { name = [...] }
+        maps = {},                -- MAP declarations: { name = {...} }
+
         -- Undo system
         history_stack = {},
         max_history = 10,
@@ -58,10 +63,72 @@ function GameState:initialize(story)
     self.selected_choices = {}  -- WLS 1.0: Reset selected once-only choices
     self.history_stack = {}
 
+    -- WLS 1.0 Gap 3: Reset collections
+    self.lists = {}
+    self.arrays = {}
+    self.maps = {}
+
     -- Initialize default variables from story
     if story.variables then
         for k, v in pairs(story.variables) do
             self.variables[k] = v
+        end
+    end
+
+    -- WLS 1.0 Gap 3: Initialize LIST declarations
+    if story.lists then
+        for name, list_data in pairs(story.lists) do
+            -- list_data = { values = {...}, active = {...} } or from parser
+            local values = {}
+            local active = {}
+            if list_data.values then
+                for _, v in ipairs(list_data.values) do
+                    if type(v) == "table" then
+                        -- Parser format: { value = "name", active = true/false }
+                        table.insert(values, v.value)
+                        if v.active then
+                            active[v.value] = true
+                        end
+                    else
+                        table.insert(values, v)
+                    end
+                end
+            end
+            self.lists[name] = { values = values, active = active }
+        end
+    end
+
+    -- WLS 1.0 Gap 3: Initialize ARRAY declarations
+    if story.arrays then
+        for name, array_data in pairs(story.arrays) do
+            local elements = {}
+            if array_data.elements then
+                for _, elem in ipairs(array_data.elements) do
+                    if type(elem) == "table" and elem.value ~= nil then
+                        -- Parser format: { index = n, value = expr }
+                        local idx = elem.index or (#elements + 1)
+                        elements[idx + 1] = elem.value  -- Lua 1-based, WLS 0-based
+                    else
+                        table.insert(elements, elem)
+                    end
+                end
+            end
+            self.arrays[name] = elements
+        end
+    end
+
+    -- WLS 1.0 Gap 3: Initialize MAP declarations
+    if story.maps then
+        for name, map_data in pairs(story.maps) do
+            local entries = {}
+            if map_data.entries then
+                for _, entry in ipairs(map_data.entries) do
+                    if type(entry) == "table" and entry.key then
+                        entries[entry.key] = entry.value
+                    end
+                end
+            end
+            self.maps[name] = entries
         end
     end
 end
@@ -161,6 +228,353 @@ function GameState:get_all_temp_variables()
     return self.temp_variables
 end
 
+-- ============================================================================
+-- WLS 1.0 Gap 3: LIST Operations
+-- ============================================================================
+
+--- Get a list by name
+---@param name string List name
+---@return table|nil { values = {...}, active = {...} }
+function GameState:get_list(name)
+    return self.lists[name]
+end
+
+--- Check if a list exists
+---@param name string List name
+---@return boolean
+function GameState:has_list(name)
+    return self.lists[name] ~= nil
+end
+
+--- Get the possible values in a list
+---@param name string List name
+---@return table|nil Array of value names
+function GameState:get_list_values(name)
+    local list = self.lists[name]
+    if list then
+        return list.values
+    end
+    return nil
+end
+
+--- Get the active values in a list
+---@param name string List name
+---@return table Array of active value names
+function GameState:get_list_active(name)
+    local list = self.lists[name]
+    if not list then return {} end
+    local result = {}
+    for value, is_active in pairs(list.active) do
+        if is_active then
+            table.insert(result, value)
+        end
+    end
+    return result
+end
+
+--- Check if a value is active in a list
+---@param list_name string List name
+---@param value string Value to check
+---@return boolean
+function GameState:list_contains(list_name, value)
+    local list = self.lists[list_name]
+    if not list then return false end
+    return list.active[value] == true
+end
+
+--- Add (activate) a value in a list
+---@param list_name string List name
+---@param value string Value to activate
+---@return boolean success
+function GameState:list_add(list_name, value)
+    local list = self.lists[list_name]
+    if not list then return false end
+    -- Verify value is in the list's possible values
+    local valid = false
+    for _, v in ipairs(list.values) do
+        if v == value then valid = true break end
+    end
+    if not valid then return false end
+    list.active[value] = true
+    return true
+end
+
+--- Remove (deactivate) a value from a list
+---@param list_name string List name
+---@param value string Value to deactivate
+---@return boolean success
+function GameState:list_remove(list_name, value)
+    local list = self.lists[list_name]
+    if not list then return false end
+    list.active[value] = nil
+    return true
+end
+
+--- Toggle a value in a list
+---@param list_name string List name
+---@param value string Value to toggle
+---@return boolean new_state
+function GameState:list_toggle(list_name, value)
+    local list = self.lists[list_name]
+    if not list then return false end
+    if list.active[value] then
+        list.active[value] = nil
+        return false
+    else
+        list.active[value] = true
+        return true
+    end
+end
+
+--- Set the entire list state
+---@param name string List name
+---@param active_values table Array of active value names
+function GameState:set_list_active(name, active_values)
+    local list = self.lists[name]
+    if not list then return end
+    list.active = {}
+    for _, v in ipairs(active_values) do
+        list.active[v] = true
+    end
+end
+
+--- Get count of active values in a list
+---@param name string List name
+---@return number
+function GameState:list_count(name)
+    local list = self.lists[name]
+    if not list then return 0 end
+    local count = 0
+    for _, is_active in pairs(list.active) do
+        if is_active then count = count + 1 end
+    end
+    return count
+end
+
+-- ============================================================================
+-- WLS 1.0 Gap 3: ARRAY Operations
+-- ============================================================================
+
+--- Get an array by name
+---@param name string Array name
+---@return table|nil
+function GameState:get_array(name)
+    return self.arrays[name]
+end
+
+--- Check if an array exists
+---@param name string Array name
+---@return boolean
+function GameState:has_array(name)
+    return self.arrays[name] ~= nil
+end
+
+--- Get array element by index (0-based WLS index)
+---@param name string Array name
+---@param index number 0-based index
+---@return any|nil
+function GameState:array_get(name, index)
+    local arr = self.arrays[name]
+    if not arr then return nil end
+    return arr[index + 1]  -- Convert 0-based to 1-based
+end
+
+--- Set array element by index (0-based WLS index)
+---@param name string Array name
+---@param index number 0-based index
+---@param value any Value to set
+---@return boolean success
+function GameState:array_set(name, index, value)
+    local arr = self.arrays[name]
+    if not arr then return false end
+    arr[index + 1] = value  -- Convert 0-based to 1-based
+    return true
+end
+
+--- Get array length
+---@param name string Array name
+---@return number
+function GameState:array_length(name)
+    local arr = self.arrays[name]
+    if not arr then return 0 end
+    return #arr
+end
+
+--- Append value to array
+---@param name string Array name
+---@param value any Value to append
+---@return number new_length
+function GameState:array_push(name, value)
+    local arr = self.arrays[name]
+    if not arr then return 0 end
+    table.insert(arr, value)
+    return #arr
+end
+
+--- Remove and return last element
+---@param name string Array name
+---@return any|nil
+function GameState:array_pop(name)
+    local arr = self.arrays[name]
+    if not arr or #arr == 0 then return nil end
+    return table.remove(arr)
+end
+
+--- Insert value at index (0-based)
+---@param name string Array name
+---@param index number 0-based index
+---@param value any Value to insert
+function GameState:array_insert(name, index, value)
+    local arr = self.arrays[name]
+    if not arr then return end
+    table.insert(arr, index + 1, value)
+end
+
+--- Remove value at index (0-based)
+---@param name string Array name
+---@param index number 0-based index
+---@return any|nil removed value
+function GameState:array_remove(name, index)
+    local arr = self.arrays[name]
+    if not arr then return nil end
+    return table.remove(arr, index + 1)
+end
+
+--- Check if array contains value
+---@param name string Array name
+---@param value any Value to find
+---@return boolean
+function GameState:array_contains(name, value)
+    local arr = self.arrays[name]
+    if not arr then return false end
+    for _, v in ipairs(arr) do
+        if v == value then return true end
+    end
+    return false
+end
+
+--- Find index of value in array (returns 0-based, or -1 if not found)
+---@param name string Array name
+---@param value any Value to find
+---@return number 0-based index or -1
+function GameState:array_index_of(name, value)
+    local arr = self.arrays[name]
+    if not arr then return -1 end
+    for i, v in ipairs(arr) do
+        if v == value then return i - 1 end  -- Convert to 0-based
+    end
+    return -1
+end
+
+-- ============================================================================
+-- WLS 1.0 Gap 3: MAP Operations
+-- ============================================================================
+
+--- Get a map by name
+---@param name string Map name
+---@return table|nil
+function GameState:get_map(name)
+    return self.maps[name]
+end
+
+--- Check if a map exists
+---@param name string Map name
+---@return boolean
+function GameState:has_map(name)
+    return self.maps[name] ~= nil
+end
+
+--- Get map value by key
+---@param name string Map name
+---@param key string Key
+---@return any|nil
+function GameState:map_get(name, key)
+    local map = self.maps[name]
+    if not map then return nil end
+    return map[key]
+end
+
+--- Set map value by key
+---@param name string Map name
+---@param key string Key
+---@param value any Value
+function GameState:map_set(name, key, value)
+    local map = self.maps[name]
+    if not map then return end
+    map[key] = value
+end
+
+--- Check if map has key
+---@param name string Map name
+---@param key string Key
+---@return boolean
+function GameState:map_has(name, key)
+    local map = self.maps[name]
+    if not map then return false end
+    return map[key] ~= nil
+end
+
+--- Delete key from map
+---@param name string Map name
+---@param key string Key to delete
+---@return any|nil old_value
+function GameState:map_delete(name, key)
+    local map = self.maps[name]
+    if not map then return nil end
+    local old = map[key]
+    map[key] = nil
+    return old
+end
+
+--- Get all keys in map
+---@param name string Map name
+---@return table Array of keys
+function GameState:map_keys(name)
+    local map = self.maps[name]
+    if not map then return {} end
+    local keys = {}
+    for k, _ in pairs(map) do
+        table.insert(keys, k)
+    end
+    return keys
+end
+
+--- Get all values in map
+---@param name string Map name
+---@return table Array of values
+function GameState:map_values(name)
+    local map = self.maps[name]
+    if not map then return {} end
+    local values = {}
+    for _, v in pairs(map) do
+        table.insert(values, v)
+    end
+    return values
+end
+
+--- Get count of entries in map
+---@param name string Map name
+---@return number
+function GameState:map_size(name)
+    local map = self.maps[name]
+    if not map then return 0 end
+    local count = 0
+    for _, _ in pairs(map) do
+        count = count + 1
+    end
+    return count
+end
+
+--- Get all collections (for debugging/serialization)
+---@return table { lists = {...}, arrays = {...}, maps = {...} }
+function GameState:get_all_collections()
+    return {
+        lists = self.lists,
+        arrays = self.arrays,
+        maps = self.maps
+    }
+end
+
 -- WLS 1.0: Once-only choice tracking
 
 --- Mark a choice as selected (for once-only choices)
@@ -241,6 +655,10 @@ function GameState:push_to_history()
         current_passage = self.current_passage,
         variables = self:clone_table(self.variables),
         visited_passages = self:clone_table(self.visited_passages),
+        -- WLS 1.0 Gap 3: Include collections in snapshot
+        lists = self:clone_table(self.lists),
+        arrays = self:clone_table(self.arrays),
+        maps = self:clone_table(self.maps),
         timestamp = os.time()
     }
 
@@ -267,6 +685,10 @@ function GameState:undo()
     self.current_passage = snapshot.current_passage
     self.variables = self:clone_table(snapshot.variables)
     self.visited_passages = self:clone_table(snapshot.visited_passages)
+    -- WLS 1.0 Gap 3: Restore collections from snapshot
+    self.lists = self:clone_table(snapshot.lists or {})
+    self.arrays = self:clone_table(snapshot.arrays or {})
+    self.maps = self:clone_table(snapshot.maps or {})
 
     return snapshot
 end
@@ -298,7 +720,11 @@ function GameState:serialize()
         variables = self.variables,
         visited_passages = self.visited_passages,
         choice_history = self.choice_history,
-        selected_choices = self.selected_choices  -- WLS 1.0: Persist selected once-only choices
+        selected_choices = self.selected_choices,  -- WLS 1.0: Persist selected once-only choices
+        -- WLS 1.0 Gap 3: Persist collections
+        lists = self.lists,
+        arrays = self.arrays,
+        maps = self.maps
     }
 
     return data
@@ -319,6 +745,10 @@ function GameState:deserialize(data)
     self.choice_history = data.choice_history or {}
     self.selected_choices = data.selected_choices or {}  -- WLS 1.0: Restore selected choices
     self.history_stack = {}
+    -- WLS 1.0 Gap 3: Restore collections
+    self.lists = data.lists or {}
+    self.arrays = data.arrays or {}
+    self.maps = data.maps or {}
 
     return true
 end
@@ -332,6 +762,10 @@ function GameState:reset()
     self.selected_choices = {}  -- WLS 1.0: Clear selected choices on reset
     self.history_stack = {}
     self.start_time = os.time()
+    -- WLS 1.0 Gap 3: Clear collections on reset
+    self.lists = {}
+    self.arrays = {}
+    self.maps = {}
 end
 
 return GameState
