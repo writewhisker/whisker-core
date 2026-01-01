@@ -435,13 +435,38 @@ function WSLexer:advance(count)
     end
 end
 
-function WSLexer:add_token(token_type, value)
+-- Get current source location
+function WSLexer:get_location()
+    return {
+        line = self.line,
+        column = self.column,
+        offset = self.position - 1  -- Convert to 0-based offset
+    }
+end
+
+-- Add token with source span
+function WSLexer:add_token(token_type, value, start_location)
+    -- If no explicit start provided, use current position
+    -- This works for tokens where we record start before advancing
+    local end_location = self:get_location()
+    start_location = start_location or {
+        line = self.line,
+        column = self.column - (type(value) == "string" and #value or 0),
+        offset = self.position - 1 - (type(value) == "string" and #value or 0)
+    }
+
     table.insert(self.tokens, {
         type = token_type,
         value = value,
-        line = self.line,
-        column = self.column,
-        position = self.position
+        -- Legacy fields for backward compatibility
+        line = start_location.line,
+        column = start_location.column,
+        position = start_location.offset + 1,  -- 1-based for Lua
+        -- New span location
+        location = {
+            start = start_location,
+            ["end"] = end_location
+        }
     })
 end
 
