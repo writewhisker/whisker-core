@@ -170,6 +170,45 @@ describe("WLS 1.0 .ws Format", function()
                 end
                 assert.equals(3, pipe_count)
             end)
+
+            it("should tokenize ampersand & for cycle mode", function()
+                local result = lexer:tokenize("{&| one | two | three }")
+                assert.is_true(result.success)
+                local found_ampersand = false
+                for _, token in ipairs(result.tokens) do
+                    if token.type == "AMPERSAND" then
+                        found_ampersand = true
+                        break
+                    end
+                end
+                assert.is_true(found_ampersand)
+            end)
+
+            it("should tokenize tilde ~ for shuffle mode", function()
+                local result = lexer:tokenize("{~| red | blue | green }")
+                assert.is_true(result.success)
+                local found_tilde = false
+                for _, token in ipairs(result.tokens) do
+                    if token.type == "TILDE" then
+                        found_tilde = true
+                        break
+                    end
+                end
+                assert.is_true(found_tilde)
+            end)
+
+            it("should tokenize exclamation ! for once mode", function()
+                local result = lexer:tokenize("{!| first | fallback }")
+                assert.is_true(result.success)
+                local found_exclamation = false
+                for _, token in ipairs(result.tokens) do
+                    if token.type == "EXCLAMATION" then
+                        found_exclamation = true
+                        break
+                    end
+                end
+                assert.is_true(found_exclamation)
+            end)
         end)
     end)
 
@@ -208,7 +247,7 @@ Welcome!
             it("should parse @start directive", function()
                 local result = parser:parse("@start: Intro\n:: Intro\nHello")
                 assert.is_true(result.success)
-                assert.equals("Intro", result.story.start_passage)
+                assert.equals("Intro", result.story.start_passage_name)
             end)
         end)
 
@@ -259,13 +298,13 @@ Test
             it("should parse passage name", function()
                 local result = parser:parse(":: Start\nHello world!")
                 assert.is_true(result.success)
-                assert.is_not_nil(result.story.passages["Start"])
+                assert.is_not_nil(result.story.passage_by_name["Start"])
             end)
 
             it("should parse passage content", function()
                 local result = parser:parse(":: Start\nHello world!")
                 assert.is_true(result.success)
-                assert.is_not_nil(result.story.passages["Start"].content:match("Hello world"))
+                assert.is_not_nil(result.story.passage_by_name["Start"].content:match("Hello world"))
             end)
 
             it("should parse multiple passages", function()
@@ -281,9 +320,9 @@ The third passage.
 ]]
                 local result = parser:parse(input)
                 assert.is_true(result.success)
-                assert.is_not_nil(result.story.passages["Start"])
-                assert.is_not_nil(result.story.passages["Second"])
-                assert.is_not_nil(result.story.passages["Third"])
+                assert.is_not_nil(result.story.passage_by_name["Start"])
+                assert.is_not_nil(result.story.passage_by_name["Second"])
+                assert.is_not_nil(result.story.passage_by_name["Third"])
             end)
 
             it("should parse passage tags", function()
@@ -295,7 +334,7 @@ Welcome!
 ]]
                 local result = parser:parse(input)
                 assert.is_true(result.success)
-                local tags = result.story.passages["Start"].tags
+                local tags = result.story.passage_by_name["Start"].tags
                 assert.equals(2, #tags)
                 assert.equals("beginning", tags[1])
                 assert.equals("tutorial", tags[2])
@@ -310,7 +349,7 @@ Welcome!
 ]]
                 local result = parser:parse(input)
                 assert.is_true(result.success)
-                assert.is_not_nil(result.story.passages["Start"].on_enter_script)
+                assert.is_not_nil(result.story.passage_by_name["Start"].on_enter_script)
             end)
         end)
 
@@ -323,7 +362,7 @@ Welcome!
 ]]
                 local result = parser:parse(input)
                 assert.is_true(result.success)
-                local choices = result.story.passages["Start"].choices
+                local choices = result.story.passage_by_name["Start"].choices
                 assert.equals(1, #choices)
                 assert.equals("Go north", choices[1].text)
                 assert.equals("North", choices[1].target)
@@ -338,7 +377,7 @@ Welcome!
 ]]
                 local result = parser:parse(input)
                 assert.is_true(result.success)
-                local choices = result.story.passages["Start"].choices
+                local choices = result.story.passage_by_name["Start"].choices
                 assert.equals("sticky", choices[1].choice_type)
             end)
 
@@ -352,7 +391,7 @@ Make a choice:
 ]]
                 local result = parser:parse(input)
                 assert.is_true(result.success)
-                local choices = result.story.passages["Start"].choices
+                local choices = result.story.passage_by_name["Start"].choices
                 assert.equals(3, #choices)
             end)
 
@@ -363,7 +402,7 @@ Make a choice:
 ]]
                 local result = parser:parse(input)
                 assert.is_true(result.success)
-                assert.equals("END", result.story.passages["Start"].choices[1].target)
+                assert.equals("END", result.story.passage_by_name["Start"].choices[1].target)
             end)
 
             it("should parse special target BACK", function()
@@ -373,7 +412,7 @@ Make a choice:
 ]]
                 local result = parser:parse(input)
                 assert.is_true(result.success)
-                assert.equals("BACK", result.story.passages["Start"].choices[1].target)
+                assert.equals("BACK", result.story.passage_by_name["Start"].choices[1].target)
             end)
 
             it("should parse special target RESTART", function()
@@ -383,7 +422,7 @@ Make a choice:
 ]]
                 local result = parser:parse(input)
                 assert.is_true(result.success)
-                assert.equals("RESTART", result.story.passages["Start"].choices[1].target)
+                assert.equals("RESTART", result.story.passage_by_name["Start"].choices[1].target)
             end)
         end)
 
@@ -395,7 +434,7 @@ You have $gold gold coins.
 ]]
                 local result = parser:parse(input)
                 assert.is_true(result.success)
-                assert.is_not_nil(result.story.passages["Start"].content:match("%$gold"))
+                assert.is_not_nil(result.story.passage_by_name["Start"].content:match("%$gold"))
             end)
 
             it("should preserve ${expr} in content", function()
@@ -405,7 +444,7 @@ Double gold: ${gold * 2}
 ]]
                 local result = parser:parse(input)
                 assert.is_true(result.success)
-                assert.is_not_nil(result.story.passages["Start"].content:match("%${gold %* 2}"))
+                assert.is_not_nil(result.story.passage_by_name["Start"].content:match("%${gold %* 2}"))
             end)
         end)
 
@@ -421,7 +460,7 @@ Double gold: ${gold * 2}
 ]]
                 local result = parser:parse(input)
                 assert.is_true(result.success)
-                local content = result.story.passages["Start"].content
+                local content = result.story.passage_by_name["Start"].content
                 assert.is_not_nil(content:match("{"))
                 assert.is_not_nil(content:match("{else}"))
                 assert.is_not_nil(content:match("{/}"))
@@ -472,8 +511,8 @@ Goodbye!
                 local story = parser:build_story()
                 assert.is_not_nil(story)
                 assert.equals("Test Story", story.metadata.title)
-                assert.is_not_nil(story:get_passage("Start"))
-                assert.is_not_nil(story:get_passage("End"))
+                assert.is_not_nil(story:get_passage_by_name("Start"))
+                assert.is_not_nil(story:get_passage_by_name("End"))
             end)
         end)
     end)
@@ -544,17 +583,17 @@ The dungeon entrance looms before you.
             assert.equals("Traveler", result.story.variables.playerName.value)
 
             -- Check passages
-            assert.is_not_nil(result.story.passages["Start"])
-            assert.is_not_nil(result.story.passages["SearchArea"])
-            assert.is_not_nil(result.story.passages["DungeonEntrance"])
+            assert.is_not_nil(result.story.passage_by_name["Start"])
+            assert.is_not_nil(result.story.passage_by_name["SearchArea"])
+            assert.is_not_nil(result.story.passage_by_name["DungeonEntrance"])
 
             -- Check Start passage
-            local start = result.story.passages["Start"]
+            local start = result.story.passage_by_name["Start"]
             assert.equals(2, #start.choices)
             assert.equals("beginning", start.tags[1])
 
             -- Check SearchArea passage has sticky choice
-            local search = result.story.passages["SearchArea"]
+            local search = result.story.passage_by_name["SearchArea"]
             local has_sticky = false
             for _, choice in ipairs(search.choices) do
                 if choice.choice_type == "sticky" then
@@ -565,7 +604,7 @@ The dungeon entrance looms before you.
             assert.is_true(has_sticky)
 
             -- Check DungeonEntrance tags
-            local dungeon = result.story.passages["DungeonEntrance"]
+            local dungeon = result.story.passage_by_name["DungeonEntrance"]
             assert.equals(2, #dungeon.tags)
         end)
     end)

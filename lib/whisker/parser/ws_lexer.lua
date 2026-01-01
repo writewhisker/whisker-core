@@ -25,6 +25,11 @@ WSLexer.TOKEN = {
     ELIF = "ELIF",                       -- {elif ...}
     PIPE = "PIPE",                       -- |
 
+    -- Alternative mode markers
+    AMPERSAND = "AMPERSAND",             -- & (cycle marker)
+    TILDE = "TILDE",                     -- ~ (shuffle marker)
+    EXCLAMATION = "EXCLAMATION",         -- ! (once-only marker)
+
     -- Interpolation
     VAR_INTERP = "VAR_INTERP",           -- $varName
     EXPR_INTERP = "EXPR_INTERP",         -- ${expr}
@@ -230,6 +235,25 @@ function WSLexer:scan_token()
         return
     end
 
+    -- Alternative mode markers (inside blocks)
+    if char == "&" then
+        self:advance(1)
+        self:add_token(WSLexer.TOKEN.AMPERSAND, "&")
+        return
+    end
+
+    if char == "~" then
+        self:advance(1)
+        self:add_token(WSLexer.TOKEN.TILDE, "~")
+        return
+    end
+
+    if char == "!" then
+        self:advance(1)
+        self:add_token(WSLexer.TOKEN.EXCLAMATION, "!")
+        return
+    end
+
     -- Newline
     if char == "\n" then
         self:advance(1)
@@ -341,7 +365,7 @@ end
 
 function WSLexer:scan_text()
     local text = ""
-    local stop_chars = "{}|$@\r\n\""
+    local stop_chars = "{}|$@\r\n\"&~!"
 
     while self.position <= #self.input do
         local char = self:peek()
