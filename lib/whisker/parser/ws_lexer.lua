@@ -17,6 +17,10 @@ WSLexer.TOKEN = {
     CHOICE_STICKY = "CHOICE_STICKY",     -- *
     ARROW = "ARROW",                     -- ->
 
+    -- Advanced flow control (WLS 1.0)
+    GATHER = "GATHER",                   -- - (at line start, gather point)
+    TUNNEL_RETURN = "TUNNEL_RETURN",     -- <-
+
     -- Control flow
     BLOCK_START = "BLOCK_START",         -- {
     BLOCK_END = "BLOCK_END",             -- }
@@ -134,6 +138,13 @@ function WSLexer:scan_token()
         end
     end
 
+    -- Tunnel return <-
+    if remaining:match("^<%-") then
+        self:advance(2)
+        self:add_token(WSLexer.TOKEN.TUNNEL_RETURN, "<-")
+        return
+    end
+
     -- Arrow ->
     if remaining:match("^%->") then
         self:advance(2)
@@ -214,6 +225,17 @@ function WSLexer:scan_token()
         self:advance(1)
         self:add_token(WSLexer.TOKEN.CHOICE_STICKY, "*")
         return
+    end
+
+    -- Gather point at start of line (after optional whitespace)
+    -- Note: Must check after arrow -> to avoid matching - in ->
+    if char == "-" and self:is_choice_context() then
+        -- Check it's not part of -> (already handled above)
+        if self:peek(1) ~= ">" then
+            self:advance(1)
+            self:add_token(WSLexer.TOKEN.GATHER, "-")
+            return
+        end
     end
 
     -- Block delimiters
@@ -374,6 +396,7 @@ function WSLexer:scan_text()
         -- Stop at special sequences
         if remaining:match("^::") or
            remaining:match("^%->") or
+           remaining:match("^<%-") or
            remaining:match("^//") or
            remaining:match("^/%*") then
             break
@@ -384,8 +407,8 @@ function WSLexer:scan_text()
             break
         end
 
-        -- Stop at choice markers if at line start context
-        if (char == "+" or char == "*") and self:is_choice_context() then
+        -- Stop at choice/gather markers if at line start context
+        if (char == "+" or char == "*" or char == "-") and self:is_choice_context() then
             break
         end
 
@@ -413,7 +436,11 @@ function WSLexer:is_choice_context()
            prev.type == WSLexer.TOKEN.INDENT or
            prev.type == WSLexer.TOKEN.BLOCK_END or
            prev.type == WSLexer.TOKEN.BLOCK_CLOSE or
-           prev.type == WSLexer.TOKEN.ELSE
+           prev.type == WSLexer.TOKEN.ELSE or
+           -- Allow nested choices and gathers (e.g., + + or - -)
+           prev.type == WSLexer.TOKEN.CHOICE_ONCE or
+           prev.type == WSLexer.TOKEN.CHOICE_STICKY or
+           prev.type == WSLexer.TOKEN.GATHER
 end
 
 function WSLexer:peek(offset)
