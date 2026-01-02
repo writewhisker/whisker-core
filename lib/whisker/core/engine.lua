@@ -95,6 +95,8 @@ function Engine.new(story, game_state, config, deps)
             passages_visited = 0,
             choices_made = 0
         },
+        -- WLS 1.0: Tunnel call stack for -> Target -> syntax
+        tunnel_stack = {},
         -- Store factories for DI
         _story_factory = deps.story_factory,
         _game_state_factory = deps.game_state_factory,
@@ -304,6 +306,86 @@ function Engine:make_choice(choice_index)
         -- Normal navigation
         return self:navigate_to_passage(target)
     end
+end
+
+-- ============================================================================
+-- WLS 1.0: Tunnel Support
+-- ============================================================================
+
+--- Call a tunnel (push return location and navigate to target)
+--- @param target_passage_id string The tunnel target passage
+--- @param return_position number Position in content to resume from (optional)
+--- @return table The rendered content from the tunnel passage
+function Engine:call_tunnel(target_passage_id, return_position)
+    if not self.is_running then
+        error("Story is not running")
+    end
+
+    -- Save current passage and local variables
+    local current_passage_id = self.game_state:get_current_passage()
+
+    -- Collect local/temporary variables (those starting with _)
+    local local_vars = {}
+    local all_vars = self.game_state:get_all_variables()
+    for name, value in pairs(all_vars) do
+        if name:sub(1, 1) == "_" then
+            local_vars[name] = value
+        end
+    end
+
+    -- Push return frame to stack
+    table.insert(self.tunnel_stack, {
+        return_passage_id = current_passage_id,
+        return_position = return_position or 0,
+        local_variables = local_vars
+    })
+
+    -- Navigate to tunnel target
+    return self:navigate_to_passage(target_passage_id)
+end
+
+--- Return from a tunnel (pop stack and navigate back)
+--- @return table|nil The rendered content from the return passage, or nil if not in tunnel
+function Engine:return_from_tunnel()
+    if #self.tunnel_stack == 0 then
+        -- Not in a tunnel - this is an error (WLS-FLW-011: orphan_tunnel_return)
+        return nil
+    end
+
+    -- Pop the return frame
+    local frame = table.remove(self.tunnel_stack)
+
+    -- Restore local variables
+    for name, value in pairs(frame.local_variables) do
+        self.game_state:set(name, value)
+    end
+
+    -- Navigate back to the return passage
+    return self:navigate_to_passage(frame.return_passage_id)
+end
+
+--- Check if currently in a tunnel
+--- @return boolean True if in a tunnel
+function Engine:is_in_tunnel()
+    return #self.tunnel_stack > 0
+end
+
+--- Get current tunnel depth
+--- @return number The depth of nested tunnel calls
+function Engine:get_tunnel_depth()
+    return #self.tunnel_stack
+end
+
+--- Get the tunnel stack (for save/restore)
+--- @return table The tunnel stack
+function Engine:get_tunnel_stack()
+    return self.tunnel_stack
+end
+
+--- Restore tunnel stack (for save/restore)
+--- @param stack table The tunnel stack to restore
+function Engine:set_tunnel_stack(stack)
+    self.tunnel_stack = stack or {}
 end
 
 function Engine:render_passage_content(passage)
