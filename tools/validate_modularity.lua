@@ -52,6 +52,7 @@ local RULES = {
       "core%.lua_interpreter", -- Core types needed by factories
       "core%.control_flow",   -- Control flow needed by factories
       "core%.engine",         -- Engine is core infrastructure
+      "core%.modules_runtime", -- Modules runtime is core infrastructure
       "core%.factories%..*",  -- Factories can be required
       -- Intra-module requires are allowed (same module can require its own files)
       "security%..*",         -- Security module intra-module
@@ -71,6 +72,13 @@ local RULES = {
       "tools%..*",            -- Tools module intra-module
       "format%..*",           -- Format module intra-module
       "utils%..*",            -- Utils module intra-module (shared utilities)
+      "import%..*",           -- Import module intra-module
+      "parser%..*",           -- Parser module intra-module
+      "validators%..*",       -- Validators module intra-module
+      "migration%..*",        -- Migration module intra-module
+      "vcs%..*",              -- VCS module intra-module
+      "wls2%..*",             -- WLS2 module intra-module
+      "api%..*",              -- API module intra-module
     },
     -- Files where direct requires are allowed
     allowed_files = {
@@ -99,6 +107,9 @@ local RULES = {
     allowed_files = {
       "init%.lua$",
       "interfaces/.*%.lua$",
+      "import/.*%.lua$",        -- Import modules are converters/parsers
+      "script/macros/.*%.lua$", -- Macros are simple utilities
+      "core/async_event%.lua$", -- Async event is a utility
     },
   },
 
@@ -111,6 +122,8 @@ local RULES = {
     pattern = "function%s+[%w_]+%.new%s*%(%s*%)%s*$",
     allowed_files = {
       "interfaces/.*%.lua$",
+      "import/.*%.lua$",        -- Import modules are converters/parsers
+      "script/macros/.*%.lua$", -- Macros are simple utilities
     },
   },
 

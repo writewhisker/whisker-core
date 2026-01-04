@@ -326,6 +326,14 @@ M.WLS_ERROR_CODES = {
     message = 'Story has many variables ({count})',
     description = 'Story has more variables than threshold.',
   },
+  ['WLS-QUA-006'] = {
+    code = 'WLS-QUA-006',
+    name = 'too_many_choices',
+    category = 'quality',
+    severity = 'info',
+    message = 'Passage "{passageName}" has too many choices ({count})',
+    description = 'Passage has more choices than recommended threshold.',
+  },
 
   -- ============================================================================
   -- Syntax (SYN) - 3 codes

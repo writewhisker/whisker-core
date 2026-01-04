@@ -101,6 +101,10 @@ function Story.new(options, passage_factory, event_bus)
         assets = options.assets or {},
         tags = options.tags or {},  -- Story-level tags
         settings = options.settings or {},  -- Story-level settings
+        -- WLS 1.0 Modules support
+        functions = options.functions or {},  -- Named function definitions
+        namespaces = options.namespaces or {},  -- Namespace declarations
+        includes = options.includes or {},  -- Included file references
         -- Store factories for DI (optional)
         _passage_factory = passage_factory,
         _event_bus = event_bus

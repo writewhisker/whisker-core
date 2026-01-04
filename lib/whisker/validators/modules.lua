@@ -141,17 +141,19 @@ function M.validate_namespace_conflicts(story)
   local seen_names = {}
 
   for passage_id, passage in pairs(story.passages) do
-    local qualified_name = passage.name
+    local qualified_name = passage.name or passage.title or passage_id
 
-    if seen_names[qualified_name] then
-      table.insert(issues, create_issue('WLS-MOD-004', {
-        passageName = qualified_name,
-      }, {
-        id = 'ns_conflict_' .. qualified_name:gsub('[^%w]', '_'),
-        passageId = passage_id,
-      }))
-    else
-      seen_names[qualified_name] = true
+    if qualified_name then
+      if seen_names[qualified_name] then
+        table.insert(issues, create_issue('WLS-MOD-004', {
+          passageName = qualified_name,
+        }, {
+          id = 'ns_conflict_' .. qualified_name:gsub('[^%w]', '_'),
+          passageId = passage_id,
+        }))
+      else
+        seen_names[qualified_name] = true
+      end
     end
   end
 
