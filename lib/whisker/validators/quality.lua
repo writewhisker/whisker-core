@@ -13,6 +13,7 @@ M.THRESHOLDS = {
   max_passage_words = 1000,          -- Maximum words per passage
   max_nesting_depth = 5,             -- Maximum conditional nesting depth
   max_variable_count = 50,           -- Maximum variables in story
+  max_choices_per_passage = 10,      -- Maximum choices per passage
 }
 
 --- Create a validation issue
@@ -271,6 +272,39 @@ function M.validate_variable_count(story, threshold)
   return issues
 end
 
+--- Validate choices per passage
+-- @param story table The story to validate
+-- @param threshold number Maximum choices per passage
+-- @return table Array of validation issues
+function M.validate_choices_per_passage(story, threshold)
+  local issues = {}
+  threshold = threshold or M.THRESHOLDS.max_choices_per_passage
+
+  if not story.passages then
+    return issues
+  end
+
+  for passage_id, passage in pairs(story.passages) do
+    if passage.choices then
+      local choice_count = #passage.choices
+      if choice_count > threshold then
+        table.insert(issues, create_issue('WLS-QUA-006', {
+          passageName = passage.title or passage_id,
+          count = choice_count,
+        }, {
+          id = 'too_many_choices_' .. passage_id,
+          passageId = passage_id,
+          passageTitle = passage.title,
+          count = choice_count,
+          threshold = threshold,
+        }))
+      end
+    end
+  end
+
+  return issues
+end
+
 --- Run all quality validators
 -- @param story table The story to validate
 -- @param options table Optional thresholds
@@ -288,6 +322,7 @@ function M.validate(story, options)
     { func = M.validate_passage_length, threshold = options.max_passage_words },
     { func = M.validate_nesting, threshold = options.max_nesting_depth },
     { func = M.validate_variable_count, threshold = options.max_variable_count },
+    { func = M.validate_choices_per_passage, threshold = options.max_choices_per_passage },
   }
 
   for _, validator in ipairs(validators) do

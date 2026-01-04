@@ -1,12 +1,19 @@
 -- LDoc Configuration for whisker-core
 -- Run: ldoc .
+-- WLS 1.0 Documentation
 
 project = 'whisker-core'
-title = 'Whisker-Core API Reference'
-description = 'Lua-based interactive fiction framework'
+title = 'Whisker Core API Reference'
+description = 'Lua implementation of the Whisker Language Specification (WLS)'
 
+-- Include all main library directories
 file = {
-  'lib/whisker',
+  'lib/whisker/parser',
+  'lib/whisker/runtime',
+  'lib/whisker/validators',
+  'lib/whisker/core',
+  'lib/whisker/format',
+  'lib/whisker/export',
   exclude = {
     'lib/whisker/vendor',
     'lib/whisker/test',
