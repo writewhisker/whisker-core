@@ -79,6 +79,9 @@ function ExportUtils.get_extension(format)
     ink = ".json",
     text = ".txt",
     json = ".json",
+    pdf = ".pdf",
+    pwa = ".zip",
+    static = ".zip",
   }
   return extensions[format] or ".export"
 end
@@ -172,6 +175,8 @@ function ExportUtils.get_mime_type(type_or_ext)
     html = "text/html",
     json = "application/json",
     txt = "text/plain",
+    pdf = "application/pdf",
+    zip = "application/zip",
   }
   -- Remove leading dot if present
   local clean = type_or_ext:gsub("^%.", "")
