@@ -11,6 +11,8 @@ M._dependencies = {}
 M.TestRunner = require("whisker.testing.test_runner")
 M.TestScenario = require("whisker.testing.test_scenario")
 M.TestReporter = require("whisker.testing.test_reporter")
+M.ParityRunner = require("whisker.testing.parity_runner")
+M.ParityReporter = require("whisker.testing.parity_reporter")
 
 -- Step types
 M.STEP_TYPES = {
