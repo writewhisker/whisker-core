@@ -466,4 +466,417 @@ describe("Static Site Exporter", function()
       assert.is_true(result.content:match("effects") ~= nil)
     end)
   end)
+
+  describe("multi-page site generation", function()
+    it("should generate multi-page site", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true })
+
+      assert.is_not_nil(result.files)
+      assert.is_not_nil(result.files["index.html"])
+      assert.is_not_nil(result.files["passages/start.html"])
+      assert.is_not_nil(result.files["passages/next.html"])
+      assert.is_not_nil(result.files["passages/end.html"])
+    end)
+
+    it("should generate CSS and JS files for multi-page site", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true })
+
+      assert.is_not_nil(result.files["css/styles.css"])
+      assert.is_not_nil(result.files["js/player.js"])
+    end)
+
+    it("should generate sitemap for multi-page site", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true })
+
+      assert.is_not_nil(result.files["sitemap.xml"])
+      assert.is_true(result.files["sitemap.xml"]:match("<urlset") ~= nil)
+    end)
+
+    it("should generate robots.txt for multi-page site", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true })
+
+      assert.is_not_nil(result.files["robots.txt"])
+      assert.is_true(result.files["robots.txt"]:match("User%-agent") ~= nil)
+    end)
+
+    it("should generate 404.html for multi-page site", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true })
+
+      assert.is_not_nil(result.files["404.html"])
+      assert.is_true(result.files["404.html"]:match("Page Not Found") ~= nil)
+    end)
+  end)
+
+  describe("breadcrumb navigation", function()
+    it("should include breadcrumbs in multi-page site by default", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true })
+
+      local passage_html = result.files["passages/next.html"]
+      assert.is_not_nil(passage_html)
+      assert.is_true(passage_html:match('class="breadcrumbs"') ~= nil)
+    end)
+
+    it("should include breadcrumb link to home", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true })
+
+      local passage_html = result.files["passages/next.html"]
+      assert.is_true(passage_html:match('%.%.%/index%.html') ~= nil)
+    end)
+
+    it("should not include breadcrumbs on index page", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true })
+
+      local index_html = result.files["index.html"]
+      assert.is_nil(index_html:match('class="breadcrumbs"'))
+    end)
+
+    it("should disable breadcrumbs when option is false", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true, include_breadcrumbs = false })
+
+      local passage_html = result.files["passages/next.html"]
+      assert.is_nil(passage_html:match('class="breadcrumbs"'))
+    end)
+  end)
+
+  describe("previous/next navigation", function()
+    it("should include prev/next links by default in multi-page site", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true })
+
+      local passage_html = result.files["passages/next.html"]
+      assert.is_true(passage_html:match('class="prev%-next%-nav"') ~= nil)
+    end)
+
+    it("should include previous link with correct passage", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true })
+
+      local passage_html = result.files["passages/next.html"]
+      assert.is_true(passage_html:match('class="prev%-link"') ~= nil)
+    end)
+
+    it("should include next link with correct passage", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true })
+
+      local passage_html = result.files["passages/next.html"]
+      assert.is_true(passage_html:match('class="next%-link"') ~= nil)
+    end)
+
+    it("should hide prev link on first passage", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true })
+
+      local start_html = result.files["passages/start.html"]
+      assert.is_true(start_html:match('prev%-link disabled') ~= nil)
+    end)
+
+    it("should hide next link on last passage", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true })
+
+      local end_html = result.files["passages/end.html"]
+      assert.is_true(end_html:match('next%-link disabled') ~= nil)
+    end)
+
+    it("should disable prev/next when option is false", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true, include_prev_next = false })
+
+      local passage_html = result.files["passages/next.html"]
+      assert.is_nil(passage_html:match('class="prev%-next%-nav"'))
+    end)
+  end)
+
+  describe("table of contents sidebar", function()
+    it("should not include TOC sidebar by default", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true })
+
+      local passage_html = result.files["passages/next.html"]
+      assert.is_nil(passage_html:match('class="toc%-sidebar"'))
+    end)
+
+    it("should include TOC sidebar when enabled", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true, include_toc_sidebar = true })
+
+      local passage_html = result.files["passages/next.html"]
+      assert.is_true(passage_html:match('class="toc%-sidebar"') ~= nil)
+    end)
+
+    it("should include all passages in TOC", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true, include_toc_sidebar = true })
+
+      local passage_html = result.files["passages/next.html"]
+      assert.is_true(passage_html:match("start%.html") ~= nil)
+      assert.is_true(passage_html:match("next%.html") ~= nil)
+      assert.is_true(passage_html:match("end%.html") ~= nil)
+    end)
+
+    it("should highlight current passage in TOC", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true, include_toc_sidebar = true })
+
+      local passage_html = result.files["passages/next.html"]
+      assert.is_true(passage_html:match('class="current"') ~= nil)
+    end)
+
+    it("should include TOC toggle button", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true, include_toc_sidebar = true })
+
+      local passage_html = result.files["passages/next.html"]
+      assert.is_true(passage_html:match('id="toc%-toggle"') ~= nil)
+    end)
+
+    it("should add has-toc-sidebar class to body", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true, include_toc_sidebar = true })
+
+      local passage_html = result.files["passages/next.html"]
+      assert.is_true(passage_html:match('has%-toc%-sidebar') ~= nil)
+    end)
+  end)
+
+  describe("alternate theme option", function()
+    it("should include sepia theme CSS when alt_theme is sepia", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true, alt_theme = "sepia" })
+
+      local css = result.files["css/styles.css"]
+      assert.is_true(css:match('%[data%-alt%-theme="sepia"%]') ~= nil)
+    end)
+
+    it("should include high-contrast theme CSS when alt_theme is high-contrast", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true, alt_theme = "high-contrast" })
+
+      local css = result.files["css/styles.css"]
+      assert.is_true(css:match('%[data%-alt%-theme="high%-contrast"%]') ~= nil)
+    end)
+
+    it("should set data-alt-theme attribute on html element", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true, alt_theme = "sepia" })
+
+      local passage_html = result.files["passages/next.html"]
+      assert.is_true(passage_html:match('data%-alt%-theme="sepia"') ~= nil)
+    end)
+
+    it("should include alt theme in theme cycle JavaScript", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true, alt_theme = "sepia" })
+
+      local js = result.files["js/player.js"]
+      assert.is_true(js:match('"sepia"') ~= nil)
+    end)
+  end)
+
+  describe("template customization", function()
+    it("should include custom header template", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, {
+        multi_page = true,
+        header_template = '<h1>My Custom Header</h1>',
+      })
+
+      local passage_html = result.files["passages/next.html"]
+      assert.is_true(passage_html:match('class="site%-header"') ~= nil)
+      assert.is_true(passage_html:match("My Custom Header") ~= nil)
+    end)
+
+    it("should include custom footer template", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, {
+        multi_page = true,
+        footer_template = '<p>Copyright 2024</p>',
+      })
+
+      local passage_html = result.files["passages/next.html"]
+      assert.is_true(passage_html:match('class="site%-footer"') ~= nil)
+      assert.is_true(passage_html:match("Copyright 2024") ~= nil)
+    end)
+
+    it("should not include header when template is empty", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true })
+
+      local passage_html = result.files["passages/next.html"]
+      assert.is_nil(passage_html:match('class="site%-header"'))
+    end)
+
+    it("should not include footer when template is empty", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true })
+
+      local passage_html = result.files["passages/next.html"]
+      assert.is_nil(passage_html:match('class="site%-footer"'))
+    end)
+  end)
+
+  describe("layout options", function()
+    it("should apply default layout class", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true })
+
+      local passage_html = result.files["passages/next.html"]
+      assert.is_true(passage_html:match('layout%-default') ~= nil)
+    end)
+
+    it("should apply minimal layout class", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true, layout = "minimal" })
+
+      local passage_html = result.files["passages/next.html"]
+      assert.is_true(passage_html:match('layout%-minimal') ~= nil)
+    end)
+
+    it("should apply full layout class", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true, layout = "full" })
+
+      local passage_html = result.files["passages/next.html"]
+      assert.is_true(passage_html:match('layout%-full') ~= nil)
+    end)
+
+    it("should include layout CSS for minimal", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true, layout = "minimal" })
+
+      local css = result.files["css/styles.css"]
+      assert.is_true(css:match("%.layout%-minimal") ~= nil)
+    end)
+
+    it("should include layout CSS for full", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true, layout = "full" })
+
+      local css = result.files["css/styles.css"]
+      assert.is_true(css:match("%.layout%-full") ~= nil)
+    end)
+  end)
+
+  describe("multi-page styles", function()
+    it("should include breadcrumb styles", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true })
+
+      local css = result.files["css/styles.css"]
+      assert.is_true(css:match("%.breadcrumbs") ~= nil)
+    end)
+
+    it("should include prev/next styles", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true })
+
+      local css = result.files["css/styles.css"]
+      assert.is_true(css:match("%.prev%-next%-nav") ~= nil)
+    end)
+
+    it("should include TOC sidebar styles", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true })
+
+      local css = result.files["css/styles.css"]
+      assert.is_true(css:match("%.toc%-sidebar") ~= nil)
+    end)
+
+    it("should include header/footer styles", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true })
+
+      local css = result.files["css/styles.css"]
+      assert.is_true(css:match("%.site%-header") ~= nil)
+      assert.is_true(css:match("%.site%-footer") ~= nil)
+    end)
+  end)
+
+  describe("multi-page JavaScript", function()
+    it("should include theme cycling logic", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true })
+
+      local js = result.files["js/player.js"]
+      assert.is_true(js:match("cycleTheme") ~= nil)
+    end)
+
+    it("should include available themes array", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true })
+
+      local js = result.files["js/player.js"]
+      assert.is_true(js:match("availableThemes") ~= nil)
+    end)
+
+    it("should include TOC sidebar JavaScript when enabled", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true, include_toc_sidebar = true })
+
+      local js = result.files["js/player.js"]
+      assert.is_true(js:match("initTocSidebar") ~= nil)
+    end)
+
+    it("should not call initTocSidebar when disabled", function()
+      local exporter = StaticExporter.new()
+      local story = create_basic_story()
+      local result = exporter:export(story, { multi_page = true, include_toc_sidebar = false })
+
+      local js = result.files["js/player.js"]
+      -- The function exists but the call (with semicolon) isn't in the initialization
+      -- When disabled, the call "initTocSidebar();" should not appear after "loadTheme();"
+      assert.is_nil(js:match("loadTheme%(%);%s+initTocSidebar%(%)"))
+    end)
+  end)
 end)

@@ -59,9 +59,12 @@ end
 --   - orientation: string ("portrait", "landscape") default "portrait"
 --   - include_toc: boolean (include table of contents) default true
 --   - include_graph: boolean (include graph visualization) default false
+--   - include_variables: boolean (include variable state display) default false
 --   - font_size: number (font size in points) default 11
 --   - line_height: number (line height multiplier) default 1.5
 --   - margin: number (margin in points) default 56 (~20mm)
+--   - header: table (header options: text, show_title, show_page_number)
+--   - footer: table (footer options: text, show_title, show_page_number)
 -- @return table Export bundle with content, assets, manifest
 function PDFExporter:export(story, options)
   options = options or {}
@@ -69,9 +72,12 @@ function PDFExporter:export(story, options)
   local format = options.format or "a4"
   local orientation = options.orientation or "portrait"
   local include_toc = options.include_toc ~= false
+  local include_variables = options.include_variables == true
   local font_size = options.font_size or 11
   local line_height = options.line_height or 1.5
   local margin = options.margin or 56 -- ~20mm in points
+  local header_opts = options.header or {}
+  local footer_opts = options.footer or {}
 
   local warnings = {}
 
@@ -83,6 +89,30 @@ function PDFExporter:export(story, options)
 
   pdf:set_font_size(font_size)
   pdf:set_line_height(line_height)
+
+  -- Set document title for headers/footers
+  local title = story.name or story.title or "Untitled"
+  pdf:set_title(title)
+
+  -- Configure header if provided
+  if header_opts.text or header_opts.show_title or header_opts.show_page_number then
+    pdf:set_header({
+      text = header_opts.text,
+      show_title = header_opts.show_title,
+      show_page_number = header_opts.show_page_number,
+      margin = header_opts.margin or margin,
+    })
+  end
+
+  -- Configure footer if provided
+  if footer_opts.text or footer_opts.show_title or footer_opts.show_page_number then
+    pdf:set_footer({
+      text = footer_opts.text,
+      show_title = footer_opts.show_title,
+      show_page_number = footer_opts.show_page_number,
+      margin = footer_opts.margin or margin,
+    })
+  end
 
   -- Enable page numbering (start after cover and TOC)
   local start_page = include_toc and 3 or 2
@@ -102,6 +132,12 @@ function PDFExporter:export(story, options)
   if include_toc and mode ~= "outline" then
     pdf:add_page()
     self:_add_table_of_contents(pdf, story, margin, font_size)
+  end
+
+  -- Add variable state section if requested
+  if include_variables and story.variables then
+    pdf:add_page()
+    self:_add_variable_state(pdf, story, margin, font_size)
   end
 
   -- Add content based on mode
@@ -241,6 +277,74 @@ function PDFExporter:_add_table_of_contents(pdf, story, margin, font_size)
     local dest_name = "passage_" .. (name:gsub("[^%w]", "_"))
     pdf:text_link(display_name, margin, y_pos, dest_name)
     y_pos = y_pos - (font_size * 1.5)
+  end
+end
+
+--- Add variable state display
+-- @param pdf PDFGenerator PDF document
+-- @param story table Story data
+-- @param margin number Page margin
+-- @param font_size number Base font size
+function PDFExporter:_add_variable_state(pdf, story, margin, font_size)
+  local page_width, page_height = pdf:get_page_size()
+  local y_pos = page_height - margin
+
+  -- Title
+  pdf:set_font("helvetica-bold", font_size + 4)
+  pdf:text("Story Variables", margin, y_pos)
+  y_pos = y_pos - 25
+
+  -- Reset font
+  pdf:set_font("helvetica", font_size)
+
+  -- List variables
+  local variables = story.variables or {}
+  if type(variables) == "table" then
+    for name, var in pairs(variables) do
+      -- Check if we need a new page
+      if y_pos < margin + 20 then
+        pdf:add_page()
+        y_pos = page_height - margin
+      end
+
+      local var_type = "unknown"
+      local var_value = ""
+      local var_desc = ""
+
+      if type(var) == "table" then
+        var_type = var.type or type(var.initial or var.default or var.value)
+        var_value = tostring(var.initial or var.default or var.value or "")
+        var_desc = var.description or ""
+      else
+        var_type = type(var)
+        var_value = tostring(var)
+      end
+
+      -- Variable name (bold)
+      pdf:set_font("helvetica-bold", font_size)
+      pdf:text(name, margin, y_pos)
+
+      -- Type and value
+      pdf:set_font("helvetica", font_size)
+      local info = string.format("  (%s) = %s", var_type, var_value)
+      pdf:text(info, margin + 100, y_pos)
+      y_pos = y_pos - (font_size * 1.3)
+
+      -- Description if present
+      if var_desc and var_desc ~= "" then
+        pdf:set_font("helvetica-italic", font_size - 1)
+        pdf:text("  " .. var_desc, margin, y_pos)
+        y_pos = y_pos - (font_size * 1.3)
+      end
+
+      y_pos = y_pos - (font_size * 0.5)
+    end
+  end
+
+  -- If no variables
+  if not next(variables) then
+    pdf:set_font("helvetica-italic", font_size)
+    pdf:text("No variables defined", margin, y_pos)
   end
 end
 
