@@ -597,4 +597,57 @@ Helper content.
       assert.is_true(has_gosub_warning)
     end)
   end)
+
+  describe("multireplace", function()
+    it("should convert basic multireplace", function()
+      local cs = [[
+*label start
+You are @{gender a man|a woman}.
+]]
+      local story = importer:import(cs)
+
+      local passage = story:get_passage("start")
+      assert.is_true(passage.content:find("switch") ~= nil)
+    end)
+
+    it("should convert multireplace with multiple options", function()
+      local cs = [[
+*label start
+The color is @{color_idx red|green|blue|yellow}.
+]]
+      local story = importer:import(cs)
+
+      local passage = story:get_passage("start")
+      -- Should contain switch with all options
+      assert.is_true(passage.content:find("switch") ~= nil)
+      assert.is_true(passage.content:find("color_idx") ~= nil)
+    end)
+
+    it("should convert multiple multireplaces in same line", function()
+      local cs = [[
+*label start
+@{pronoun He|She} @{verb is|are} ready.
+]]
+      local story = importer:import(cs)
+
+      local passage = story:get_passage("start")
+      -- Both should be converted
+      assert.is_true(passage.content:find("pronoun") ~= nil)
+      assert.is_true(passage.content:find("verb") ~= nil)
+    end)
+
+    it("should preserve regular variable interpolation with multireplace", function()
+      local cs = [[
+*label start
+Hello ${name}, you are @{status healthy|sick}.
+]]
+      local story = importer:import(cs)
+
+      local passage = story:get_passage("start")
+      -- Regular interpolation preserved
+      assert.is_true(passage.content:find("%${name}") ~= nil)
+      -- Multireplace converted
+      assert.is_true(passage.content:find("switch") ~= nil or passage.content:find("status") ~= nil)
+    end)
+  end)
 end)

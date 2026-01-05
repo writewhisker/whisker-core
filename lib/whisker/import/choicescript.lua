@@ -599,9 +599,30 @@ end
 -- @param text string Text to convert
 -- @return string Converted text
 function ChoiceScriptImporter:_convert_text(text)
+  local result = text
+
+  -- Convert multireplace @{var text1|text2|text3} to switch statement
+  -- This is ChoiceScript's way of displaying different text based on numeric variable values
+  result = result:gsub("@{([%w_]+)%s+([^}]+)}", function(var, options)
+    local option_list = {}
+    for opt in options:gmatch("[^|]+") do
+      table.insert(option_list, opt:match("^%s*(.-)%s*$"))
+    end
+    if #option_list > 0 then
+      -- Convert to switch-case style
+      local switch_parts = {}
+      for i, opt in ipairs(option_list) do
+        table.insert(switch_parts, string.format("%s == %d: %s", var, i - 1, opt))
+      end
+      return "{switch " .. table.concat(switch_parts, " | ") .. "}"
+    end
+    return "${" .. var .. "}"
+  end)
+
   -- Convert ${var} format (already compatible)
   -- Convert {var} format to ${var}
-  local result = text:gsub("{([%w_]+)}", "${%1}")
+  result = result:gsub("{([%w_]+)}", "${%1}")
+
   return result
 end
 
