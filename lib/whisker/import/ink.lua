@@ -226,6 +226,7 @@ function InkImporter:_parse_ink(content)
     title = "Untitled Ink Story",
     author = nil,
     variables = {},
+    lists = {},
     knots = {},
     includes = {},
     external_functions = {},
@@ -307,6 +308,38 @@ function InkImporter:_parse_ink(content)
         value = const_value:match("^%s*(.-)%s*$"),
         var_type = self:_infer_type(const_value:match("^%s*(.-)%s*$")),
       }
+      i = i + 1
+      goto continue
+    end
+
+    -- LIST declaration
+    local list_name, list_items = trimmed:match("^LIST%s+([%w_]+)%s*=%s*(.+)$")
+    if list_name then
+      local items = {}
+      local default_items = {}
+      for item in list_items:gmatch("[^,]+") do
+        local item_trimmed = item:match("^%s*(.-)%s*$")
+        -- Check for parentheses (default selected items)
+        local selected_item = item_trimmed:match("^%(([%w_]+)%)$")
+        if selected_item then
+          table.insert(items, selected_item)
+          table.insert(default_items, selected_item)
+        else
+          table.insert(items, item_trimmed)
+        end
+      end
+      story.lists[list_name] = {
+        items = items,
+        defaults = default_items,
+      }
+      -- Create a variable for the list
+      story.variables[list_name] = {
+        value = #default_items > 0 and default_items[1] or "",
+        var_type = "string",
+        is_list = true,
+      }
+      self:_add_issue(Severity.INFO, "list", "LIST declaration",
+        "LIST " .. list_name .. " converted to string variable with items: " .. table.concat(items, ", "))
       i = i + 1
       goto continue
     end
@@ -455,14 +488,14 @@ function InkImporter:_convert_to_story(parsed)
   -- Convert knots to passages
   for knot_name, knot in pairs(parsed.knots) do
     -- Convert main knot content
-    local content, choices = self:_convert_content(knot.content, knot_name)
+    local content, choices, content_tags = self:_convert_content(knot.content, knot_name)
 
     local passage = {
       id = knot_name,
       name = knot_name,
       content = content,
       choices = choices,
-      tags = {},
+      tags = content_tags or {},
     }
 
     passages[knot_name] = passage
@@ -470,14 +503,14 @@ function InkImporter:_convert_to_story(parsed)
     -- Convert stitches as separate passages
     for stitch_name, stitch_content in pairs(knot.stitches) do
       local full_name = knot_name .. "." .. stitch_name
-      local s_content, s_choices = self:_convert_content(stitch_content, full_name)
+      local s_content, s_choices, s_tags = self:_convert_content(stitch_content, full_name)
 
       local stitch_passage = {
         id = full_name,
         name = full_name,
         content = s_content,
         choices = s_choices,
-        tags = {},
+        tags = s_tags or {},
       }
 
       passages[full_name] = stitch_passage
@@ -525,15 +558,48 @@ end
 -- @param passage_name string Current passage name
 -- @return string content
 -- @return table choices
+-- @return table tags
 function InkImporter:_convert_content(lines, passage_name)
   local content_parts = {}
   local choices = {}
+  local tags = {}
   local choice_index = 0
 
   for _, line in ipairs(lines) do
     local trimmed = line:match("^%s*(.-)%s*$")
     if trimmed == "" then
       goto continue
+    end
+
+    -- Tags (# tag or # tag at end of line)
+    local tag_match = trimmed:match("^#%s*(.+)$")
+    if tag_match then
+      table.insert(tags, tag_match:match("^%s*(.-)%s*$"))
+      goto continue
+    end
+
+    -- Inline tags at end of line (text # tag1 # tag2)
+    local base_text, inline_tags = trimmed:match("^(.-)%s+(#.+)$")
+    if inline_tags then
+      for tag in inline_tags:gmatch("#%s*([^#]+)") do
+        table.insert(tags, tag:match("^%s*(.-)%s*$"))
+      end
+      if base_text and base_text ~= "" then
+        trimmed = base_text
+      else
+        goto continue
+      end
+    end
+
+    -- Glue (<>) - joins text without whitespace
+    if trimmed:find("<>") then
+      -- Convert glue to empty string (text joining marker)
+      trimmed = trimmed:gsub("<>", "")
+      -- Mark that next line should be joined without newline
+      if #content_parts > 0 then
+        content_parts[#content_parts] = content_parts[#content_parts] .. trimmed
+        goto continue
+      end
     end
 
     -- Choice (* or +)
@@ -555,6 +621,7 @@ function InkImporter:_convert_content(lines, passage_name)
         id = passage_name .. "_choice_" .. choice_index,
         text = (text:match("^%s*(.-)%s*$") ~= "" and text:match("^%s*(.-)%s*$")) or "Continue",
         target = target ~= "" and target or nil,
+        sticky = is_sticky,
       }
       choice_index = choice_index + 1
 
@@ -597,8 +664,15 @@ function InkImporter:_convert_content(lines, passage_name)
       goto continue
     end
 
+    -- Temp variable declaration (~ temp var = value)
+    local temp_var, temp_value = trimmed:match("^~%s*temp%s+([%w_]+)%s*=%s*(.+)$")
+    if temp_var then
+      table.insert(content_parts, "{do local " .. temp_var .. " = " .. self:_convert_expression(temp_value) .. "}")
+      goto continue
+    end
+
     -- Variable assignment (~ var = value)
-    local var_name, var_value = trimmed:match("^~%s*(%w+)%s*=%s*(.+)$")
+    local var_name, var_value = trimmed:match("^~%s*([%w_]+)%s*=%s*(.+)$")
     if var_name then
       table.insert(content_parts, "{do " .. var_name .. " = " .. self:_convert_expression(var_value) .. "}")
       goto continue
@@ -607,6 +681,14 @@ function InkImporter:_convert_content(lines, passage_name)
     -- Conditional content ({ condition: text } or { condition })
     local cond_inner = trimmed:match("^{([^}]+)}$")
     if cond_inner then
+      -- Alternatives with special markers: {~alt1|alt2|alt3} (shuffle), {&alt1|alt2|alt3} (cycle), {!alt1|alt2|alt3} (sequence)
+      local alt_type, alt_content = cond_inner:match("^([~&!])(.+)$")
+      if alt_type and alt_content:find("|") then
+        local alt_type_name = alt_type == "~" and "shuffle" or (alt_type == "&" and "cycle" or "sequence")
+        table.insert(content_parts, "{" .. alt_type_name .. " " .. alt_content .. "}")
+        goto continue
+      end
+
       if cond_inner:find(":") then
         -- Inline conditional
         local cond, cond_text = cond_inner:match("([^:]+):(.+)")
@@ -614,8 +696,8 @@ function InkImporter:_convert_content(lines, passage_name)
           table.insert(content_parts, "{" .. self:_convert_expression(cond:match("^%s*(.-)%s*$")) .. ": " .. cond_text:match("^%s*(.-)%s*$") .. " | }")
         end
       elseif cond_inner:find("|") then
-        -- Alternatives
-        table.insert(content_parts, "{| " .. cond_inner .. " }")
+        -- Plain alternatives (default to sequence)
+        table.insert(content_parts, "{sequence " .. cond_inner .. "}")
       else
         -- Just condition check or variable interpolation
         table.insert(content_parts, "${" .. self:_convert_expression(cond_inner) .. "}")
@@ -626,20 +708,38 @@ function InkImporter:_convert_content(lines, passage_name)
     -- Regular text (convert inline Ink syntax)
     local converted = line
 
-    -- Convert inline variable references {var}
-    converted = converted:gsub("{(%w+)}", "$%1")
+    -- Convert glue in inline text
+    converted = converted:gsub("<>", "")
+
+    -- Convert inline alternatives {~alt1|alt2|alt3}
+    converted = converted:gsub("{([~&!])([^}]+)}", function(alt_type, content)
+      local alt_type_name = alt_type == "~" and "shuffle" or (alt_type == "&" and "cycle" or "sequence")
+      return "{" .. alt_type_name .. " " .. content .. "}"
+    end)
+
+    -- Convert plain inline alternatives {one|two|three} (no prefix)
+    converted = converted:gsub("{([^}:~&!]+|[^}]+)}", function(content)
+      -- Only convert if it contains | and doesn't look like a variable
+      if content:find("|") then
+        return "{sequence " .. content .. "}"
+      end
+      return "{" .. content .. "}"
+    end)
 
     -- Convert inline conditionals {cond: text}
     converted = converted:gsub("{([^:}]+):([^}]+)}", function(cond, text)
       return "{" .. self:_convert_expression(cond:match("^%s*(.-)%s*$")) .. ": " .. text:match("^%s*(.-)%s*$") .. " | }"
     end)
 
+    -- Convert inline variable references {var} - do this LAST so it doesn't catch alternatives
+    converted = converted:gsub("{([%w_]+)}", "${%1}")
+
     table.insert(content_parts, converted)
 
     ::continue::
   end
 
-  return table.concat(content_parts, "\n"), choices
+  return table.concat(content_parts, "\n"), choices, tags
 end
 
 --- Convert Ink expression to WLS expression
@@ -649,9 +749,15 @@ function InkImporter:_convert_expression(expr)
   local result = expr:match("^%s*(.-)%s*$")
 
   -- Convert 'and' to &&, 'or' to ||, 'not' to !
-  result = result:gsub("%band%b", "&&")
-  result = result:gsub("%bor%b", "||")
-  result = result:gsub("%bnot%b", "!")
+  -- Use word boundaries (%s or start/end) for proper matching
+  result = result:gsub("(%s)and(%s)", "%1&&%2")
+  result = result:gsub("^and(%s)", "&&%1")
+  result = result:gsub("(%s)and$", "%1&&")
+  result = result:gsub("(%s)or(%s)", "%1||%2")
+  result = result:gsub("^or(%s)", "||%1")
+  result = result:gsub("(%s)or$", "%1||")
+  result = result:gsub("(%s)not(%s)", "%1!%2")
+  result = result:gsub("^not(%s)", "!%1")
 
   return result
 end

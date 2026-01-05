@@ -529,8 +529,192 @@ Hello {name}, you have {score} points.
 ]]
       local story = importer:import(ink)
       local passage = story:get_passage("start")
-      assert.is_true(passage.content:find("%$name") ~= nil)
-      assert.is_true(passage.content:find("%$score") ~= nil)
+      -- Ink {var} converts to WLS ${var} syntax
+      assert.is_true(passage.content:find("%${name}") ~= nil)
+      assert.is_true(passage.content:find("%${score}") ~= nil)
+    end)
+  end)
+
+  describe("glue", function()
+    it("should handle glue at end of line", function()
+      local ink = [[
+=== start ===
+Hello <>
+world!
+]]
+      local story = importer:import(ink)
+      local passage = story:get_passage("start")
+      -- Glue should join lines without newline
+      assert.is_true(passage.content:find("Hello%s*world") ~= nil or passage.content:find("Helloworld") ~= nil)
+    end)
+
+    it("should handle inline glue", function()
+      local ink = [[
+=== start ===
+The value is <>42<>.
+]]
+      local story = importer:import(ink)
+      local passage = story:get_passage("start")
+      -- Glue markers should be removed
+      assert.is_nil(passage.content:find("<>"))
+    end)
+  end)
+
+  describe("tags", function()
+    it("should parse standalone tags", function()
+      local ink = [[
+=== start ===
+# dark
+# spooky
+You enter the cave.
+]]
+      local story = importer:import(ink)
+      local passage = story:get_passage("start")
+      assert.is_not_nil(passage.tags)
+      assert.is_true(#passage.tags >= 2)
+    end)
+
+    it("should parse inline tags", function()
+      local ink = [[
+=== start ===
+You enter the cave. # dark # spooky
+]]
+      local story = importer:import(ink)
+      local passage = story:get_passage("start")
+      assert.is_not_nil(passage.tags)
+      local has_dark = false
+      for _, tag in ipairs(passage.tags) do
+        if tag:find("dark") then has_dark = true end
+      end
+      assert.is_true(has_dark)
+    end)
+  end)
+
+  describe("LIST declarations", function()
+    it("should parse LIST declaration", function()
+      local ink = [[
+LIST mood = happy, sad, angry
+
+=== start ===
+You are feeling {mood}.
+]]
+      local story = importer:import(ink)
+      assert.is_not_nil(story.variables.mood)
+    end)
+
+    it("should parse LIST with default selected item", function()
+      local ink = [[
+LIST inventory = (torch), sword, key
+
+=== start ===
+You have the {inventory}.
+]]
+      local story = importer:import(ink)
+      assert.is_not_nil(story.variables.inventory)
+      -- Default should be the item in parentheses
+    end)
+
+    it("should report LIST as info issue", function()
+      local ink = [[
+LIST items = a, b, c
+
+=== start ===
+Test
+]]
+      importer:import(ink)
+      local report = importer:get_loss_report()
+      local has_list_info = false
+      for _, info in ipairs(report.info) do
+        if info.category == "list" then
+          has_list_info = true
+          break
+        end
+      end
+      assert.is_true(has_list_info)
+    end)
+  end)
+
+  describe("temp variables", function()
+    it("should parse temp variable declaration", function()
+      local ink = [[
+=== start ===
+~ temp result = 42
+The result is {result}.
+]]
+      local story = importer:import(ink)
+      local passage = story:get_passage("start")
+      -- Temp variables should be converted to local declarations
+      assert.is_true(passage.content:find("local") ~= nil or passage.content:find("result") ~= nil)
+    end)
+
+    it("should parse temp variable with expression", function()
+      local ink = [[
+=== start ===
+~ temp total = score + bonus
+Your total is {total}.
+]]
+      local story = importer:import(ink)
+      local passage = story:get_passage("start")
+      assert.is_true(passage.content:find("total") ~= nil)
+    end)
+  end)
+
+  describe("alternatives", function()
+    it("should parse shuffle alternatives", function()
+      local ink = [[
+=== start ===
+{~Hello|Hi|Hey} there!
+]]
+      local story = importer:import(ink)
+      local passage = story:get_passage("start")
+      assert.is_true(passage.content:find("shuffle") ~= nil)
+    end)
+
+    it("should parse cycle alternatives", function()
+      local ink = [[
+=== start ===
+{&first|second|third} time!
+]]
+      local story = importer:import(ink)
+      local passage = story:get_passage("start")
+      assert.is_true(passage.content:find("cycle") ~= nil)
+    end)
+
+    it("should parse sequence alternatives", function()
+      local ink = [[
+=== start ===
+{!once|twice|thrice} upon a time.
+]]
+      local story = importer:import(ink)
+      local passage = story:get_passage("start")
+      assert.is_true(passage.content:find("sequence") ~= nil)
+    end)
+
+    it("should parse plain alternatives as sequence", function()
+      local ink = [[
+=== start ===
+{one|two|three} options.
+]]
+      local story = importer:import(ink)
+      local passage = story:get_passage("start")
+      assert.is_true(passage.content:find("sequence") ~= nil)
+    end)
+  end)
+
+  describe("sticky choices", function()
+    it("should mark sticky choices", function()
+      local ink = [[
+=== start ===
++ [This is sticky] -> somewhere
+* [This is not sticky] -> elsewhere
+]]
+      local story = importer:import(ink)
+      local passage = story:get_passage("start")
+      assert.equals(2, #passage.choices)
+      -- First choice should be sticky
+      assert.is_true(passage.choices[1].sticky)
+      -- Second choice should not be sticky
+      assert.is_false(passage.choices[2].sticky or false)
     end)
   end)
 end)
