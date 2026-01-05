@@ -5,6 +5,7 @@
 -- @license MIT
 
 local vcs = {}
+vcs._dependencies = {}
 
 -- Import submodules
 local ok_diff, diff = pcall(require, "whisker.vcs.diff")

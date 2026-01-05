@@ -5,6 +5,7 @@
 -- @license MIT
 
 local merge = {}
+merge._dependencies = {}
 
 -- Load diff module
 local ok_diff, diff_module = pcall(require, "whisker.vcs.diff")

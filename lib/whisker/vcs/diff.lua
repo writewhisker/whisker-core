@@ -5,6 +5,7 @@
 -- @license MIT
 
 local diff = {}
+diff._dependencies = {}
 
 --- Change types
 diff.CHANGE_TYPES = {
@@ -47,8 +48,25 @@ function diff.diff_stories(base, modified, options)
       choices_removed = 0,
       choices_modified = 0,
     },
+    -- Statistics for base and modified versions
+    base_stats = {
+      passage_count = 0,
+      variable_count = 0,
+      total_words = 0,
+      total_choices = 0,
+    },
+    modified_stats = {
+      passage_count = 0,
+      variable_count = 0,
+      total_words = 0,
+      total_choices = 0,
+    },
     has_changes = false,
   }
+
+  -- Calculate statistics
+  result.base_stats = diff._calculate_stats(base)
+  result.modified_stats = diff._calculate_stats(modified)
 
   -- Diff metadata
   result.metadata_changes = diff._diff_metadata(base.metadata or {}, modified.metadata or {})
@@ -439,6 +457,50 @@ end
 function diff._normalize_whitespace(text)
   if not text then return "" end
   return text:gsub("%s+", " "):match("^%s*(.-)%s*$")
+end
+
+--- Count words in text
+-- @param text string Text to count words in
+-- @return number Word count
+function diff._count_words(text)
+  if not text or text == "" then return 0 end
+  local count = 0
+  for _ in text:gmatch("%S+") do
+    count = count + 1
+  end
+  return count
+end
+
+--- Calculate statistics for a story
+-- @param story table Story data
+-- @return table Statistics
+function diff._calculate_stats(story)
+  local stats = {
+    passage_count = 0,
+    variable_count = 0,
+    total_words = 0,
+    total_choices = 0,
+  }
+
+  -- Count passages and their content
+  if story.passages then
+    for _, passage in pairs(story.passages) do
+      stats.passage_count = stats.passage_count + 1
+      stats.total_words = stats.total_words + diff._count_words(passage.content)
+      if passage.choices then
+        stats.total_choices = stats.total_choices + #passage.choices
+      end
+    end
+  end
+
+  -- Count variables
+  if story.variables then
+    for _ in pairs(story.variables) do
+      stats.variable_count = stats.variable_count + 1
+    end
+  end
+
+  return stats
 end
 
 --- Format a value for display
