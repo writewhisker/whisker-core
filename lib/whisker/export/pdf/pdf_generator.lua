@@ -77,6 +77,23 @@ function PDFGenerator.new(options)
     margin = 30,
   }
 
+  -- Header/footer configuration
+  self.header = {
+    enabled = false,
+    text = "",
+    show_title = false,
+    show_page_number = false,
+    margin = 30,
+  }
+  self.footer = {
+    enabled = false,
+    text = "",
+    show_title = false,
+    show_page_number = false,
+    margin = 30,
+  }
+  self.document_title = ""
+
   -- Initialize document structure
   self:_init_document()
 
@@ -151,8 +168,23 @@ end
 function PDFGenerator:_finalize_page()
   if not self.current_page then return end
 
-  -- Add page number if enabled
   local page_index = #self.pages
+
+  -- Add header if enabled
+  local header_stream = self:_add_header_footer(page_index, "header")
+  if header_stream then
+    table.insert(self.current_page.content, header_stream)
+    self.current_page.fonts_used["helvetica"] = true
+  end
+
+  -- Add footer if enabled
+  local footer_stream = self:_add_header_footer(page_index, "footer")
+  if footer_stream then
+    table.insert(self.current_page.content, footer_stream)
+    self.current_page.fonts_used["helvetica"] = true
+  end
+
+  -- Add page number if enabled (and not already in header/footer)
   local page_num_stream = self:_add_page_number(page_index)
   if page_num_stream then
     table.insert(self.current_page.content, page_num_stream)
@@ -376,6 +408,34 @@ function PDFGenerator:enable_page_numbering(options)
   self.page_numbering.margin = options.margin or 30
 end
 
+--- Set document title (used in headers/footers)
+-- @param title string Document title
+function PDFGenerator:set_title(title)
+  self.document_title = title or ""
+end
+
+--- Configure header
+-- @param options table Options: text, show_title, show_page_number, margin
+function PDFGenerator:set_header(options)
+  options = options or {}
+  self.header.enabled = true
+  self.header.text = options.text or ""
+  self.header.show_title = options.show_title == true
+  self.header.show_page_number = options.show_page_number == true
+  self.header.margin = options.margin or 30
+end
+
+--- Configure footer
+-- @param options table Options: text, show_title, show_page_number, margin
+function PDFGenerator:set_footer(options)
+  options = options or {}
+  self.footer.enabled = true
+  self.footer.text = options.text or ""
+  self.footer.show_title = options.show_title == true
+  self.footer.show_page_number = options.show_page_number == true
+  self.footer.margin = options.margin or 30
+end
+
 --- Add a named destination for internal linking
 -- @param name string Destination name
 -- @param page_index number Page index (1-based)
@@ -572,6 +632,55 @@ function PDFGenerator:_add_page_number(page_index)
   local stream = string.format(
     "BT /%s %d Tf %.0f %.0f Td (%s) Tj ET",
     font.ref, 10, x, y, self:_escape_string(text)
+  )
+
+  return stream
+end
+
+--- Add header or footer to a page
+-- @param page_index number Page index (1-based)
+-- @param type string "header" or "footer"
+-- @return string PDF stream commands or nil
+function PDFGenerator:_add_header_footer(page_index, hf_type)
+  local config = hf_type == "header" and self.header or self.footer
+  if not config.enabled then return nil end
+
+  -- Skip first page (cover page usually)
+  if page_index < 2 then return nil end
+
+  -- Build text content
+  local parts = {}
+  if config.text and config.text ~= "" then
+    table.insert(parts, config.text)
+  end
+  if config.show_title and self.document_title ~= "" then
+    table.insert(parts, self.document_title)
+  end
+  if config.show_page_number then
+    table.insert(parts, "Page " .. page_index)
+  end
+
+  if #parts == 0 then return nil end
+
+  local text = table.concat(parts, " | ")
+
+  -- Calculate position
+  local y
+  if hf_type == "header" then
+    y = self.page_height - config.margin
+  else
+    y = config.margin
+  end
+
+  local x = config.margin
+  local text_width = #text * 9 * 0.5
+  x = (self.page_width - text_width) / 2 -- center align
+
+  -- Build text command
+  local font = self.fonts["helvetica"]
+  local stream = string.format(
+    "BT /%s %d Tf %.0f %.0f Td (%s) Tj ET",
+    font.ref, 9, x, y, self:_escape_string(text)
   )
 
   return stream

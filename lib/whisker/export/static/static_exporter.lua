@@ -60,11 +60,18 @@ end
 --   - include_theme: boolean (include theme toggle, default true)
 --   - include_back: boolean (include back button, default true)
 --   - theme: string ("light", "dark", "auto", default "auto")
+--   - alt_theme: string (alternate theme name, e.g., "sepia", "high-contrast")
 --   - site_url: string (base URL for sitemap/SEO, default "/")
 --   - include_sitemap: boolean (generate sitemap.xml, default true with multi_page)
 --   - include_robots: boolean (generate robots.txt, default true with multi_page)
 --   - include_404: boolean (generate 404.html, default true with multi_page)
 --   - include_seo: boolean (include OG tags, JSON-LD, default true)
+--   - include_breadcrumbs: boolean (show breadcrumb navigation, default true with multi_page)
+--   - include_prev_next: boolean (show previous/next links, default true with multi_page)
+--   - include_toc_sidebar: boolean (show TOC sidebar, default false)
+--   - header_template: string (custom header HTML)
+--   - footer_template: string (custom footer HTML)
+--   - layout: string ("default", "minimal", "full", default "default")
 -- @return table Export bundle with files, manifest
 function StaticExporter:export(story, options)
   options = options or {}
@@ -75,11 +82,18 @@ function StaticExporter:export(story, options)
   local include_theme = options.include_theme ~= false
   local include_back = options.include_back ~= false
   local theme = options.theme or "auto"
+  local alt_theme = options.alt_theme
   local site_url = options.site_url or "/"
   local include_sitemap = options.include_sitemap ~= false and multi_page
   local include_robots = options.include_robots ~= false and multi_page
   local include_404 = options.include_404 ~= false and multi_page
   local include_seo = options.include_seo ~= false
+  local include_breadcrumbs = options.include_breadcrumbs ~= false and multi_page
+  local include_prev_next = options.include_prev_next ~= false and multi_page
+  local include_toc_sidebar = options.include_toc_sidebar == true
+  local header_template = options.header_template
+  local footer_template = options.footer_template
+  local layout = options.layout or "default"
 
   -- Generate HTML
   local title = story.name or story.title or "Interactive Story"
@@ -95,9 +109,16 @@ function StaticExporter:export(story, options)
       include_theme = include_theme,
       include_back = include_back,
       theme = theme,
+      alt_theme = alt_theme,
       include_seo = include_seo,
       site_url = site_url,
       author = author,
+      include_breadcrumbs = include_breadcrumbs,
+      include_prev_next = include_prev_next,
+      include_toc_sidebar = include_toc_sidebar,
+      header_template = header_template,
+      footer_template = footer_template,
+      layout = layout,
     })
 
     -- Add sitemap.xml
@@ -497,6 +518,307 @@ body {
     }
 }
 ]]
+end
+
+--- Get multi-page site styles with additional features
+-- @param options table Options (alt_theme, include_toc_sidebar, layout)
+-- @return string CSS content
+function StaticExporter:get_multi_page_styles(options)
+  options = options or {}
+  local base_styles = self:get_player_styles()
+
+  -- Additional styles for multi-page features
+  local additional_styles = [[
+
+/* Alternate Theme: Sepia */
+[data-alt-theme="sepia"], [data-theme="sepia"] {
+    --bg-primary: #f4ecd8;
+    --bg-secondary: #e8dcc8;
+    --text-primary: #5b4636;
+    --text-secondary: #7a6452;
+    --accent-color: #8b6914;
+    --accent-hover: #a67c00;
+    --border-color: #d4c4a8;
+    --shadow: 0 2px 10px rgba(91, 70, 54, 0.15);
+}
+
+/* Alternate Theme: High Contrast */
+[data-alt-theme="high-contrast"], [data-theme="high-contrast"] {
+    --bg-primary: #000000;
+    --bg-secondary: #0a0a0a;
+    --text-primary: #ffffff;
+    --text-secondary: #ffff00;
+    --accent-color: #00ff00;
+    --accent-hover: #00cc00;
+    --border-color: #ffffff;
+    --shadow: 0 2px 10px rgba(255, 255, 255, 0.2);
+}
+
+[data-alt-theme="high-contrast"] .choice,
+[data-theme="high-contrast"] .choice {
+    border: 2px solid #ffffff;
+}
+
+/* Breadcrumb Navigation */
+.breadcrumbs {
+    margin-bottom: 20px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.breadcrumbs ol {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 0;
+    margin: 0;
+}
+
+.breadcrumbs li {
+    display: flex;
+    align-items: center;
+}
+
+.breadcrumbs li:not(:last-child)::after {
+    content: "›";
+    margin-left: 8px;
+    color: var(--text-secondary);
+}
+
+.breadcrumbs a {
+    color: var(--accent-color);
+    text-decoration: none;
+}
+
+.breadcrumbs a:hover {
+    text-decoration: underline;
+}
+
+.breadcrumbs li[aria-current="page"] {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+/* Previous/Next Navigation */
+.prev-next-nav {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+    gap: 20px;
+}
+
+.prev-link, .next-link {
+    display: inline-flex;
+    align-items: center;
+    padding: 10px 15px;
+    background: var(--bg-secondary);
+    color: var(--accent-color);
+    text-decoration: none;
+    border-radius: 5px;
+    transition: background 0.2s, color 0.2s;
+    max-width: 45%;
+}
+
+.prev-link:hover, .next-link:hover {
+    background: var(--accent-color);
+    color: white;
+}
+
+.prev-link.disabled, .next-link.disabled {
+    visibility: hidden;
+}
+
+.next-link {
+    margin-left: auto;
+    text-align: right;
+}
+
+/* TOC Sidebar */
+.toc-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 280px;
+    height: 100vh;
+    background: var(--bg-primary);
+    box-shadow: var(--shadow);
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    z-index: 1000;
+    overflow-y: auto;
+}
+
+.toc-sidebar.open {
+    transform: translateX(0);
+}
+
+.toc-toggle {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    width: 40px;
+    height: 40px;
+    background: var(--accent-color);
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    z-index: 1001;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+
+.toc-toggle:hover {
+    background: var(--accent-hover);
+}
+
+.toc-content {
+    padding: 60px 20px 20px 20px;
+}
+
+.toc-content h2 {
+    font-size: 1.2em;
+    margin-bottom: 15px;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 10px;
+}
+
+.toc-content ol {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.toc-content li {
+    margin: 5px 0;
+}
+
+.toc-content a {
+    display: block;
+    padding: 8px 10px;
+    color: var(--text-primary);
+    text-decoration: none;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.toc-content a:hover {
+    background: var(--bg-secondary);
+}
+
+.toc-content li.current a {
+    background: var(--accent-color);
+    color: white;
+    font-weight: 500;
+}
+
+/* Body with TOC sidebar adjustment */
+.has-toc-sidebar #whisker-player {
+    margin-left: 0;
+    transition: margin-left 0.3s ease;
+}
+
+.has-toc-sidebar.toc-open #whisker-player {
+    margin-left: 280px;
+}
+
+/* Header and Footer */
+.site-header {
+    background: var(--bg-primary);
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--border-color);
+    box-shadow: var(--shadow);
+}
+
+.site-footer {
+    background: var(--bg-primary);
+    padding: 15px 20px;
+    border-top: 1px solid var(--border-color);
+    text-align: center;
+    color: var(--text-secondary);
+    margin-top: 40px;
+}
+
+/* Layout: Default */
+.layout-default #whisker-player {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+/* Layout: Minimal */
+.layout-minimal #whisker-player {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.layout-minimal .passage h1 {
+    font-size: 1.5em;
+}
+
+.layout-minimal #controls {
+    padding-top: 15px;
+}
+
+/* Layout: Full */
+.layout-full #whisker-player {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.layout-full .passage {
+    display: grid;
+    grid-template-columns: 1fr;
+}
+
+@media (min-width: 900px) {
+    .layout-full .passage {
+        grid-template-columns: 2fr 1fr;
+        gap: 40px;
+    }
+
+    .layout-full .passage h1 {
+        grid-column: 1 / -1;
+    }
+
+    .layout-full .choices {
+        grid-column: 1 / -1;
+    }
+}
+
+/* Mobile responsiveness for TOC */
+@media (max-width: 768px) {
+    .toc-sidebar {
+        width: 100%;
+    }
+
+    .has-toc-sidebar.toc-open #whisker-player {
+        margin-left: 0;
+    }
+
+    .prev-next-nav {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .prev-link, .next-link {
+        max-width: 100%;
+    }
+
+    .next-link {
+        margin-left: 0;
+    }
+}
+]]
+
+  return base_styles .. additional_styles
 end
 
 --- Get player script
@@ -943,20 +1265,29 @@ function StaticExporter:generate_multi_page_site(story, options)
   local description = story.description or "An interactive story"
   local start_passage = story.start_passage or story.start or "Start"
 
-  -- Build passage lookup map
+  -- Build passage lookup map and ordered list
   local passage_map = {}
-  for _, passage in ipairs(story.passages) do
+  local passage_order = {}
+  for i, passage in ipairs(story.passages) do
     local name = passage.name or passage.id
     passage_map[name] = passage
+    passage_order[i] = name
   end
+
+  -- Build navigation context for prev/next links
+  local nav_context = {
+    passage_map = passage_map,
+    passage_order = passage_order,
+    start_passage = start_passage,
+  }
 
   -- Generate index.html (landing page / start passage)
   local start = passage_map[start_passage]
   if start then
-    files["index.html"] = self:generate_passage_page(start, story, options, true)
+    files["index.html"] = self:generate_passage_page(start, story, options, true, nav_context)
   else
     -- Fallback: use first passage
-    files["index.html"] = self:generate_passage_page(story.passages[1], story, options, true)
+    files["index.html"] = self:generate_passage_page(story.passages[1], story, options, true, nav_context)
   end
 
   -- Generate a page for each passage
@@ -964,11 +1295,11 @@ function StaticExporter:generate_multi_page_site(story, options)
     local name = passage.name or passage.id
     local safe_name = self:safe_filename(name)
     local filename = "passages/" .. safe_name .. ".html"
-    files[filename] = self:generate_passage_page(passage, story, options, false)
+    files[filename] = self:generate_passage_page(passage, story, options, false, nav_context)
   end
 
   -- Generate shared CSS file
-  files["css/styles.css"] = self:get_player_styles()
+  files["css/styles.css"] = self:get_multi_page_styles(options)
 
   -- Generate shared JS file
   files["js/player.js"] = self:get_multi_page_player_script(story, options)
@@ -981,8 +1312,9 @@ end
 -- @param story table Full story data
 -- @param options table Generation options
 -- @param is_index boolean Whether this is the index page
+-- @param nav_context table Navigation context for prev/next links
 -- @return string HTML content
-function StaticExporter:generate_passage_page(passage, story, options, is_index)
+function StaticExporter:generate_passage_page(passage, story, options, is_index, nav_context)
   local title = story.name or story.title or "Interactive Story"
   local passage_title = passage.title or passage.name or "Untitled"
   local page_title = is_index and title or (passage_title .. " - " .. title)
@@ -993,6 +1325,7 @@ function StaticExporter:generate_passage_page(passage, story, options, is_index)
   local escaped_passage_title = ExportUtils.escape_html(passage_title)
   local escaped_description = ExportUtils.escape_html(description)
   local escaped_content = ExportUtils.escape_html(passage.text or passage.content or "")
+  local escaped_story_title = ExportUtils.escape_html(title)
 
   -- Build SEO tags
   local seo_tags = ""
@@ -1008,6 +1341,105 @@ function StaticExporter:generate_passage_page(passage, story, options, is_index)
     })
   end
 
+  -- Determine relative paths
+  local css_path = is_index and "css/styles.css" or "../css/styles.css"
+  local js_path = is_index and "js/player.js" or "../js/player.js"
+  local home_url = is_index and "index.html" or "../index.html"
+  local passages_prefix = is_index and "passages/" or "../passages/"
+
+  -- Build breadcrumb navigation
+  local breadcrumbs_html = ""
+  if options.include_breadcrumbs and not is_index then
+    breadcrumbs_html = [[
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+            <ol>
+                <li><a href="]] .. home_url .. [[">]] .. escaped_story_title .. [[</a></li>
+                <li aria-current="page">]] .. escaped_passage_title .. [[</li>
+            </ol>
+        </nav>]]
+  end
+
+  -- Build previous/next navigation
+  local prev_next_html = ""
+  if options.include_prev_next and nav_context then
+    local passage_name = passage.name or passage.id
+    local current_index = nil
+
+    -- Find current passage index
+    for i, name in ipairs(nav_context.passage_order) do
+      if name == passage_name then
+        current_index = i
+        break
+      end
+    end
+
+    if current_index then
+      local prev_name = current_index > 1 and nav_context.passage_order[current_index - 1] or nil
+      local next_name = current_index < #nav_context.passage_order and nav_context.passage_order[current_index + 1] or nil
+
+      prev_next_html = '\n        <nav class="prev-next-nav" aria-label="Page navigation">'
+
+      if prev_name then
+        local prev_passage = nav_context.passage_map[prev_name]
+        local prev_title = prev_passage and (prev_passage.title or prev_passage.name) or prev_name
+        local prev_url = passages_prefix .. self:safe_filename(prev_name) .. ".html"
+        prev_next_html = prev_next_html .. '\n            <a href="' .. prev_url .. '" class="prev-link" rel="prev">&larr; ' .. ExportUtils.escape_html(prev_title) .. '</a>'
+      else
+        prev_next_html = prev_next_html .. '\n            <span class="prev-link disabled"></span>'
+      end
+
+      if next_name then
+        local next_passage = nav_context.passage_map[next_name]
+        local next_title = next_passage and (next_passage.title or next_passage.name) or next_name
+        local next_url = passages_prefix .. self:safe_filename(next_name) .. ".html"
+        prev_next_html = prev_next_html .. '\n            <a href="' .. next_url .. '" class="next-link" rel="next">' .. ExportUtils.escape_html(next_title) .. ' &rarr;</a>'
+      else
+        prev_next_html = prev_next_html .. '\n            <span class="next-link disabled"></span>'
+      end
+
+      prev_next_html = prev_next_html .. '\n        </nav>'
+    end
+  end
+
+  -- Build TOC sidebar
+  local toc_sidebar_html = ""
+  if options.include_toc_sidebar and nav_context then
+    local passage_name = passage.name or passage.id
+    toc_sidebar_html = [[
+    <aside class="toc-sidebar" id="toc-sidebar">
+        <button class="toc-toggle" id="toc-toggle" aria-label="Toggle table of contents">☰</button>
+        <div class="toc-content">
+            <h2>Table of Contents</h2>
+            <nav aria-label="Table of contents">
+                <ol>
+]]
+    for _, name in ipairs(nav_context.passage_order) do
+      local p = nav_context.passage_map[name]
+      local p_title = p and (p.title or p.name) or name
+      local p_url = passages_prefix .. self:safe_filename(name) .. ".html"
+      local is_current = (name == passage_name)
+      local li_class = is_current and ' class="current"' or ''
+      local aria_current = is_current and ' aria-current="page"' or ''
+      toc_sidebar_html = toc_sidebar_html .. '                    <li' .. li_class .. '><a href="' .. p_url .. '"' .. aria_current .. '>' .. ExportUtils.escape_html(p_title) .. '</a></li>\n'
+    end
+    toc_sidebar_html = toc_sidebar_html .. [[                </ol>
+            </nav>
+        </div>
+    </aside>]]
+  end
+
+  -- Build header from template or default
+  local header_html = ""
+  if options.header_template and options.header_template ~= "" then
+    header_html = '\n    <header class="site-header">\n        ' .. options.header_template .. '\n    </header>'
+  end
+
+  -- Build footer from template or default
+  local footer_html = ""
+  if options.footer_template and options.footer_template ~= "" then
+    footer_html = '\n    <footer class="site-footer">\n        ' .. options.footer_template .. '\n    </footer>'
+  end
+
   -- Build choices HTML
   local choices_html = ""
   local choices = passage.choices or passage.links or {}
@@ -1016,22 +1448,29 @@ function StaticExporter:generate_passage_page(passage, story, options, is_index)
     for _, choice in ipairs(choices) do
       local target = choice.target or choice.passage or choice.link or ""
       local choice_text = ExportUtils.escape_html(choice.text or choice.label or "Continue")
-      local target_url = "../passages/" .. self:safe_filename(target) .. ".html"
-      if is_index then
-        target_url = "passages/" .. self:safe_filename(target) .. ".html"
-      end
+      local target_url = passages_prefix .. self:safe_filename(target) .. ".html"
       choices_html = choices_html .. '            <a href="' .. target_url .. '" class="choice">' .. choice_text .. '</a>\n'
     end
     choices_html = choices_html .. '        </nav>'
   end
 
-  -- Determine relative paths
-  local css_path = is_index and "css/styles.css" or "../css/styles.css"
-  local js_path = is_index and "js/player.js" or "../js/player.js"
-  local home_link = is_index and "" or '<a href="../index.html" class="control-btn">Home</a>'
+  local home_link = is_index and "" or '<a href="' .. home_url .. '" class="control-btn">Home</a>'
+
+  -- Determine layout class
+  local layout_class = options.layout or "default"
+  local body_class = 'layout-' .. layout_class
+  if options.include_toc_sidebar then
+    body_class = body_class .. ' has-toc-sidebar'
+  end
+
+  -- Determine theme attribute
+  local theme_attr = ""
+  if options.alt_theme and options.alt_theme ~= "" then
+    theme_attr = ' data-alt-theme="' .. ExportUtils.escape_html(options.alt_theme) .. '"'
+  end
 
   return [[<!DOCTYPE html>
-<html lang="en">
+<html lang="en"]] .. theme_attr .. [[>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1040,17 +1479,17 @@ function StaticExporter:generate_passage_page(passage, story, options, is_index)
     <title>]] .. escaped_title .. [[</title>
     <link rel="stylesheet" href="]] .. css_path .. [[">
 </head>
-<body>
-    <div id="whisker-player">
+<body class="]] .. body_class .. [[">]] .. header_html .. toc_sidebar_html .. [[
+    <main id="whisker-player">]] .. breadcrumbs_html .. [[
         <article class="passage">
             <h1>]] .. escaped_passage_title .. [[</h1>
             <div class="passage-content">]] .. escaped_content:gsub("\n", "<br>") .. [[</div>
         ]] .. choices_html .. [[
-        </article>
+        </article>]] .. prev_next_html .. [[
         <div id="controls">
             ]] .. home_link .. [[
         </div>
-    </div>
+    </main>]] .. footer_html .. [[
     <script src="]] .. js_path .. [["></script>
 </body>
 </html>]]
@@ -1070,37 +1509,99 @@ end
 -- @return string JavaScript code
 function StaticExporter:get_multi_page_player_script(story, options)
   local include_theme = options.include_theme
+  local include_toc_sidebar = options.include_toc_sidebar
+  local alt_theme = options.alt_theme
+
+  -- Build theme cycle array
+  local themes = {"", "dark"}
+  if alt_theme and alt_theme ~= "" then
+    table.insert(themes, alt_theme)
+  end
+  local themes_js = '["' .. table.concat(themes, '", "') .. '"]'
 
   return [[// Whisker Multi-Page Player Script
 (function() {
     'use strict';
+
+    const availableThemes = ]] .. themes_js .. [[;
+    let currentThemeIndex = 0;
 
     // Theme management
     function loadTheme() {
         const savedTheme = localStorage.getItem('whisker_theme');
         if (savedTheme) {
             document.documentElement.setAttribute('data-theme', savedTheme);
+            // Find current theme index
+            const idx = availableThemes.indexOf(savedTheme);
+            if (idx >= 0) {
+                currentThemeIndex = idx;
+            }
         }
     }
 
-    function toggleTheme() {
-        const current = document.documentElement.getAttribute('data-theme') || '';
-        const newTheme = current === 'dark' ? 'light' : 'dark';
+    function cycleTheme() {
+        currentThemeIndex = (currentThemeIndex + 1) % availableThemes.length;
+        const newTheme = availableThemes[currentThemeIndex];
         document.documentElement.setAttribute('data-theme', newTheme);
         localStorage.setItem('whisker_theme', newTheme);
         updateThemeButton();
+    }
+
+    function getThemeLabel(theme) {
+        if (theme === '' || theme === 'light') return 'Light';
+        if (theme === 'dark') return 'Dark';
+        // Capitalize first letter for alt themes
+        return theme.charAt(0).toUpperCase() + theme.slice(1);
     }
 
     function updateThemeButton() {
         const btn = document.getElementById('theme-toggle');
         if (btn) {
             const current = document.documentElement.getAttribute('data-theme') || '';
-            btn.textContent = current === 'dark' ? 'Light Mode' : 'Dark Mode';
+            const nextIndex = (currentThemeIndex + 1) % availableThemes.length;
+            const nextTheme = availableThemes[nextIndex];
+            btn.textContent = getThemeLabel(nextTheme) + ' Mode';
+        }
+    }
+
+    // TOC Sidebar management
+    function initTocSidebar() {
+        const tocToggle = document.getElementById('toc-toggle');
+        const tocSidebar = document.getElementById('toc-sidebar');
+
+        if (tocToggle && tocSidebar) {
+            // Load saved state
+            const tocOpen = localStorage.getItem('whisker_toc_open') === 'true';
+            if (tocOpen) {
+                tocSidebar.classList.add('open');
+                document.body.classList.add('toc-open');
+            }
+
+            tocToggle.addEventListener('click', function() {
+                const isOpen = tocSidebar.classList.toggle('open');
+                document.body.classList.toggle('toc-open', isOpen);
+                localStorage.setItem('whisker_toc_open', isOpen);
+            });
+
+            // Close on outside click (mobile)
+            document.addEventListener('click', function(e) {
+                if (window.innerWidth <= 768 &&
+                    tocSidebar.classList.contains('open') &&
+                    !tocSidebar.contains(e.target) &&
+                    e.target !== tocToggle) {
+                    tocSidebar.classList.remove('open');
+                    document.body.classList.remove('toc-open');
+                    localStorage.setItem('whisker_toc_open', 'false');
+                }
+            });
         }
     }
 
     // Initialize
     loadTheme();
+    ]] .. (include_toc_sidebar and [[
+    initTocSidebar();
+    ]] or "") .. [[
 
     ]] .. (include_theme and [[
     // Add theme toggle button
@@ -1109,10 +1610,8 @@ function StaticExporter:get_multi_page_player_script(story, options)
         const themeBtn = document.createElement('button');
         themeBtn.id = 'theme-toggle';
         themeBtn.className = 'control-btn';
-        themeBtn.onclick = toggleTheme;
+        themeBtn.onclick = cycleTheme;
         updateThemeButton.call(null);
-        const current = document.documentElement.getAttribute('data-theme') || '';
-        themeBtn.textContent = current === 'dark' ? 'Light Mode' : 'Dark Mode';
         controls.appendChild(themeBtn);
     }
     ]] or "") .. [[

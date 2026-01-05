@@ -132,6 +132,9 @@ function PWAExporter:export(story, options)
   files["icons/icon-192.png"] = self:generate_placeholder_icon(192)
   files["icons/icon-512.png"] = self:generate_placeholder_icon(512)
 
+  -- Asset manifest for cache busting
+  files["asset-manifest.json"] = self:generate_asset_manifest(files, cache_version)
+
   -- Generate filename
   local safe_title = app_name:lower():gsub("[^%w]", "_")
   local filename = safe_title .. "_pwa.zip"
@@ -458,6 +461,41 @@ body {
         background: #27ae60;
     }
 }
+.update-notification {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #2c3e50;
+    color: white;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 1000;
+    animation: slideUp 0.3s ease-out;
+}
+@keyframes slideUp {
+    from { transform: translateX(-50%) translateY(100%); opacity: 0; }
+    to { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+.update-notification button {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+.update-notification button:first-of-type {
+    background: #27ae60;
+    color: white;
+}
+.update-notification button:last-of-type {
+    background: transparent;
+    color: #bdc3c7;
+}
 ]]
 end
 
@@ -512,6 +550,55 @@ function PWAExporter:get_install_prompt_script()
         if (window.matchMedia('(display-mode: standalone)').matches) {
             if (installBtn) {
                 installBtn.style.display = 'none';
+            }
+        }
+
+        // Update notification handling
+        let updateNotification = null;
+
+        // Listen for service worker updates
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener('message', function(event) {
+                if (event.data && event.data.type === 'SW_UPDATED') {
+                    showUpdateNotification();
+                }
+            });
+
+            // Check for updates on registration
+            navigator.serviceWorker.ready.then(function(registration) {
+                registration.addEventListener('updatefound', function() {
+                    const newWorker = registration.installing;
+                    newWorker.addEventListener('statechange', function() {
+                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            showUpdateNotification();
+                        }
+                    });
+                });
+            });
+        }
+
+        function showUpdateNotification() {
+            if (updateNotification) return;
+
+            updateNotification = document.createElement('div');
+            updateNotification.className = 'update-notification';
+            updateNotification.innerHTML = '<span>A new version is available!</span>' +
+                '<button onclick="updateApp()">Update Now</button>' +
+                '<button onclick="dismissUpdate()">Later</button>';
+            document.body.appendChild(updateNotification);
+        }
+
+        function updateApp() {
+            if (navigator.serviceWorker.controller) {
+                navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' });
+            }
+            window.location.reload();
+        }
+
+        function dismissUpdate() {
+            if (updateNotification) {
+                updateNotification.remove();
+                updateNotification = null;
             }
         }
 ]]
@@ -658,7 +745,51 @@ self.addEventListener('message', (event) => {
         self.skipWaiting();
     }
 });
+
+// Notify clients of updates
+self.addEventListener('activate', (event) => {
+    event.waitUntil(
+        self.clients.matchAll({ type: 'window' }).then((clients) => {
+            clients.forEach((client) => {
+                client.postMessage({ type: 'SW_UPDATED', version: CACHE_NAME });
+            });
+        })
+    );
+});
 ]]
+end
+
+--- Generate asset manifest
+-- @param files table Map of file paths to content
+-- @param version string Cache version
+-- @return string JSON asset manifest
+function PWAExporter:generate_asset_manifest(files, version)
+  local assets = {}
+
+  for path, content in pairs(files) do
+    -- Calculate simple hash (sum of bytes mod large prime)
+    local hash = 0
+    for i = 1, math.min(#content, 1000) do
+      hash = (hash + content:byte(i)) % 999983
+    end
+
+    table.insert(assets, {
+      path = path,
+      size = #content,
+      hash = string.format("%06x", hash),
+    })
+  end
+
+  -- Sort by path for consistency
+  table.sort(assets, function(a, b) return a.path < b.path end)
+
+  local manifest = {
+    version = version,
+    generated = os.date("%Y-%m-%dT%H:%M:%SZ"),
+    assets = assets,
+  }
+
+  return self:to_json(manifest)
 end
 
 --- Generate offline fallback page
