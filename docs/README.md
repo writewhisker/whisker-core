@@ -65,11 +65,17 @@ lua main.lua my_story.lua
 
 ## 📚 Documentation
 
+### Core Documentation
 - **[Getting Started](GETTING_STARTED.md)** - Installation and first steps
 - **[API Reference](API_REFERENCE.md)** - Complete API documentation
 - **[Story Format](STORY_FORMAT.md)** - Story file format specification
 - **[Twine Compatibility](TWINE_COMPATIBILITY.md)** - Import/export Twine stories
 - **[Development Guide](DEVELOPMENT_GUIDE.md)** - Advanced development topics
+
+### WLS 2.0 (New Features)
+- **[WLS 2.0 Reference](WLS_2.0_REFERENCE.md)** - Complete feature guide for WLS 2.0
+- **[WLS 2.0 Migration](WLS_2.0_MIGRATION.md)** - Migrating from WLS 1.x to 2.0
+- **[WLS 2.0 API](WLS_2.0_API.md)** - Lua API reference for WLS 2.0 modules
 
 ## 🎮 Examples
 
@@ -214,6 +220,8 @@ This project is licensed under the MIT License - see the [LICENSE](../LICENSE) f
 - [x] Twine compatibility
 - [x] Web runtime
 - [x] Development tools
+- [x] WLS 2.0 features (threads, timed content, effects, audio, external functions)
+- [x] WLS 1.x to 2.0 migration tool
 - [ ] Visual editor (planned)
 - [ ] Mobile apps (planned)
 - [ ] Plugin system (planned)
