@@ -79,6 +79,7 @@ local RULES = {
       "vcs%..*",              -- VCS module intra-module
       "wls2%..*",             -- WLS2 module intra-module
       "api%..*",              -- API module intra-module
+      "lsp%..*",              -- LSP module intra-module
     },
     -- Files where direct requires are allowed
     allowed_files = {
