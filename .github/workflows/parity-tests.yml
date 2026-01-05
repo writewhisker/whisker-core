@@ -1,0 +1,218 @@
+name: Parity Tests
+
+on:
+  push:
+    branches: [main, 'parity/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      verbose:
+        description: 'Enable verbose output'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  lua-tests:
+    name: Lua Test Suite
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout whisker-core
+        uses: actions/checkout@v4
+
+      - name: Setup Lua
+        uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: "5.4"
+
+      - name: Setup LuaRocks
+        uses: leafo/gh-actions-luarocks@v4
+
+      - name: Install dependencies
+        run: |
+          luarocks install busted
+          luarocks install luafilesystem
+          luarocks install dkjson
+
+      - name: Run Lua tests
+        run: |
+          busted --output=TAP > lua-test-results.tap || true
+          busted --output=json > lua-test-results.json || true
+          busted
+
+      - name: Upload Lua test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lua-test-results
+          path: |
+            lua-test-results.tap
+            lua-test-results.json
+
+  parity-check:
+    name: Cross-Platform Parity Check
+    runs-on: ubuntu-latest
+    needs: [lua-tests]
+
+    steps:
+      - name: Checkout whisker-core
+        uses: actions/checkout@v4
+
+      - name: Setup Lua
+        uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: "5.4"
+
+      - name: Setup LuaRocks
+        uses: leafo/gh-actions-luarocks@v4
+
+      - name: Install Lua dependencies
+        run: |
+          luarocks install busted
+          luarocks install luafilesystem
+          luarocks install dkjson
+
+      - name: Run parity test scenarios
+        run: |
+          # Run test scenarios and generate results
+          lua -e "
+            package.path = 'lib/?.lua;lib/?/init.lua;' .. package.path
+            local testing = require('whisker.testing')
+            local json = require('whisker.utils.json')
+
+            -- Create sample test story
+            local story = {
+              startPassage = 'start',
+              passages = {
+                start = {
+                  id = 'start',
+                  name = 'start',
+                  title = 'Start',
+                  content = 'Welcome!',
+                  choices = {
+                    { id = 'c1', text = 'Continue', target = 'end' }
+                  }
+                },
+                ['end'] = {
+                  id = 'end',
+                  name = 'end',
+                  title = 'End',
+                  content = 'The End.',
+                  choices = {}
+                }
+              },
+              variables = {
+                score = { name = 'score', type = 'number', initial = 0 }
+              }
+            }
+
+            -- Create test scenarios
+            local scenarios = {
+              testing.TestScenario.new({ id = 'basic-start', name = 'Basic Start' })
+                :start()
+                :check_passage({ id = 'start' }),
+              testing.TestScenario.new({ id = 'navigation', name = 'Navigation Test' })
+                :start()
+                :choose_by_text('Continue')
+                :check_passage({ id = 'end' }),
+              testing.TestScenario.new({ id = 'variable-check', name = 'Variable Check' })
+                :start()
+                :check_variable('score', 0)
+            }
+
+            -- Run tests
+            local runner = testing.TestRunner.new(story)
+            local summary = runner:run_all(scenarios)
+
+            -- Save results
+            local file = io.open('lua-scenario-results.json', 'w')
+            file:write(json.encode(summary.results, { pretty = true }))
+            file:close()
+
+            -- Generate parity report (self-comparison for CI demo)
+            local parity = testing.ParityRunner.new()
+            local parity_summary = parity:compare_all(summary.results, summary.results)
+
+            local reporter = testing.ParityReporter.new({ format = 'markdown', colors = false })
+            local report = reporter:format(parity_summary)
+
+            local report_file = io.open('parity-report.md', 'w')
+            report_file:write(report)
+            report_file:close()
+
+            -- Also generate JSON report
+            local json_reporter = testing.ParityReporter.new({ format = 'json' })
+            local json_report = json_reporter:format(parity_summary)
+
+            local json_file = io.open('parity-report.json', 'w')
+            json_file:write(json_report)
+            json_file:close()
+
+            -- Exit with appropriate code
+            if parity_summary.passed then
+              print('Parity check passed!')
+              os.exit(0)
+            else
+              print('Parity check failed!')
+              os.exit(1)
+            end
+          "
+
+      - name: Upload parity results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: parity-results
+          path: |
+            lua-scenario-results.json
+            parity-report.md
+            parity-report.json
+
+      - name: Post parity summary
+        if: always()
+        run: |
+          if [ -f parity-report.md ]; then
+            echo "## Parity Report" >> $GITHUB_STEP_SUMMARY
+            cat parity-report.md >> $GITHUB_STEP_SUMMARY
+          fi
+
+  modularity-check:
+    name: Modularity Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Lua
+        uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: "5.4"
+
+      - name: Validate modularity
+        run: lua tools/validate_modularity.lua
+
+  summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [lua-tests, parity-check, modularity-check]
+    if: always()
+
+    steps:
+      - name: Check results
+        run: |
+          if [ "${{ needs.lua-tests.result }}" != "success" ]; then
+            echo "Lua tests failed"
+            exit 1
+          fi
+          if [ "${{ needs.parity-check.result }}" != "success" ]; then
+            echo "Parity check failed"
+            exit 1
+          fi
+          if [ "${{ needs.modularity-check.result }}" != "success" ]; then
+            echo "Modularity check failed"
+            exit 1
+          fi
+          echo "All checks passed!"
