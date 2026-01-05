@@ -1,11 +1,11 @@
 -- src/core/engine.lua
--- Story engine with navigation (75% complete - missing visual/audio)
+-- Story engine with navigation (WLS 1.0 and 2.0 support)
 
 local Engine = {}
 Engine.__index = Engine
 
 -- Dependencies for DI pattern
-Engine._dependencies = {"story_factory", "game_state_factory", "lua_interpreter_factory", "event_bus", "control_flow_factory"}
+Engine._dependencies = {"story_factory", "game_state_factory", "lua_interpreter_factory", "event_bus", "control_flow_factory", "wls2_integration"}
 
 -- Cached factories for backward compatibility (lazy loaded)
 local _story_factory_cache = nil
@@ -61,6 +61,27 @@ local function get_control_flow_factory(deps)
   return _control_flow_cache
 end
 
+-- WLS 2.0 Integration (lazy loaded, optional)
+local _wls2_cache = nil
+
+--- Get WLS 2.0 integration (optional - returns nil if not available)
+local function get_wls2_integration(deps, options)
+  if deps and deps.wls2_integration then
+    return deps.wls2_integration
+  end
+  -- Only create if explicitly requested via options
+  if options and options.enable_wls2 then
+    if not _wls2_cache then
+      local ok, wls2 = pcall(require, "whisker.wls2.wls2_integration")
+      if ok then
+        _wls2_cache = wls2.new(options.wls2_options or {})
+      end
+    end
+    return _wls2_cache
+  end
+  return nil
+end
+
 --- Create a new Engine instance via DI container
 -- @param deps table Dependencies from container
 -- @return function Factory function that creates Engine instances
@@ -82,9 +103,10 @@ end
 
 function Engine.new(story, game_state, config, deps)
     deps = deps or {}
+    config = config or {}
 
     local instance = {
-        config = config or {},
+        config = config,
         current_story = nil,
         game_state = game_state,
         interpreter = nil,
@@ -97,6 +119,8 @@ function Engine.new(story, game_state, config, deps)
         },
         -- WLS 1.0: Tunnel call stack for -> Target -> syntax
         tunnel_stack = {},
+        -- WLS 2.0: Integration module (optional)
+        wls2 = nil,
         -- Store factories for DI
         _story_factory = deps.story_factory,
         _game_state_factory = deps.game_state_factory,
@@ -134,6 +158,9 @@ function Engine.new(story, game_state, config, deps)
     if not instance.interpreter then
         instance.interpreter = interpreter_factory:create()
     end
+
+    -- Initialize WLS 2.0 integration if enabled
+    instance.wls2 = get_wls2_integration(deps, config)
 
     return instance
 end
@@ -586,6 +613,140 @@ end
 function Engine:stop_story()
     self.is_running = false
     self.current_content = nil
+    -- Reset WLS 2.0 if enabled
+    if self.wls2 then
+        self.wls2:reset()
+    end
+end
+
+-- ============================================================================
+-- WLS 2.0: Thread, Timer, Effect, and External Function Support
+-- ============================================================================
+
+--- Check if WLS 2.0 is enabled
+--- @return boolean True if WLS 2.0 integration is available
+function Engine:has_wls2()
+    return self.wls2 ~= nil
+end
+
+--- Get the WLS 2.0 integration instance
+--- @return table|nil The WLS2Integration instance or nil
+function Engine:get_wls2()
+    return self.wls2
+end
+
+--- Spawn a new thread (WLS 2.0)
+--- @param passage_id string The passage to execute in the new thread
+--- @param options table|nil Thread options (priority, etc.)
+--- @return string|nil Thread ID or nil if WLS 2.0 not enabled
+function Engine:spawn_thread(passage_id, options)
+    if not self.wls2 then
+        return nil
+    end
+    local main = self.wls2:get_main_thread()
+    local parent_id = main and main.id or nil
+    return self.wls2:spawn_thread(passage_id, parent_id, options)
+end
+
+--- Await a thread completion (WLS 2.0)
+--- @param thread_id string The thread to wait for
+--- @return boolean True if await was set
+function Engine:await_thread(thread_id)
+    if not self.wls2 then
+        return false
+    end
+    local main = self.wls2:get_main_thread()
+    if main then
+        self.wls2:await_thread(main.id, thread_id)
+        return true
+    end
+    return false
+end
+
+--- Schedule delayed content (WLS 2.0)
+--- @param delay number Delay in milliseconds
+--- @param content table Content to deliver
+--- @param options table|nil Timer options
+--- @return string|nil Timer ID or nil if WLS 2.0 not enabled
+function Engine:schedule_content(delay, content, options)
+    if not self.wls2 then
+        return nil
+    end
+    return self.wls2:schedule_content(delay, content, options)
+end
+
+--- Apply a text effect (WLS 2.0)
+--- @param text string Text to apply effect to
+--- @param effect_name string Effect name (typewriter, fade-in, etc.)
+--- @param options table|nil Effect options
+--- @return string|nil Effect ID or nil if WLS 2.0 not enabled
+function Engine:apply_effect(text, effect_name, options)
+    if not self.wls2 then
+        return nil
+    end
+    return self.wls2:apply_effect(text, effect_name, options)
+end
+
+--- Register external functions for host application use (WLS 2.0)
+--- @param functions table Map of name -> function
+function Engine:register_externals(functions)
+    if self.wls2 then
+        self.wls2:register_externals(functions)
+    end
+end
+
+--- Call an external function (WLS 2.0)
+--- @param name string Function name
+--- @param ... any Arguments
+--- @return any Function result or nil if not available
+function Engine:call_external(name, ...)
+    if not self.wls2 then
+        return nil
+    end
+    return self.wls2:call_external(name, ...)
+end
+
+--- Advance WLS 2.0 by one tick
+--- @param delta_ms number|nil Milliseconds since last tick (default: tick_rate)
+--- @return table|nil Tick results or nil if WLS 2.0 not enabled
+function Engine:tick(delta_ms)
+    if not self.wls2 then
+        return nil
+    end
+    return self.wls2:tick(delta_ms)
+end
+
+--- Run WLS 2.0 until threads need input or complete
+--- @param max_ticks number|nil Maximum ticks to execute
+--- @return table|nil Results or nil if WLS 2.0 not enabled
+function Engine:run_until_blocked(max_ticks)
+    if not self.wls2 then
+        return nil
+    end
+    return self.wls2:run_until_blocked(max_ticks)
+end
+
+--- Pause WLS 2.0 execution
+function Engine:pause_wls2()
+    if self.wls2 then
+        self.wls2:pause()
+    end
+end
+
+--- Resume WLS 2.0 execution
+function Engine:resume_wls2()
+    if self.wls2 then
+        self.wls2:resume()
+    end
+end
+
+--- Get WLS 2.0 statistics
+--- @return table|nil Stats or nil if WLS 2.0 not enabled
+function Engine:get_wls2_stats()
+    if not self.wls2 then
+        return nil
+    end
+    return self.wls2:get_stats()
 end
 
 return Engine

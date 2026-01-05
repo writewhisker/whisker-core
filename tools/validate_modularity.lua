@@ -71,6 +71,7 @@ local RULES = {
       "tools%..*",            -- Tools module intra-module
       "format%..*",           -- Format module intra-module
       "utils%..*",            -- Utils module intra-module (shared utilities)
+      "wls2%..*",             -- WLS 2.0 module intra-module
     },
     -- Files where direct requires are allowed
     allowed_files = {
