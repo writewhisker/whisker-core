@@ -5,13 +5,14 @@ local Engine = {}
 Engine.__index = Engine
 
 -- Dependencies for DI pattern
-Engine._dependencies = {"story_factory", "game_state_factory", "lua_interpreter_factory", "event_bus", "control_flow_factory"}
+Engine._dependencies = {"story_factory", "game_state_factory", "lua_interpreter_factory", "event_bus", "control_flow_factory", "modules_runtime_factory"}
 
 -- Cached factories for backward compatibility (lazy loaded)
 local _story_factory_cache = nil
 local _game_state_factory_cache = nil
 local _interpreter_factory_cache = nil
 local _control_flow_cache = nil
+local _modules_runtime_cache = nil
 
 --- Get the story factory (supports both DI and backward compatibility)
 local function get_story_factory(deps)
@@ -61,6 +62,17 @@ local function get_control_flow_factory(deps)
   return _control_flow_cache
 end
 
+--- Get or create the modules runtime
+-- @param game_state table The game state instance
+-- @return ModulesRuntime
+local function get_modules_runtime(game_state)
+  if not _modules_runtime_cache then
+    local ModulesRuntime = require("whisker.core.modules_runtime")
+    _modules_runtime_cache = ModulesRuntime.new(game_state)
+  end
+  return _modules_runtime_cache
+end
+
 --- Create a new Engine instance via DI container
 -- @param deps table Dependencies from container
 -- @return function Factory function that creates Engine instances
@@ -97,6 +109,8 @@ function Engine.new(story, game_state, config, deps)
         },
         -- WLS 1.0: Tunnel call stack for -> Target -> syntax
         tunnel_stack = {},
+        -- WLS 1.0: Modules runtime for FUNCTION/NAMESPACE
+        modules_runtime = nil,
         -- Store factories for DI
         _story_factory = deps.story_factory,
         _game_state_factory = deps.game_state_factory,
@@ -135,6 +149,9 @@ function Engine.new(story, game_state, config, deps)
         instance.interpreter = interpreter_factory:create()
     end
 
+    -- Initialize modules runtime
+    instance.modules_runtime = get_modules_runtime(instance.game_state)
+
     return instance
 end
 
@@ -168,6 +185,11 @@ function Engine:load_story(story)
         self.interpreter = interpreter_factory:create()
     end
 
+    -- Initialize modules runtime if not set
+    if not self.modules_runtime then
+        self.modules_runtime = get_modules_runtime(self.game_state)
+    end
+
     return true
 end
 
@@ -178,6 +200,11 @@ function Engine:start_story(starting_passage_id)
 
     -- Initialize game state
     self.game_state:initialize(self.current_story)
+
+    -- Load functions from story into modules runtime
+    if self.modules_runtime and self.current_story.functions then
+        self.modules_runtime:load_from_story(self.current_story)
+    end
 
     -- Determine starting passage
     local start_passage
@@ -586,6 +613,76 @@ end
 function Engine:stop_story()
     self.is_running = false
     self.current_content = nil
+end
+
+-- ============================================================================
+-- WLS 1.0: Module Functions Support
+-- ============================================================================
+
+--- Get the modules runtime
+--- @return ModulesRuntime
+function Engine:get_modules_runtime()
+    return self.modules_runtime
+end
+
+--- Call a defined function
+--- @param name string The function name (may be namespace-qualified)
+--- @param args table Array of argument values
+--- @return any The function result
+function Engine:call_function(name, args)
+    if not self.modules_runtime then
+        error("Modules runtime not initialized")
+    end
+    return self.modules_runtime:call_function(name, args)
+end
+
+--- Check if a function exists
+--- @param name string The function name
+--- @return boolean
+function Engine:has_function(name)
+    if not self.modules_runtime then
+        return false
+    end
+    return self.modules_runtime:has_function(name)
+end
+
+--- Define a function dynamically
+--- @param name string The function name
+--- @param params table Array of parameter names
+--- @param body string The function body
+--- @return string The qualified function name
+function Engine:define_function(name, params, body)
+    if not self.modules_runtime then
+        error("Modules runtime not initialized")
+    end
+    return self.modules_runtime:define_function(name, params, body)
+end
+
+--- Enter a namespace scope
+--- @param name string The namespace name
+function Engine:enter_namespace(name)
+    if not self.modules_runtime then
+        error("Modules runtime not initialized")
+    end
+    self.modules_runtime:enter_namespace(name)
+end
+
+--- Exit the current namespace scope
+--- @return string|nil The exited namespace name
+function Engine:exit_namespace()
+    if not self.modules_runtime then
+        return nil
+    end
+    return self.modules_runtime:exit_namespace()
+end
+
+--- Get current namespace
+--- @return string The current namespace path
+function Engine:current_namespace()
+    if not self.modules_runtime then
+        return ""
+    end
+    return self.modules_runtime:current_namespace()
 end
 
 return Engine
