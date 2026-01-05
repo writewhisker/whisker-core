@@ -84,6 +84,16 @@ function PDFExporter:export(story, options)
   pdf:set_font_size(font_size)
   pdf:set_line_height(line_height)
 
+  -- Enable page numbering (start after cover and TOC)
+  local start_page = include_toc and 3 or 2
+  pdf:enable_page_numbering({
+    start_page = start_page,
+    format = "- %d -",
+    position = "bottom",
+    align = "center",
+    margin = margin,
+  })
+
   -- Add cover page
   pdf:add_page()
   self:_add_cover_page(pdf, story, margin)
@@ -214,7 +224,7 @@ function PDFExporter:_add_table_of_contents(pdf, story, margin, font_size)
   -- Find start passage
   local start_name = story.start_passage or story.start or "Start"
 
-  -- Add each passage to TOC
+  -- Add each passage to TOC with links
   for _, passage in ipairs(passages) do
     -- Check if we need a new page
     if y_pos < margin + 20 then
@@ -226,7 +236,10 @@ function PDFExporter:_add_table_of_contents(pdf, story, margin, font_size)
     local is_start = name == start_name or passage.name == start_name
 
     local display_name = is_start and (name .. " (Start)") or name
-    pdf:text(display_name, margin, y_pos)
+
+    -- Draw text with link to passage destination
+    local dest_name = "passage_" .. (name:gsub("[^%w]", "_"))
+    pdf:text_link(display_name, margin, y_pos, dest_name)
     y_pos = y_pos - (font_size * 1.5)
   end
 end
@@ -296,8 +309,28 @@ function PDFExporter:_add_playable_content(pdf, story, margin, font_size, line_h
     pdf:set_font("helvetica-bold", font_size + 2)
     local name = passage.name or passage.id or "Unnamed"
     local header = i == 1 and (name .. " (Start)") or name
+
+    -- Add destination for this passage (for TOC links)
+    local dest_name = "passage_" .. (name:gsub("[^%w]", "_"))
+    pdf:add_destination(dest_name, nil, y_pos)
+
     pdf:text(header, margin, y_pos)
     y_pos = y_pos - (font_size * 1.8)
+
+    -- Add passage image if present
+    local image_data = passage.image or passage.cover_image
+    if image_data and type(image_data) == "string" and #image_data > 0 then
+      local img_format = "jpeg"
+      if image_data:sub(1, 8) == "\137PNG\r\n\26\n" then
+        img_format = "png"
+      end
+      local img_width = 200
+      local img_height = 150
+      if y_pos - img_height > margin then
+        pdf:add_image(image_data, img_format, margin, y_pos, img_width, img_height)
+        y_pos = y_pos - img_height - 10
+      end
+    end
 
     -- Passage content
     pdf:set_font("helvetica", font_size)
@@ -382,8 +415,28 @@ function PDFExporter:_add_manuscript_content(pdf, story, margin, font_size, line
     local name = passage.name or passage.id or "Unnamed"
     local is_start = name == start_name
     local header = is_start and (name .. " (Start)") or name
+
+    -- Add destination for this passage (for TOC links)
+    local dest_name = "passage_" .. (name:gsub("[^%w]", "_"))
+    pdf:add_destination(dest_name, nil, y_pos)
+
     pdf:text(header, margin, y_pos)
     y_pos = y_pos - (font_size * 1.8)
+
+    -- Add passage image if present
+    local image_data = passage.image or passage.cover_image
+    if image_data and type(image_data) == "string" and #image_data > 0 then
+      local img_format = "jpeg"
+      if image_data:sub(1, 8) == "\137PNG\r\n\26\n" then
+        img_format = "png"
+      end
+      local img_width = 200
+      local img_height = 150
+      if y_pos - img_height > margin then
+        pdf:add_image(image_data, img_format, margin, y_pos, img_width, img_height)
+        y_pos = y_pos - img_height - 10
+      end
+    end
 
     -- Passage content
     pdf:set_font("helvetica", font_size)
@@ -476,6 +529,11 @@ function PDFExporter:_add_outline_content(pdf, story, margin, font_size)
     local name = passage.name or passage.id or "Unnamed"
     local is_start = name == start_name
     local header = is_start and (name .. " (Start)") or name
+
+    -- Add destination for this passage
+    local dest_name = "passage_" .. (name:gsub("[^%w]", "_"))
+    pdf:add_destination(dest_name, nil, y_pos)
+
     pdf:text(header, margin, y_pos)
     y_pos = y_pos - (font_size * 1.5)
 

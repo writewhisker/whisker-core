@@ -55,54 +55,96 @@ end
 --- Export story to static site
 -- @param story table Story data
 -- @param options table Export options:
---   - single_page: boolean (single page vs multi-page, default true for now)
+--   - multi_page: boolean (multi-page vs single page, default false)
 --   - include_save: boolean (include save/load, default true)
 --   - include_theme: boolean (include theme toggle, default true)
 --   - include_back: boolean (include back button, default true)
 --   - theme: string ("light", "dark", "auto", default "auto")
+--   - site_url: string (base URL for sitemap/SEO, default "/")
+--   - include_sitemap: boolean (generate sitemap.xml, default true with multi_page)
+--   - include_robots: boolean (generate robots.txt, default true with multi_page)
+--   - include_404: boolean (generate 404.html, default true with multi_page)
+--   - include_seo: boolean (include OG tags, JSON-LD, default true)
 -- @return table Export bundle with files, manifest
 function StaticExporter:export(story, options)
   options = options or {}
   local warnings = {}
 
+  local multi_page = options.multi_page == true
   local include_save = options.include_save ~= false
   local include_theme = options.include_theme ~= false
   local include_back = options.include_back ~= false
   local theme = options.theme or "auto"
-
-  -- Serialize story data
-  local story_json = self:serialize_story(story)
+  local site_url = options.site_url or "/"
+  local include_sitemap = options.include_sitemap ~= false and multi_page
+  local include_robots = options.include_robots ~= false and multi_page
+  local include_404 = options.include_404 ~= false and multi_page
+  local include_seo = options.include_seo ~= false
 
   -- Generate HTML
   local title = story.name or story.title or "Interactive Story"
   local description = story.description or "An interactive story"
+  local author = story.author or ""
 
-  local html = self:generate_html(story_json, title, description, {
-    include_save = include_save,
-    include_theme = include_theme,
-    include_back = include_back,
-    theme = theme,
-  })
+  local files = {}
 
-  -- Generate files map (for consistency with PWA exporter)
-  local files = {
-    ["index.html"] = html,
-  }
+  if multi_page then
+    -- Multi-page mode: generate one HTML file per passage
+    files = self:generate_multi_page_site(story, {
+      include_save = include_save,
+      include_theme = include_theme,
+      include_back = include_back,
+      theme = theme,
+      include_seo = include_seo,
+      site_url = site_url,
+      author = author,
+    })
+
+    -- Add sitemap.xml
+    if include_sitemap then
+      files["sitemap.xml"] = self:generate_sitemap(story, site_url)
+    end
+
+    -- Add robots.txt
+    if include_robots then
+      files["robots.txt"] = self:generate_robots(site_url)
+    end
+
+    -- Add 404.html
+    if include_404 then
+      files["404.html"] = self:generate_404_page(title, description)
+    end
+  else
+    -- Single-page mode (default)
+    local story_json = self:serialize_story(story)
+    local html = self:generate_html(story_json, title, description, {
+      include_save = include_save,
+      include_theme = include_theme,
+      include_back = include_back,
+      theme = theme,
+      include_seo = include_seo,
+      author = author,
+      site_url = site_url,
+    })
+    files["index.html"] = html
+  end
 
   -- Generate filename
   local safe_title = title:lower():gsub("[^%w]", "_")
-  local filename = safe_title .. ".html"
+  local filename = multi_page and (safe_title .. "_site.zip") or (safe_title .. ".html")
 
   return {
-    content = html,
+    content = files["index.html"],
     files = files,
     assets = {},
     manifest = {
       format = "static",
       story_name = story.name or story.title or "Untitled",
       passage_count = #story.passages,
+      file_count = 0, -- Will be counted externally
       exported_at = os.time(),
       filename = filename,
+      multi_page = multi_page,
       include_save = include_save,
       include_theme = include_theme,
     },
@@ -241,11 +283,25 @@ end
 -- @param story_json string Story JSON data
 -- @param title string Page title
 -- @param description string Page description
--- @param options table Options (include_save, include_theme, etc.)
+-- @param options table Options (include_save, include_theme, include_seo, author, site_url)
 -- @return string HTML content
 function StaticExporter:generate_html(story_json, title, description, options)
   local escaped_title = ExportUtils.escape_html(title)
   local escaped_description = ExportUtils.escape_html(description)
+  local author = options.author or ""
+  local site_url = options.site_url or "/"
+
+  -- Build SEO meta tags
+  local seo_tags = ""
+  if options.include_seo then
+    seo_tags = self:generate_seo_tags({
+      title = escaped_title,
+      description = escaped_description,
+      author = author,
+      url = site_url,
+      type = "website",
+    })
+  end
 
   return [[<!DOCTYPE html>
 <html lang="en">
@@ -253,7 +309,7 @@ function StaticExporter:generate_html(story_json, title, description, options)
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="]] .. escaped_description .. [[">
-    <meta name="generator" content="whisker-core">
+    <meta name="generator" content="whisker-core">]] .. seo_tags .. [[
     <title>]] .. escaped_title .. [[</title>
     <style>
         ]] .. self:get_player_styles() .. [[
@@ -827,6 +883,332 @@ function StaticExporter:estimate_size(story)
   local per_passage_size = 300 -- ~300 bytes per passage
   local passage_count = story.passages and #story.passages or 0
   return base_size + (passage_count * per_passage_size)
+end
+
+--- Generate SEO meta tags (Open Graph, JSON-LD)
+-- @param options table SEO options (title, description, author, url, type)
+-- @return string HTML meta tags
+function StaticExporter:generate_seo_tags(options)
+  local title = options.title or "Interactive Story"
+  local description = options.description or "An interactive story"
+  local author = options.author or ""
+  local url = options.url or "/"
+  local og_type = options.type or "website"
+
+  -- Build Open Graph tags
+  local og_tags = [[
+    <meta property="og:type" content="]] .. og_type .. [[">
+    <meta property="og:title" content="]] .. title .. [[">
+    <meta property="og:description" content="]] .. description .. [[">
+    <meta property="og:url" content="]] .. url .. [[">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="]] .. title .. [[">
+    <meta name="twitter:description" content="]] .. description .. [[">]]
+
+  -- Add author if present
+  if author and author ~= "" then
+    og_tags = og_tags .. [[
+    <meta name="author" content="]] .. ExportUtils.escape_html(author) .. [[">]]
+  end
+
+  -- Build JSON-LD structured data
+  local json_ld_data = {
+    ["@context"] = "https://schema.org",
+    ["@type"] = "CreativeWork",
+    name = title,
+    description = description,
+    genre = "Interactive Fiction",
+  }
+
+  if author and author ~= "" then
+    json_ld_data.author = {
+      ["@type"] = "Person",
+      name = author,
+    }
+  end
+
+  og_tags = og_tags .. [[
+    <script type="application/ld+json">]] .. self:to_json(json_ld_data) .. [[</script>]]
+
+  return og_tags
+end
+
+--- Generate multi-page static site
+-- @param story table Story data
+-- @param options table Generation options
+-- @return table Map of filename to content
+function StaticExporter:generate_multi_page_site(story, options)
+  local files = {}
+  local title = story.name or story.title or "Interactive Story"
+  local description = story.description or "An interactive story"
+  local start_passage = story.start_passage or story.start or "Start"
+
+  -- Build passage lookup map
+  local passage_map = {}
+  for _, passage in ipairs(story.passages) do
+    local name = passage.name or passage.id
+    passage_map[name] = passage
+  end
+
+  -- Generate index.html (landing page / start passage)
+  local start = passage_map[start_passage]
+  if start then
+    files["index.html"] = self:generate_passage_page(start, story, options, true)
+  else
+    -- Fallback: use first passage
+    files["index.html"] = self:generate_passage_page(story.passages[1], story, options, true)
+  end
+
+  -- Generate a page for each passage
+  for _, passage in ipairs(story.passages) do
+    local name = passage.name or passage.id
+    local safe_name = self:safe_filename(name)
+    local filename = "passages/" .. safe_name .. ".html"
+    files[filename] = self:generate_passage_page(passage, story, options, false)
+  end
+
+  -- Generate shared CSS file
+  files["css/styles.css"] = self:get_player_styles()
+
+  -- Generate shared JS file
+  files["js/player.js"] = self:get_multi_page_player_script(story, options)
+
+  return files
+end
+
+--- Generate a single passage page for multi-page site
+-- @param passage table Passage data
+-- @param story table Full story data
+-- @param options table Generation options
+-- @param is_index boolean Whether this is the index page
+-- @return string HTML content
+function StaticExporter:generate_passage_page(passage, story, options, is_index)
+  local title = story.name or story.title or "Interactive Story"
+  local passage_title = passage.title or passage.name or "Untitled"
+  local page_title = is_index and title or (passage_title .. " - " .. title)
+  local description = passage.text and passage.text:sub(1, 160) or story.description or "An interactive story"
+  description = description:gsub("\n", " "):gsub("%s+", " ")
+
+  local escaped_title = ExportUtils.escape_html(page_title)
+  local escaped_passage_title = ExportUtils.escape_html(passage_title)
+  local escaped_description = ExportUtils.escape_html(description)
+  local escaped_content = ExportUtils.escape_html(passage.text or passage.content or "")
+
+  -- Build SEO tags
+  local seo_tags = ""
+  if options.include_seo then
+    local passage_name = passage.name or passage.id
+    local page_url = is_index and options.site_url or (options.site_url .. "passages/" .. self:safe_filename(passage_name) .. ".html")
+    seo_tags = self:generate_seo_tags({
+      title = escaped_title,
+      description = escaped_description,
+      author = options.author,
+      url = page_url,
+      type = "article",
+    })
+  end
+
+  -- Build choices HTML
+  local choices_html = ""
+  local choices = passage.choices or passage.links or {}
+  if #choices > 0 then
+    choices_html = '<nav class="choices" aria-label="Story choices">\n'
+    for _, choice in ipairs(choices) do
+      local target = choice.target or choice.passage or choice.link or ""
+      local choice_text = ExportUtils.escape_html(choice.text or choice.label or "Continue")
+      local target_url = "../passages/" .. self:safe_filename(target) .. ".html"
+      if is_index then
+        target_url = "passages/" .. self:safe_filename(target) .. ".html"
+      end
+      choices_html = choices_html .. '            <a href="' .. target_url .. '" class="choice">' .. choice_text .. '</a>\n'
+    end
+    choices_html = choices_html .. '        </nav>'
+  end
+
+  -- Determine relative paths
+  local css_path = is_index and "css/styles.css" or "../css/styles.css"
+  local js_path = is_index and "js/player.js" or "../js/player.js"
+  local home_link = is_index and "" or '<a href="../index.html" class="control-btn">Home</a>'
+
+  return [[<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="]] .. escaped_description .. [[">
+    <meta name="generator" content="whisker-core">]] .. seo_tags .. [[
+    <title>]] .. escaped_title .. [[</title>
+    <link rel="stylesheet" href="]] .. css_path .. [[">
+</head>
+<body>
+    <div id="whisker-player">
+        <article class="passage">
+            <h1>]] .. escaped_passage_title .. [[</h1>
+            <div class="passage-content">]] .. escaped_content:gsub("\n", "<br>") .. [[</div>
+        ]] .. choices_html .. [[
+        </article>
+        <div id="controls">
+            ]] .. home_link .. [[
+        </div>
+    </div>
+    <script src="]] .. js_path .. [["></script>
+</body>
+</html>]]
+end
+
+--- Generate safe filename from passage name
+-- @param name string Passage name
+-- @return string Safe filename
+function StaticExporter:safe_filename(name)
+  if not name then return "unnamed" end
+  return name:lower():gsub("[^%w%-_]", "_"):gsub("_+", "_"):gsub("^_", ""):gsub("_$", "")
+end
+
+--- Get multi-page player script
+-- @param story table Story data
+-- @param options table Options
+-- @return string JavaScript code
+function StaticExporter:get_multi_page_player_script(story, options)
+  local include_theme = options.include_theme
+
+  return [[// Whisker Multi-Page Player Script
+(function() {
+    'use strict';
+
+    // Theme management
+    function loadTheme() {
+        const savedTheme = localStorage.getItem('whisker_theme');
+        if (savedTheme) {
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        }
+    }
+
+    function toggleTheme() {
+        const current = document.documentElement.getAttribute('data-theme') || '';
+        const newTheme = current === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', newTheme);
+        localStorage.setItem('whisker_theme', newTheme);
+        updateThemeButton();
+    }
+
+    function updateThemeButton() {
+        const btn = document.getElementById('theme-toggle');
+        if (btn) {
+            const current = document.documentElement.getAttribute('data-theme') || '';
+            btn.textContent = current === 'dark' ? 'Light Mode' : 'Dark Mode';
+        }
+    }
+
+    // Initialize
+    loadTheme();
+
+    ]] .. (include_theme and [[
+    // Add theme toggle button
+    const controls = document.getElementById('controls');
+    if (controls) {
+        const themeBtn = document.createElement('button');
+        themeBtn.id = 'theme-toggle';
+        themeBtn.className = 'control-btn';
+        themeBtn.onclick = toggleTheme;
+        updateThemeButton.call(null);
+        const current = document.documentElement.getAttribute('data-theme') || '';
+        themeBtn.textContent = current === 'dark' ? 'Light Mode' : 'Dark Mode';
+        controls.appendChild(themeBtn);
+    }
+    ]] or "") .. [[
+})();
+]]
+end
+
+--- Generate sitemap.xml for SEO
+-- @param story table Story data
+-- @param site_url string Base site URL
+-- @return string XML sitemap content
+function StaticExporter:generate_sitemap(story, site_url)
+  -- Ensure site_url ends with /
+  if site_url:sub(-1) ~= "/" then
+    site_url = site_url .. "/"
+  end
+
+  local today = os.date("%Y-%m-%d")
+
+  local xml = [[<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+        <loc>]] .. ExportUtils.escape_html(site_url) .. [[</loc>
+        <lastmod>]] .. today .. [[</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>1.0</priority>
+    </url>
+]]
+
+  -- Add each passage
+  for _, passage in ipairs(story.passages) do
+    local name = passage.name or passage.id
+    local safe_name = self:safe_filename(name)
+    xml = xml .. [[    <url>
+        <loc>]] .. ExportUtils.escape_html(site_url) .. [[passages/]] .. safe_name .. [[.html</loc>
+        <lastmod>]] .. today .. [[</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.8</priority>
+    </url>
+]]
+  end
+
+  xml = xml .. [[</urlset>
+]]
+
+  return xml
+end
+
+--- Generate robots.txt
+-- @param site_url string Base site URL
+-- @return string robots.txt content
+function StaticExporter:generate_robots(site_url)
+  -- Ensure site_url ends with /
+  if site_url:sub(-1) ~= "/" then
+    site_url = site_url .. "/"
+  end
+
+  return [[User-agent: *
+Allow: /
+
+Sitemap: ]] .. site_url .. [[sitemap.xml
+]]
+end
+
+--- Generate 404 error page
+-- @param title string Site title
+-- @param description string Site description
+-- @return string HTML content
+function StaticExporter:generate_404_page(title, description)
+  local escaped_title = ExportUtils.escape_html(title)
+
+  return [[<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex">
+    <title>Page Not Found - ]] .. escaped_title .. [[</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div id="whisker-player">
+        <div class="passage">
+            <h1>Page Not Found</h1>
+            <div class="passage-content">
+                <p>Sorry, the page you're looking for doesn't exist.</p>
+                <p>The story may have changed, or you may have followed an old link.</p>
+            </div>
+            <div class="choices">
+                <a href="index.html" class="choice">Return to Start</a>
+            </div>
+        </div>
+    </div>
+    <script src="js/player.js"></script>
+</body>
+</html>]]
 end
 
 return StaticExporter
