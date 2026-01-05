@@ -65,6 +65,18 @@ function PDFGenerator.new(options)
   self.x = 0
   self.y = 0
 
+  -- Link and image tracking
+  self.link_destinations = {} -- Named destinations for internal links
+  self.images = {} -- Embedded images
+  self.page_numbering = {
+    enabled = false,
+    start_page = 1,
+    format = "Page %d",
+    position = "bottom", -- "top" or "bottom"
+    align = "center", -- "left", "center", "right"
+    margin = 30,
+  }
+
   -- Initialize document structure
   self:_init_document()
 
@@ -139,6 +151,14 @@ end
 function PDFGenerator:_finalize_page()
   if not self.current_page then return end
 
+  -- Add page number if enabled
+  local page_index = #self.pages
+  local page_num_stream = self:_add_page_number(page_index)
+  if page_num_stream then
+    table.insert(self.current_page.content, page_num_stream)
+    self.current_page.fonts_used["helvetica"] = true
+  end
+
   -- Create content stream object
   local content_str = table.concat(self.current_page.content, "\n")
   local content_id = self:_add_object({
@@ -147,13 +167,33 @@ function PDFGenerator:_finalize_page()
   })
   self.current_page.content_id = content_id
 
+  -- Create annotation objects if any
+  local annot_ids = {}
+  if self.current_page.annotations then
+    for _, annot in ipairs(self.current_page.annotations) do
+      local annot_id = self:_add_object({
+        type = "annotation",
+        annot_type = annot.type,
+        x = annot.x,
+        y = annot.y,
+        width = annot.width,
+        height = annot.height,
+        destination = annot.destination,
+        url = annot.url,
+      })
+      table.insert(annot_ids, annot_id)
+    end
+  end
+
   -- Create page object
   local page_id = self:_add_object({
     type = "page",
     width = self.page_width,
     height = self.page_height,
     content_id = content_id,
-    fonts_used = self.current_page.fonts_used
+    fonts_used = self.current_page.fonts_used,
+    images_used = self.current_page.images_used,
+    annot_ids = annot_ids,
   })
   self.current_page.page_id = page_id
 end
@@ -324,6 +364,219 @@ function PDFGenerator:text(text, x, y, options)
   self.current_page.fonts_used[self.current_font] = true
 end
 
+--- Enable page numbering
+-- @param options table Options: start_page, format, position, align, margin
+function PDFGenerator:enable_page_numbering(options)
+  options = options or {}
+  self.page_numbering.enabled = true
+  self.page_numbering.start_page = options.start_page or 1
+  self.page_numbering.format = options.format or "Page %d"
+  self.page_numbering.position = options.position or "bottom"
+  self.page_numbering.align = options.align or "center"
+  self.page_numbering.margin = options.margin or 30
+end
+
+--- Add a named destination for internal linking
+-- @param name string Destination name
+-- @param page_index number Page index (1-based)
+-- @param y number Y position on page
+function PDFGenerator:add_destination(name, page_index, y)
+  self.link_destinations[name] = {
+    page_index = page_index or #self.pages,
+    y = y or self.page_height,
+  }
+end
+
+--- Add an internal link annotation
+-- @param x number X position
+-- @param y number Y position
+-- @param width number Link width
+-- @param height number Link height
+-- @param destination string Destination name
+function PDFGenerator:add_link(x, y, width, height, destination)
+  if not self.current_page then
+    self:add_page()
+  end
+
+  -- Initialize annotations array if needed
+  if not self.current_page.annotations then
+    self.current_page.annotations = {}
+  end
+
+  table.insert(self.current_page.annotations, {
+    type = "link",
+    x = x,
+    y = y,
+    width = width,
+    height = height,
+    destination = destination,
+  })
+end
+
+--- Add an external URL link annotation
+-- @param x number X position
+-- @param y number Y position
+-- @param width number Link width
+-- @param height number Link height
+-- @param url string External URL
+function PDFGenerator:add_url_link(x, y, width, height, url)
+  if not self.current_page then
+    self:add_page()
+  end
+
+  if not self.current_page.annotations then
+    self.current_page.annotations = {}
+  end
+
+  table.insert(self.current_page.annotations, {
+    type = "url",
+    x = x,
+    y = y,
+    width = width,
+    height = height,
+    url = url,
+  })
+end
+
+--- Draw text with an internal link
+-- @param text string Text to draw
+-- @param x number X position
+-- @param y number Y position
+-- @param destination string Destination name
+function PDFGenerator:text_link(text, x, y, destination)
+  -- Draw the text
+  self:text(text, x, y)
+
+  -- Estimate text width for link area
+  local text_width = #text * self.font_size * 0.5
+  local text_height = self.font_size
+
+  -- Add link annotation
+  self:add_link(x, y - text_height, text_width, text_height, destination)
+end
+
+--- Embed an image (PNG or JPEG)
+-- @param image_data string Raw image data
+-- @param format string Image format ("png" or "jpeg")
+-- @param x number X position
+-- @param y number Y position
+-- @param width number Display width
+-- @param height number Display height
+-- @return boolean Success
+function PDFGenerator:add_image(image_data, format, x, y, width, height)
+  if not self.current_page then
+    self:add_page()
+  end
+
+  format = format or "jpeg"
+
+  -- Parse image dimensions from data (simplified)
+  local img_width, img_height = self:_parse_image_dimensions(image_data, format)
+
+  -- Create image XObject
+  local image_id = self:_add_object({
+    type = "image",
+    format = format,
+    data = image_data,
+    width = img_width or width,
+    height = img_height or height,
+  })
+
+  -- Store image reference
+  local img_ref = "Im" .. #self.images + 1
+  table.insert(self.images, {
+    id = image_id,
+    ref = img_ref,
+  })
+
+  -- Track image usage on current page
+  if not self.current_page.images_used then
+    self.current_page.images_used = {}
+  end
+  self.current_page.images_used[img_ref] = image_id
+
+  -- Add image drawing command to content stream
+  local stream = string.format(
+    "q %.2f 0 0 %.2f %.2f %.2f cm /%s Do Q",
+    width, height, x, y - height, img_ref
+  )
+  table.insert(self.current_page.content, stream)
+
+  return true
+end
+
+--- Parse image dimensions from raw data
+-- @param data string Image data
+-- @param format string Image format
+-- @return number, number Width and height
+function PDFGenerator:_parse_image_dimensions(data, format)
+  if format == "png" then
+    -- PNG: dimensions at bytes 16-23
+    if #data >= 24 and data:sub(1, 8) == "\137PNG\r\n\26\n" then
+      local w1, w2, w3, w4 = data:byte(17, 20)
+      local h1, h2, h3, h4 = data:byte(21, 24)
+      local width = w1 * 16777216 + w2 * 65536 + w3 * 256 + w4
+      local height = h1 * 16777216 + h2 * 65536 + h3 * 256 + h4
+      return width, height
+    end
+  elseif format == "jpeg" then
+    -- JPEG: search for SOF0 marker (0xFFC0)
+    local i = 1
+    while i < #data - 10 do
+      if data:byte(i) == 0xFF then
+        local marker = data:byte(i + 1)
+        if marker >= 0xC0 and marker <= 0xCF and marker ~= 0xC4 and marker ~= 0xC8 and marker ~= 0xCC then
+          local height = data:byte(i + 5) * 256 + data:byte(i + 6)
+          local width = data:byte(i + 7) * 256 + data:byte(i + 8)
+          return width, height
+        end
+        local len = data:byte(i + 2) * 256 + data:byte(i + 3)
+        i = i + len + 2
+      else
+        i = i + 1
+      end
+    end
+  end
+  return 100, 100 -- Default fallback
+end
+
+--- Add page number to a page
+-- @param page_index number Page index (1-based)
+function PDFGenerator:_add_page_number(page_index)
+  if not self.page_numbering.enabled then return end
+  if page_index < self.page_numbering.start_page then return end
+
+  local page_num = page_index - self.page_numbering.start_page + 1
+  local text = string.format(self.page_numbering.format, page_num)
+
+  -- Calculate position
+  local y
+  if self.page_numbering.position == "top" then
+    y = self.page_height - self.page_numbering.margin
+  else
+    y = self.page_numbering.margin
+  end
+
+  local x
+  local text_width = #text * self.font_size * 0.5
+  if self.page_numbering.align == "left" then
+    x = self.page_numbering.margin
+  elseif self.page_numbering.align == "right" then
+    x = self.page_width - self.page_numbering.margin - text_width
+  else -- center
+    x = (self.page_width - text_width) / 2
+  end
+
+  -- Build page number text command
+  local font = self.fonts["helvetica"]
+  local stream = string.format(
+    "BT /%s %d Tf %.0f %.0f Td (%s) Tj ET",
+    font.ref, 10, x, y, self:_escape_string(text)
+  )
+
+  return stream
+end
+
 --- Generate the complete PDF content
 -- @return string PDF document as string
 function PDFGenerator:output()
@@ -388,7 +641,20 @@ function PDFGenerator:_render_object(obj, page_ids)
   table.insert(parts, string.format("%d 0 obj\n", obj.id))
 
   if obj.type == "catalog" then
-    table.insert(parts, "<< /Type /Catalog /Pages 2 0 R >>\n")
+    -- Add destinations if any
+    local dests_str = ""
+    if next(self.link_destinations) then
+      local dests = {}
+      for name, dest in pairs(self.link_destinations) do
+        local page_id = page_ids[dest.page_index] or page_ids[1]
+        table.insert(dests, string.format(
+          "/%s [%d 0 R /XYZ 0 %.2f null]",
+          self:_escape_name(name), page_id, dest.y
+        ))
+      end
+      dests_str = " /Dests << " .. table.concat(dests, " ") .. " >>"
+    end
+    table.insert(parts, "<< /Type /Catalog /Pages 2 0 R" .. dests_str .. " >>\n")
 
   elseif obj.type == "pages" then
     local kids = {}
@@ -412,12 +678,32 @@ function PDFGenerator:_render_object(obj, page_ids)
     end
     local fonts_dict = "<<" .. table.concat(font_refs, " ") .. ">>"
 
+    -- Build image resources
+    local xobject_dict = ""
+    if obj.images_used and next(obj.images_used) then
+      local img_refs = {}
+      for ref, id in pairs(obj.images_used) do
+        table.insert(img_refs, string.format("/%s %d 0 R", ref, id))
+      end
+      xobject_dict = " /XObject <<" .. table.concat(img_refs, " ") .. ">>"
+    end
+
+    -- Build annotations reference
+    local annots_str = ""
+    if obj.annot_ids and #obj.annot_ids > 0 then
+      local annot_refs = {}
+      for _, aid in ipairs(obj.annot_ids) do
+        table.insert(annot_refs, string.format("%d 0 R", aid))
+      end
+      annots_str = " /Annots [" .. table.concat(annot_refs, " ") .. "]"
+    end
+
     table.insert(parts, string.format(
       "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %.2f %.2f] " ..
-      "/Contents %d 0 R /Resources << /Font %s >> >>\n",
+      "/Contents %d 0 R /Resources << /Font %s%s >>%s >>\n",
       obj.width, obj.height,
       obj.content_id,
-      fonts_dict
+      fonts_dict, xobject_dict, annots_str
     ))
 
   elseif obj.type == "font" then
@@ -433,11 +719,54 @@ function PDFGenerator:_render_object(obj, page_ids)
       "<< /Length %d >>\nstream\n%s\nendstream\n",
       len, content
     ))
+
+  elseif obj.type == "annotation" then
+    local rect = string.format("[%.2f %.2f %.2f %.2f]",
+      obj.x, obj.y, obj.x + obj.width, obj.y + obj.height)
+
+    if obj.annot_type == "link" and obj.destination then
+      -- Internal link
+      table.insert(parts, string.format(
+        "<< /Type /Annot /Subtype /Link /Rect %s /Border [0 0 0] " ..
+        "/Dest /%s >>\n",
+        rect, self:_escape_name(obj.destination)
+      ))
+    elseif obj.annot_type == "url" and obj.url then
+      -- External URL link
+      table.insert(parts, string.format(
+        "<< /Type /Annot /Subtype /Link /Rect %s /Border [0 0 0] " ..
+        "/A << /Type /Action /S /URI /URI (%s) >> >>\n",
+        rect, self:_escape_string(obj.url)
+      ))
+    else
+      table.insert(parts, "<< /Type /Annot /Subtype /Link /Rect [0 0 0 0] >>\n")
+    end
+
+  elseif obj.type == "image" then
+    -- Simplified image XObject (DCTDecode for JPEG, FlateDecode for others)
+    local filter = obj.format == "jpeg" and "/DCTDecode" or "/FlateDecode"
+    local colorspace = "/DeviceRGB"
+    local data = obj.data or ""
+
+    table.insert(parts, string.format(
+      "<< /Type /XObject /Subtype /Image /Width %d /Height %d " ..
+      "/ColorSpace %s /BitsPerComponent 8 /Filter %s /Length %d >>\n" ..
+      "stream\n%s\nendstream\n",
+      obj.width, obj.height, colorspace, filter, #data, data
+    ))
   end
 
   table.insert(parts, "endobj\n")
 
   return table.concat(parts)
+end
+
+--- Escape a name for PDF (remove spaces, special chars)
+-- @param name string Input name
+-- @return string Escaped name
+function PDFGenerator:_escape_name(name)
+  if not name then return "unnamed" end
+  return name:gsub("[^%w_]", "_")
 end
 
 return PDFGenerator

@@ -63,6 +63,8 @@ end
 --   - display: string ("standalone", "fullscreen", "minimal-ui", "browser")
 --   - orientation: string ("any", "portrait", "landscape")
 --   - cache_version: string (service worker cache version)
+--   - show_install_button: boolean (show install button, default true)
+--   - splash_screen: table (splash screen config: background_color, icon_url)
 -- @return table Export bundle with files, manifest
 function PWAExporter:export(story, options)
   options = options or {}
@@ -90,6 +92,10 @@ function PWAExporter:export(story, options)
   local display = options.display or "standalone"
   local orientation = options.orientation or "any"
   local cache_version = options.cache_version or ("v" .. tostring(os.time()))
+  local show_install_button = options.show_install_button ~= false
+  local splash_screen = options.splash_screen or {
+    background_color = background_color,
+  }
 
   -- Generate story JSON
   local story_json = self:serialize_story(story)
@@ -101,6 +107,7 @@ function PWAExporter:export(story, options)
   files["index.html"] = self:generate_index_html(story_json, app_name, {
     theme_color = theme_color,
     description = description,
+    show_install_button = show_install_button,
   })
 
   -- manifest.json
@@ -112,6 +119,7 @@ function PWAExporter:export(story, options)
     background_color = background_color,
     display = display,
     orientation = orientation,
+    splash_screen = splash_screen,
   })
 
   -- sw.js (service worker)
@@ -251,11 +259,22 @@ end
 --- Generate the main index.html with PWA meta tags
 -- @param story_json string Story JSON data
 -- @param title string App title
--- @param options table Options (theme_color, description)
+-- @param options table Options (theme_color, description, show_install_button)
 -- @return string HTML content
 function PWAExporter:generate_index_html(story_json, title, options)
   local escaped_title = ExportUtils.escape_html(title)
   local escaped_description = ExportUtils.escape_html(options.description)
+
+  -- Install button HTML (only if enabled)
+  local install_button_html = ""
+  local install_script = ""
+  if options.show_install_button then
+    install_button_html = [[
+                <button id="install-btn" class="install-button" style="display:none" aria-label="Install app">
+                    <span class="install-icon">&#11015;</span> Install App
+                </button>]]
+    install_script = self:get_install_prompt_script()
+  end
 
   return [[<!DOCTYPE html>
 <html lang="en">
@@ -283,7 +302,7 @@ function PWAExporter:generate_index_html(story_json, title, options)
     <div id="whisker-player">
         <div id="story-container">
             <header class="story-header">
-                <h1>]] .. escaped_title .. [[</h1>
+                <h1>]] .. escaped_title .. [[</h1>]] .. install_button_html .. [[
             </header>
             <main id="story" role="main" aria-live="polite">
                 <div id="passage"></div>
@@ -308,6 +327,7 @@ function PWAExporter:generate_index_html(story_json, title, options)
                     .catch(function(err) { console.error('SW registration failed:', err); });
             });
         }
+        ]] .. install_script .. [[
     </script>
 </body>
 </html>]]
@@ -394,6 +414,32 @@ body {
     border: 1px solid #f5c6cb;
     border-radius: 4px;
 }
+.install-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+    background: #27ae60;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-left: auto;
+    transition: background 0.2s;
+}
+.install-button:hover {
+    background: #219a52;
+}
+.install-icon {
+    font-size: 1.1rem;
+}
+.story-header {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
 @media (prefers-color-scheme: dark) {
     body {
         background: #1a1a1a;
@@ -405,7 +451,69 @@ body {
     .story-footer {
         border-top-color: #444;
     }
+    .install-button {
+        background: #2ecc71;
+    }
+    .install-button:hover {
+        background: #27ae60;
+    }
 }
+]]
+end
+
+--- Get install prompt JavaScript
+-- @return string JavaScript code for install prompt handling
+function PWAExporter:get_install_prompt_script()
+  return [[
+        // PWA Install Prompt Handling
+        let deferredPrompt;
+        const installBtn = document.getElementById('install-btn');
+
+        // Listen for the beforeinstallprompt event
+        window.addEventListener('beforeinstallprompt', function(e) {
+            // Prevent Chrome 67+ from automatically showing the prompt
+            e.preventDefault();
+            // Stash the event so it can be triggered later
+            deferredPrompt = e;
+            // Show the install button
+            if (installBtn) {
+                installBtn.style.display = 'inline-flex';
+            }
+        });
+
+        // Handle install button click
+        if (installBtn) {
+            installBtn.addEventListener('click', async function() {
+                if (!deferredPrompt) {
+                    return;
+                }
+                // Show the install prompt
+                deferredPrompt.prompt();
+                // Wait for the user to respond to the prompt
+                const { outcome } = await deferredPrompt.userChoice;
+                console.log('User response to install prompt:', outcome);
+                // Clear the deferred prompt
+                deferredPrompt = null;
+                // Hide the install button
+                installBtn.style.display = 'none';
+            });
+        }
+
+        // Hide install button when app is installed
+        window.addEventListener('appinstalled', function() {
+            console.log('PWA was installed');
+            if (installBtn) {
+                installBtn.style.display = 'none';
+            }
+            deferredPrompt = null;
+        });
+
+        // Check if app is running in standalone mode (already installed)
+        if (window.matchMedia('(display-mode: standalone)').matches) {
+            if (installBtn) {
+                installBtn.style.display = 'none';
+            }
+        }
 ]]
 end
 
@@ -413,31 +521,54 @@ end
 -- @param options table Manifest options
 -- @return string JSON manifest content
 function PWAExporter:generate_manifest(options)
+  -- Get splash screen background color (can be configured separately)
+  local splash_bg = options.background_color
+  if options.splash_screen and options.splash_screen.background_color then
+    splash_bg = options.splash_screen.background_color
+  end
+
   local manifest = {
     name = options.name,
     short_name = options.short_name,
     description = options.description,
     start_url = "/",
+    scope = "/",
+    id = "/",
     display = options.display,
+    display_override = { "standalone", "minimal-ui" },
     orientation = options.orientation,
     theme_color = options.theme_color,
-    background_color = options.background_color,
+    background_color = splash_bg,
     icons = {
       {
         src = "icons/icon-192.png",
         sizes = "192x192",
         type = "image/png",
-        purpose = "any maskable",
+        purpose = "any",
       },
       {
         src = "icons/icon-512.png",
         sizes = "512x512",
         type = "image/png",
-        purpose = "any maskable",
+        purpose = "any",
+      },
+      {
+        src = "icons/icon-512.png",
+        sizes = "512x512",
+        type = "image/png",
+        purpose = "maskable",
       },
     },
     categories = { "games", "entertainment" },
+    launch_handler = {
+      client_mode = { "navigate-existing", "auto" },
+    },
   }
+
+  -- Add screenshots for richer install UI if available
+  if options.splash_screen and options.splash_screen.screenshots then
+    manifest.screenshots = options.splash_screen.screenshots
+  end
 
   return self:to_json(manifest)
 end
