@@ -10,21 +10,7 @@
 --   v2.0: choices = { { id = "ch_xxx", text = "Go", target = "room" } }
 -- - Auto-migration: v1.0 files automatically upgrade to v2.0 on load
 
--- Lua 5.1/5.2+ compatibility for load()
-local function load_compat(code, chunkname, mode, env)
-    local func, err
-    if _VERSION == "Lua 5.1" then
-        -- Lua 5.1 uses loadstring for strings
-        func, err = loadstring(code, chunkname)
-        if func and env then
-            setfenv(func, env)
-        end
-    else
-        -- Lua 5.2+ can use load directly
-        func, err = load(code, chunkname, mode, env)
-    end
-    return func, err
-end
+local compat = require("whisker.compat")
 
 local whiskerFormat = {}
 
@@ -232,7 +218,7 @@ function whiskerFormat.from_json(json_string)
 
         -- This is NOT safe for production - just for demonstration
         -- Use a proper JSON library in real code
-        local func, err = load_compat("return " .. str, "json_decode", "t", nil)
+        local func, err = compat.load("return " .. str, "json_decode", "t", nil)
         if not func then
             return nil, "JSON parse error: " .. err
         end

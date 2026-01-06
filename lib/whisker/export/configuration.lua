@@ -5,6 +5,7 @@
 -- @license MIT
 
 local ExportUtils = require("whisker.export.utils")
+local compat = require("whisker.compat")
 
 local Configuration = {}
 
@@ -78,19 +79,13 @@ function Configuration.load_file(path)
     return nil
   end
 
-  -- Execute Lua config file in sandbox
-  local chunk, err = loadstring(content, path)
-  if not chunk then
-    error("Configuration syntax error in " .. path .. ": " .. tostring(err))
-  end
-
-  -- Create sandbox environment
+  -- Execute Lua config file in sandbox (Lua 5.1-5.4 compatible)
   local env = {}
   setmetatable(env, { __index = _G })
 
-  if setfenv then
-    -- Lua 5.1
-    setfenv(chunk, env)
+  local chunk, err = compat.load(content, path, "t", env)
+  if not chunk then
+    error("Configuration syntax error in " .. path .. ": " .. tostring(err))
   end
 
   local ok, result = pcall(chunk)

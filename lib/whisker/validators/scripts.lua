@@ -5,6 +5,7 @@
 local M = {}
 
 local error_codes = require("whisker.validators.error_codes")
+local compat = require("whisker.compat")
 
 --- Default thresholds
 M.THRESHOLDS = {
@@ -77,7 +78,7 @@ local function is_empty_script(script)
   return script:match('^%s*$') ~= nil
 end
 
---- Check for syntax errors using loadstring
+--- Check for syntax errors using loadstring/load
 -- @param script string The script to check
 -- @return boolean, string True if valid, or false with error message
 local function check_syntax(script)
@@ -85,8 +86,8 @@ local function check_syntax(script)
     return true, nil
   end
 
-  -- Use loadstring to check syntax
-  local func, err = loadstring(script)
+  -- Use loadstring/load to check syntax (Lua 5.1-5.4 compatible)
+  local func, err = compat.loadstring(script)
   if not func then
     -- Clean up error message
     local clean_err = err
