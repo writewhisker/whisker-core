@@ -30,7 +30,7 @@ describe("Import/Export Round-trip", function()
   end)
 
   -- Sample Harlowe source
-  local harlowe_source = [[
+  local harlowe_source = [=[
 :: Start
 (set: $health to 100)
 (set: $name to "Hero")
@@ -116,10 +116,10 @@ You found gold!
 (set: $gold to $gold + 100)
 
 [[Continue->Start]]
-]]
+]=]
 
   -- Sample SugarCube source
-  local sugarcube_source = [[
+  local sugarcube_source = [=[
 :: Start
 <<set $health = 100>>
 <<set $gold = 0>>
@@ -179,10 +179,10 @@ You pick some beautiful flowers.
 <<set $hasFlowers = true>>
 
 [[Continue->Valley]]
-]]
+]=]
 
   -- Sample Chapbook source
-  local chapbook_source = [[
+  local chapbook_source = [=[
 :: Start
 config.header.center: My Adventure
 gold: 0
@@ -260,7 +260,7 @@ gold: 500
 You found the temple treasure!
 
 + [Take it and leave] -> Start
-]]
+]=]
 
   describe("Harlowe Import", function()
     pending("should convert Harlowe conditionals to WLS", function()

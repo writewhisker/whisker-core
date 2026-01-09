@@ -983,7 +983,10 @@ function StoryState:load(jObject)
             self._currentFlow = self._namedFlows[jObject["currentFlowName"]]
         end
     else
-        -- TODO: currently ommited, see StoryState.cs line 728
+        -- Legacy save format: no flows, state is at root level
+        -- Create default flow from legacy data
+        self._namedFlows = nil
+        self._currentFlow = Flow(self.kDefaultFlowName, self.story, jObject)
     end
 
 

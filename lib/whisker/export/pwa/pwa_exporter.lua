@@ -12,6 +12,7 @@
 
 local ExportUtils = require("whisker.export.utils")
 local Runtime = require("whisker.export.html.runtime")
+local PNGEncoder = require("whisker.vendor.codecs.png_encoder")
 
 local PWAExporter = {}
 PWAExporter.__index = PWAExporter
@@ -128,9 +129,26 @@ function PWAExporter:export(story, options)
   -- offline.html
   files["offline.html"] = self:generate_offline_page(app_name)
 
-  -- Placeholder icons
-  files["icons/icon-192.png"] = self:generate_placeholder_icon(192)
-  files["icons/icon-512.png"] = self:generate_placeholder_icon(512)
+  -- Generate icons with theme color and story initial
+  local icon_letter = app_name:sub(1, 1)
+  local icon_options = {
+    bg_color = PNGEncoder.hex_to_rgb(theme_color),
+    text_color = {255, 255, 255},  -- White text
+    text = icon_letter,
+  }
+
+  -- Use custom icon if provided in options
+  if options.icon_192 then
+    files["icons/icon-192.png"] = options.icon_192
+  else
+    files["icons/icon-192.png"] = self:generate_icon(192, icon_options)
+  end
+
+  if options.icon_512 then
+    files["icons/icon-512.png"] = options.icon_512
+  else
+    files["icons/icon-512.png"] = self:generate_icon(512, icon_options)
+  end
 
   -- Asset manifest for cache busting
   files["asset-manifest.json"] = self:generate_asset_manifest(files, cache_version)
@@ -857,12 +875,15 @@ function PWAExporter:generate_offline_page(title)
 </html>]]
 end
 
---- Generate placeholder icon (minimal valid PNG)
--- @param size number Icon size
--- @return string PNG placeholder data
-function PWAExporter:generate_placeholder_icon(size)
-  -- Simple placeholder - in production this would be a real PNG
-  return string.format("/* %dx%d PNG icon placeholder - replace with actual icon */", size, size)
+--- Generate PNG icon with letter on colored background
+-- @param size number Icon size (192 or 512)
+-- @param options table Icon options:
+--   - bg_color: {r, g, b} background color
+--   - text_color: {r, g, b} text color
+--   - text: string letter to display
+-- @return string PNG file data
+function PWAExporter:generate_icon(size, options)
+  return PNGEncoder.create_icon(size, options)
 end
 
 --- Validate export bundle

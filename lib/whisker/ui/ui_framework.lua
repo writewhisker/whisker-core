@@ -534,14 +534,523 @@ function UIFramework:show_help()
     print()
 end
 
--- Setup LÖVE2D platform (placeholder)
+-- Setup LÖVE2D platform
 function UIFramework:setup_love2d_platform()
-    error("LÖVE2D platform not yet implemented")
+    -- Verify LÖVE2D environment
+    if not love then
+        error("LÖVE2D environment not detected. Please run from LÖVE2D.")
+    end
+
+    -- LÖVE2D-specific state
+    self.love2d_state = {
+        y_offset = 20,
+        line_height = 24,
+        padding = 20,
+        scroll_offset = 0,
+        font = love.graphics.getFont(),
+        content_lines = {},
+        choice_buttons = {},
+        pending_choice = nil,
+        waiting_for_continue = false
+    }
+
+    -- Create renderer callbacks
+    self.renderer = {
+        display_passage = function(content, choices)
+            self:render_love2d_passage(content, choices)
+        end,
+
+        show_message = function(message, message_type)
+            self:render_love2d_message(message, message_type)
+        end,
+
+        show_save_menu = function(saves)
+            self:render_love2d_save_menu(saves)
+        end,
+
+        show_load_menu = function(saves)
+            self:render_love2d_load_menu(saves)
+        end,
+
+        clear_screen = function()
+            self.love2d_state.content_lines = {}
+            self.love2d_state.choice_buttons = {}
+        end
+    }
+
+    -- Create input handler callbacks
+    self.input_handler = {
+        get_user_input = function()
+            return self:get_love2d_input()
+        end,
+
+        get_save_name = function()
+            -- LÖVE2D would show a text input dialog
+            return os.date("%Y-%m-%d %H:%M:%S")
+        end,
+
+        get_load_choice = function(saves)
+            return self:get_love2d_load_choice(saves)
+        end,
+
+        confirm_action = function(message)
+            return true -- Simplified for now
+        end
+    }
+
+    -- Register LÖVE2D draw callback
+    local original_draw = love.draw or function() end
+    love.draw = function()
+        original_draw()
+        self:love2d_draw()
+    end
+
+    -- Register LÖVE2D key callback
+    local original_keypressed = love.keypressed or function() end
+    love.keypressed = function(key)
+        original_keypressed(key)
+        self:love2d_keypressed(key)
+    end
+
+    -- Register LÖVE2D mouse callback
+    local original_mousepressed = love.mousepressed or function() end
+    love.mousepressed = function(x, y, button)
+        original_mousepressed(x, y, button)
+        self:love2d_mousepressed(x, y, button)
+    end
 end
 
--- Setup web platform (placeholder)
+-- LÖVE2D rendering methods
+function UIFramework:render_love2d_passage(content, choices)
+    local state = self.love2d_state
+    state.content_lines = {}
+    state.choice_buttons = {}
+
+    -- Format and wrap passage content
+    local text = content.content or content.text or ""
+    local width = love.graphics.getWidth() - 2 * state.padding
+    local wrapped = self:wrap_text_love2d(text, width)
+
+    for _, line in ipairs(wrapped) do
+        table.insert(state.content_lines, {text = line, type = "content"})
+    end
+
+    -- Add spacing
+    table.insert(state.content_lines, {text = "", type = "spacer"})
+
+    -- Add choices
+    if choices and #choices > 0 then
+        for i, choice in ipairs(choices) do
+            local choice_text = string.format("%d. %s", i, choice.text or "Unnamed choice")
+            table.insert(state.choice_buttons, {
+                text = choice_text,
+                index = i,
+                y = 0 -- Will be calculated in draw
+            })
+        end
+        state.waiting_for_continue = false
+    else
+        table.insert(state.content_lines, {text = "(Story complete)", type = "info"})
+        state.waiting_for_continue = true
+    end
+
+    self.stats.passages_displayed = self.stats.passages_displayed + 1
+    if choices then
+        self.stats.choices_displayed = self.stats.choices_displayed + #choices
+    end
+end
+
+function UIFramework:render_love2d_message(message, message_type)
+    local color = {1, 1, 1}
+    if message_type == "error" then color = {1, 0.3, 0.3}
+    elseif message_type == "warning" then color = {1, 0.8, 0.2}
+    elseif message_type == "info" then color = {0.5, 0.8, 1}
+    elseif message_type == "success" then color = {0.3, 1, 0.3}
+    end
+
+    table.insert(self.love2d_state.content_lines, {
+        text = message,
+        type = message_type,
+        color = color
+    })
+    self.stats.messages_shown = self.stats.messages_shown + 1
+end
+
+function UIFramework:render_love2d_save_menu(saves)
+    -- Would show a save dialog - for now, just display message
+    self:render_love2d_message("Save menu not yet fully implemented", "info")
+end
+
+function UIFramework:render_love2d_load_menu(saves)
+    -- Would show a load dialog - for now, just display message
+    self:render_love2d_message("Load menu not yet fully implemented", "info")
+end
+
+function UIFramework:love2d_draw()
+    local state = self.love2d_state
+    local y = state.padding - state.scroll_offset
+
+    -- Draw content lines
+    love.graphics.setColor(1, 1, 1)
+    for _, line in ipairs(state.content_lines) do
+        if line.color then
+            love.graphics.setColor(line.color)
+        else
+            love.graphics.setColor(1, 1, 1)
+        end
+        love.graphics.print(line.text, state.padding, y)
+        y = y + state.line_height
+    end
+
+    -- Draw choice buttons
+    love.graphics.setColor(0.3, 0.6, 1)
+    for _, button in ipairs(state.choice_buttons) do
+        button.y = y
+        love.graphics.print(button.text, state.padding, y)
+        y = y + state.line_height
+    end
+
+    -- Reset color
+    love.graphics.setColor(1, 1, 1)
+
+    -- Show continue prompt if waiting
+    if state.waiting_for_continue then
+        love.graphics.print("Press Enter to continue...", state.padding, y + state.line_height)
+    end
+end
+
+function UIFramework:love2d_keypressed(key)
+    local state = self.love2d_state
+
+    -- Handle number keys for choice selection
+    local num = tonumber(key)
+    if num and num >= 1 and num <= #state.choice_buttons then
+        state.pending_choice = num
+        return
+    end
+
+    -- Handle arrow keys for scrolling
+    if key == "up" then
+        state.scroll_offset = math.max(0, state.scroll_offset - state.line_height)
+    elseif key == "down" then
+        state.scroll_offset = state.scroll_offset + state.line_height
+    elseif key == "return" or key == "space" then
+        if state.waiting_for_continue then
+            state.pending_choice = 0 -- Signal continue
+        end
+    end
+end
+
+function UIFramework:love2d_mousepressed(x, y, button)
+    if button ~= 1 then return end
+
+    local state = self.love2d_state
+    for _, btn in ipairs(state.choice_buttons) do
+        if y >= btn.y and y < btn.y + state.line_height then
+            state.pending_choice = btn.index
+            return
+        end
+    end
+end
+
+function UIFramework:get_love2d_input()
+    local state = self.love2d_state
+
+    -- Wait for choice selection via coroutine yield
+    while state.pending_choice == nil do
+        coroutine.yield()
+    end
+
+    local choice = state.pending_choice
+    state.pending_choice = nil
+    return tostring(choice)
+end
+
+function UIFramework:get_love2d_load_choice(saves)
+    -- Simplified - would show proper UI
+    return 1
+end
+
+function UIFramework:wrap_text_love2d(text, max_width)
+    local lines = {}
+    local font = love.graphics.getFont()
+
+    for line in text:gmatch("[^\n]+") do
+        local words = {}
+        for word in line:gmatch("%S+") do
+            table.insert(words, word)
+        end
+
+        local current_line = ""
+        for _, word in ipairs(words) do
+            local test_line = current_line == "" and word or (current_line .. " " .. word)
+            if font:getWidth(test_line) <= max_width then
+                current_line = test_line
+            else
+                if current_line ~= "" then
+                    table.insert(lines, current_line)
+                end
+                current_line = word
+            end
+        end
+        if current_line ~= "" then
+            table.insert(lines, current_line)
+        end
+    end
+
+    if #lines == 0 then
+        table.insert(lines, "")
+    end
+
+    return lines
+end
+
+-- Setup web platform (Fengari or other Lua-JS bridge)
 function UIFramework:setup_web_platform()
-    error("Web platform not yet implemented")
+    -- Try to detect JavaScript bridge (Fengari)
+    local js, window
+    local has_js = pcall(function()
+        js = require("js")
+        window = js.global
+    end)
+
+    if not has_js then
+        error("Web platform requires Fengari or compatible Lua-JS bridge.")
+    end
+
+    -- Web-specific state
+    self.web_state = {
+        output_element = nil,
+        choices_element = nil,
+        pending_choice = nil,
+        document = window.document
+    }
+
+    -- Find or create output elements
+    local doc = self.web_state.document
+    self.web_state.output_element = doc:getElementById("story-output")
+    self.web_state.choices_element = doc:getElementById("story-choices")
+
+    if not self.web_state.output_element then
+        -- Create default container
+        local container = doc:createElement("div")
+        container.id = "whisker-story"
+        container.innerHTML = [[
+            <div id="story-output" style="padding:20px;max-width:800px;margin:0 auto;"></div>
+            <div id="story-choices" style="padding:20px;max-width:800px;margin:0 auto;"></div>
+        ]]
+        doc.body:appendChild(container)
+        self.web_state.output_element = doc:getElementById("story-output")
+        self.web_state.choices_element = doc:getElementById("story-choices")
+    end
+
+    -- Create renderer callbacks
+    self.renderer = {
+        display_passage = function(content, choices)
+            self:render_web_passage(content, choices)
+        end,
+
+        show_message = function(message, message_type)
+            self:render_web_message(message, message_type)
+        end,
+
+        show_save_menu = function(saves)
+            self:render_web_save_menu(saves)
+        end,
+
+        show_load_menu = function(saves)
+            self:render_web_load_menu(saves)
+        end,
+
+        clear_screen = function()
+            self.web_state.output_element.innerHTML = ""
+            self.web_state.choices_element.innerHTML = ""
+        end
+    }
+
+    -- Create input handler callbacks
+    self.input_handler = {
+        get_user_input = function()
+            return self:get_web_input()
+        end,
+
+        get_save_name = function()
+            return window:prompt("Enter save name:", os.date("%Y-%m-%d %H:%M:%S")) or ""
+        end,
+
+        get_load_choice = function(saves)
+            return self:get_web_load_choice(saves)
+        end,
+
+        confirm_action = function(message)
+            return window:confirm(message)
+        end
+    }
+end
+
+-- Web rendering methods
+function UIFramework:render_web_passage(content, choices)
+    local js = require("js")
+    local doc = self.web_state.document
+    local output = self.web_state.output_element
+    local choices_div = self.web_state.choices_element
+
+    -- Clear previous content
+    output.innerHTML = ""
+    choices_div.innerHTML = ""
+
+    -- Create passage content
+    local passage_div = doc:createElement("div")
+    passage_div.className = "passage"
+    passage_div.style.cssText = "margin-bottom:20px;line-height:1.6;"
+
+    local text = content.content or content.text or ""
+    -- Convert newlines to <br> and preserve paragraphs
+    text = text:gsub("\n\n", "</p><p>")
+    text = text:gsub("\n", "<br>")
+    passage_div.innerHTML = "<p>" .. text .. "</p>"
+    output:appendChild(passage_div)
+
+    -- Render choices
+    if choices and #choices > 0 then
+        for i, choice in ipairs(choices) do
+            local button = doc:createElement("button")
+            button.className = "choice-button"
+            button.style.cssText = [[
+                display:block;
+                width:100%;
+                padding:12px 20px;
+                margin:8px 0;
+                background:#4a90d9;
+                color:white;
+                border:none;
+                border-radius:4px;
+                cursor:pointer;
+                font-size:16px;
+                text-align:left;
+            ]]
+            button.textContent = (i .. ". " .. (choice.text or "Unnamed choice"))
+
+            -- Store choice index for click handler
+            local choice_index = i
+            button.onclick = function()
+                self.web_state.pending_choice = choice_index
+            end
+
+            choices_div:appendChild(button)
+        end
+        self.stats.choices_displayed = self.stats.choices_displayed + #choices
+    else
+        local end_div = doc:createElement("div")
+        end_div.style.cssText = "color:#666;font-style:italic;padding:20px 0;"
+        end_div.textContent = "The End"
+        choices_div:appendChild(end_div)
+    end
+
+    self.stats.passages_displayed = self.stats.passages_displayed + 1
+
+    -- Scroll to top of output
+    output:scrollIntoView(js.new(js.global.Object, {behavior = "smooth"}))
+end
+
+function UIFramework:render_web_message(message, message_type)
+    local doc = self.web_state.document
+    local output = self.web_state.output_element
+
+    local msg_div = doc:createElement("div")
+    msg_div.className = "message message-" .. (message_type or "info")
+
+    local colors = {
+        error = "#ff4444",
+        warning = "#ffaa00",
+        info = "#4a90d9",
+        success = "#44aa44"
+    }
+
+    msg_div.style.cssText = string.format([[
+        padding:12px 16px;
+        margin:10px 0;
+        border-radius:4px;
+        background:%s22;
+        border-left:4px solid %s;
+        color:%s;
+    ]], colors[message_type] or colors.info,
+        colors[message_type] or colors.info,
+        colors[message_type] or colors.info)
+
+    msg_div.textContent = message
+    output:appendChild(msg_div)
+
+    self.stats.messages_shown = self.stats.messages_shown + 1
+end
+
+function UIFramework:render_web_save_menu(saves)
+    self:render_web_message("Save functionality: use browser's localStorage", "info")
+end
+
+function UIFramework:render_web_load_menu(saves)
+    self:render_web_message("Load functionality: use browser's localStorage", "info")
+end
+
+function UIFramework:get_web_input()
+    local js = require("js")
+    local window = js.global
+
+    -- Wait for choice selection using a Promise-like approach
+    -- In Fengari, we can use coroutines with JavaScript event loop
+
+    self.web_state.pending_choice = nil
+
+    -- Create a simple polling mechanism
+    -- In production, you'd use proper async/await with Fengari
+    while self.web_state.pending_choice == nil do
+        -- Yield to allow JS event loop to process
+        coroutine.yield()
+    end
+
+    local choice = self.web_state.pending_choice
+    self.web_state.pending_choice = nil
+    return tostring(choice)
+end
+
+function UIFramework:get_web_load_choice(saves)
+    local js = require("js")
+    local window = js.global
+
+    if not saves or #saves == 0 then
+        window:alert("No saves available")
+        return nil
+    end
+
+    -- Simple prompt-based selection
+    local list = ""
+    for i, save in ipairs(saves) do
+        list = list .. i .. ". " .. (save.name or "Save " .. i) .. "\n"
+    end
+
+    local choice = window:prompt("Select save to load:\n" .. list, "1")
+    return tonumber(choice) or 1
+end
+
+-- Web storage helpers
+function UIFramework:web_save_state(key, data)
+    local js = require("js")
+    -- Use vendor-approved JSON library
+    local json = require("whisker.vendor.dkjson")
+    local window = js.global
+    window.localStorage:setItem("whisker_" .. key, json.encode(data))
+end
+
+function UIFramework:web_load_state(key)
+    local js = require("js")
+    -- Use vendor-approved JSON library
+    local json = require("whisker.vendor.dkjson")
+    local window = js.global
+    local data = window.localStorage:getItem("whisker_" .. key)
+    if data then
+        return json.decode(data)
+    end
+    return nil
 end
 
 -- Get statistics

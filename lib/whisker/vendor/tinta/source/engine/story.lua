@@ -19,6 +19,10 @@ function Story:new(book)
     self._stateSnapshotAtLastNewline = nil
     self.asyncSaving = false
     self._asyncContinueActive = false
+
+    -- Error handler callback: function(message, errorType)
+    -- errorType: "error", "warning", "author"
+    self.onError = nil
 end
 
 function Story:mainContentContainer()
@@ -176,7 +180,19 @@ function Story:ContinueInternal(millisecsLimitAsync)
 
     self._recursiveContinueCount = self._recursiveContinueCount - 1
 
-    --TODO : Error handlers (Story.cs 523)
+    -- Invoke error handler callback if registered and errors/warnings exist
+    if self.onError then
+        if self.state:hasError() then
+            for _, err in ipairs(self.state.currentErrors) do
+                self.onError(err, "error")
+            end
+        end
+        if self.state:hasWarning() then
+            for _, warn in ipairs(self.state.currentWarnings) do
+                self.onError(warn, "warning")
+            end
+        end
+    end
 end
 
 function Story:IfAsyncWeCant(activityStr)
