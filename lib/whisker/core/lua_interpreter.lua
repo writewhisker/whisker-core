@@ -1,6 +1,8 @@
 -- src/runtime/interpreter.lua
 -- Secure Lua sandbox with instruction counting
 
+local compat = require("whisker.vendor.compat")
+
 local LuaInterpreter = {}
 LuaInterpreter.__index = LuaInterpreter
 
@@ -15,22 +17,6 @@ function LuaInterpreter.create(deps)
   return function(config)
     return LuaInterpreter.new(config)
   end
-end
-
--- Lua 5.1/5.2+ compatibility for load()
-local function load_compat(code, chunkname, mode, env)
-    local func, err
-    if _VERSION == "Lua 5.1" then
-        -- Lua 5.1 uses loadstring for strings
-        func, err = loadstring(code, chunkname)
-        if func and env then
-            setfenv(func, env)
-        end
-    else
-        -- Lua 5.2+ can use load directly
-        func, err = load(code, chunkname, mode, env)
-    end
-    return func, err
 end
 
 function LuaInterpreter.new(config)
@@ -68,7 +54,7 @@ function LuaInterpreter:create_sandbox()
     self.sandbox_env.tonumber = tonumber
     self.sandbox_env.tostring = tostring
     self.sandbox_env.type = type
-    self.sandbox_env.unpack = unpack or table.unpack
+    self.sandbox_env.unpack = compat.unpack
 
     -- Safe string library
     self.sandbox_env.string = {
@@ -528,7 +514,7 @@ function LuaInterpreter:execute_code(code, game_state, context)
     end
 
     -- Compile the code
-    local chunk, compile_error = load_compat(code, "story_code", "t", self.sandbox_env)
+    local chunk, compile_error = compat.load(code, "story_code", "t", self.sandbox_env)
 
     if not chunk then
         return false, "Compilation error: " .. tostring(compile_error), {

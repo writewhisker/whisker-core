@@ -4,6 +4,8 @@
 -- @author Whisker Core Team
 -- @license MIT
 
+local compat = require("whisker.vendor.compat")
+
 local ExportCommand = {}
 ExportCommand._dependencies = {}
 
@@ -158,7 +160,7 @@ local function load_story(path)
 
   if ext == "lua" then
     -- Lua story file
-    local chunk, err = loadstring(content)
+    local chunk, err = compat.loadstring(content)
     if not chunk then
       return nil, "Lua parse error: " .. tostring(err)
     end
@@ -175,7 +177,7 @@ local function load_story(path)
     return nil, "Whisker script parsing not yet implemented (use .lua format)"
   else
     -- Try as Lua
-    local chunk, err = loadstring(content)
+    local chunk, err = compat.loadstring(content)
     if chunk then
       local ok, result = pcall(chunk)
       if ok then
