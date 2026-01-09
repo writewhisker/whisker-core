@@ -249,14 +249,73 @@ end
 function PluginContext:_create_ui_interface()
   local self_ref = self
 
+  -- Initialize component registry for this plugin
+  if not self._ui_components then
+    self._ui_components = {}
+    self._ui_component_counter = 0
+  end
+
+  -- Global UI component registry (shared across all contexts)
+  if not PluginContext._global_ui_registry then
+    PluginContext._global_ui_registry = {}
+    PluginContext._ui_event_handlers = {}
+  end
+
   return {
     --- Add a UI component
     -- @param component_def table Component definition
+    --   component_def.type: string - Component type (panel, button, text, custom)
+    --   component_def.anchor: string - Position (top-left, top-right, bottom-left, bottom-right, center)
+    --   component_def.content: string - Text content
+    --   component_def.style: table - CSS-like style properties
+    --   component_def.events: table - Event handlers (click, hover, etc.)
     -- @return string Component ID
     add_component = function(component_def)
       require_capability(self_ref, "ui:inject")
-      -- UI implementation deferred to later phase
-      error("UI injection not yet implemented")
+
+      -- Validate component definition
+      if type(component_def) ~= "table" then
+        error("Component definition must be a table")
+      end
+
+      -- Generate unique component ID
+      self_ref._ui_component_counter = self_ref._ui_component_counter + 1
+      local component_id = string.format("%s-component-%d",
+        self_ref.name:gsub("[^%w]", "_"),
+        self_ref._ui_component_counter)
+
+      -- Build component
+      local component = {
+        id = component_id,
+        plugin = self_ref.name,
+        type = component_def.type or "panel",
+        anchor = component_def.anchor or "bottom-right",
+        content = component_def.content or "",
+        style = component_def.style or {},
+        visible = component_def.visible ~= false,
+        created_at = os.time(),
+      }
+
+      -- Store in plugin's registry
+      self_ref._ui_components[component_id] = component
+
+      -- Store in global registry
+      PluginContext._global_ui_registry[component_id] = component
+
+      -- Store event handlers if any
+      if component_def.events then
+        PluginContext._ui_event_handlers[component_id] = component_def.events
+      end
+
+      -- Notify UI framework if available (via hook)
+      if self_ref._hook_manager then
+        self_ref._hook_manager:call_hook("ui:component_added", {
+          component_id = component_id,
+          component = component
+        })
+      end
+
+      return component_id
     end,
 
     --- Remove a UI component
@@ -264,7 +323,26 @@ function PluginContext:_create_ui_interface()
     -- @return boolean Success
     remove_component = function(component_id)
       require_capability(self_ref, "ui:inject")
-      error("UI injection not yet implemented")
+
+      -- Check if component exists and belongs to this plugin
+      local component = self_ref._ui_components[component_id]
+      if not component then
+        return false, "Component not found or not owned by this plugin"
+      end
+
+      -- Remove from registries
+      self_ref._ui_components[component_id] = nil
+      PluginContext._global_ui_registry[component_id] = nil
+      PluginContext._ui_event_handlers[component_id] = nil
+
+      -- Notify UI framework
+      if self_ref._hook_manager then
+        self_ref._hook_manager:call_hook("ui:component_removed", {
+          component_id = component_id
+        })
+      end
+
+      return true
     end,
 
     --- Update a UI component
@@ -273,9 +351,104 @@ function PluginContext:_create_ui_interface()
     -- @return boolean Success
     update_component = function(component_id, updates)
       require_capability(self_ref, "ui:inject")
-      error("UI injection not yet implemented")
+
+      -- Check if component exists and belongs to this plugin
+      local component = self_ref._ui_components[component_id]
+      if not component then
+        return false, "Component not found or not owned by this plugin"
+      end
+
+      -- Merge updates
+      for key, value in pairs(updates) do
+        if key ~= "id" and key ~= "plugin" and key ~= "created_at" then
+          component[key] = value
+        end
+      end
+
+      -- Update event handlers if provided
+      if updates.events then
+        PluginContext._ui_event_handlers[component_id] = updates.events
+      end
+
+      -- Notify UI framework
+      if self_ref._hook_manager then
+        self_ref._hook_manager:call_hook("ui:component_updated", {
+          component_id = component_id,
+          component = component,
+          updates = updates
+        })
+      end
+
+      return true
+    end,
+
+    --- Get all components owned by this plugin
+    -- @return table[] Array of components
+    get_components = function()
+      require_capability(self_ref, "ui:inject")
+
+      local result = {}
+      for _, component in pairs(self_ref._ui_components) do
+        table.insert(result, component)
+      end
+      return result
+    end,
+
+    --- Get a specific component by ID
+    -- @param component_id string Component ID
+    -- @return table|nil Component or nil if not found
+    get_component = function(component_id)
+      require_capability(self_ref, "ui:inject")
+      return self_ref._ui_components[component_id]
+    end,
+
+    --- Set component visibility
+    -- @param component_id string Component ID
+    -- @param visible boolean Visibility state
+    -- @return boolean Success
+    set_visible = function(component_id, visible)
+      require_capability(self_ref, "ui:inject")
+
+      local component = self_ref._ui_components[component_id]
+      if not component then
+        return false, "Component not found"
+      end
+
+      component.visible = visible
+
+      if self_ref._hook_manager then
+        self_ref._hook_manager:call_hook("ui:component_visibility", {
+          component_id = component_id,
+          visible = visible
+        })
+      end
+
+      return true
     end,
   }
+end
+
+--- Get all registered UI components (static method for UI framework)
+-- @return table[] All components from all plugins
+function PluginContext.get_all_ui_components()
+  local result = {}
+  for _, component in pairs(PluginContext._global_ui_registry or {}) do
+    table.insert(result, component)
+  end
+  return result
+end
+
+--- Trigger UI event (static method for UI framework)
+-- @param component_id string Component ID
+-- @param event_name string Event name (click, hover, etc.)
+-- @param event_data table|nil Event data
+-- @return any Event handler result
+function PluginContext.trigger_ui_event(component_id, event_name, event_data)
+  local handlers = PluginContext._ui_event_handlers[component_id]
+  if handlers and handlers[event_name] then
+    return handlers[event_name](event_data or {})
+  end
+  return nil
 end
 
 --- Create logging interface (always available)

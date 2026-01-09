@@ -35,8 +35,10 @@ local DAPAdapter = {}
 DAPAdapter.__index = DAPAdapter
 
 ---Create a new DAP adapter
+---@param transport string|nil "stdio" (default) or "tcp"
+---@param port number|nil TCP port (required if transport is "tcp")
 ---@return table
-function DAPAdapter.new()
+function DAPAdapter.new(transport, port)
   local self = setmetatable({}, DAPAdapter)
   self.sequence = 1
   self.request_seq = 0
@@ -47,22 +49,110 @@ function DAPAdapter.new()
   self.configuration_done = false
   self.paused = false
   self.continue_signal = nil
+
+  -- Transport configuration
+  self.transport = transport or "stdio"
+  self.tcp_port = port
+  self.socket = nil
+  self.client = nil
+
   return self
 end
 
 ---Main message loop
 function DAPAdapter:run()
-  while true do
-    local msg = self:read_message()
-    if not msg then break end
+  if self.transport == "tcp" then
+    self:run_tcp()
+  else
+    self:run_stdio()
+  end
+end
 
+---Run in stdio mode (default)
+function DAPAdapter:run_stdio()
+  while true do
+    local msg = self:read_message_stdio()
+    if not msg then break end
+    self:handle_message(msg)
+  end
+end
+
+---Run in TCP mode
+function DAPAdapter:run_tcp()
+  -- Try to load LuaSocket
+  local ok, socket = pcall(require, "socket")
+  if not ok then
+    io.stderr:write("Error: TCP mode requires LuaSocket. Install with: luarocks install luasocket\n")
+    os.exit(1)
+  end
+
+  -- Create TCP server
+  local server, err = socket.tcp()
+  if not server then
+    io.stderr:write("Error creating TCP socket: " .. tostring(err) .. "\n")
+    os.exit(1)
+  end
+
+  server:setoption("reuseaddr", true)
+
+  local ok, err = server:bind("127.0.0.1", self.tcp_port)
+  if not ok then
+    io.stderr:write("Error binding to port " .. self.tcp_port .. ": " .. tostring(err) .. "\n")
+    os.exit(1)
+  end
+
+  server:listen(1)
+  io.stderr:write("Debug adapter listening on port " .. self.tcp_port .. "\n")
+  io.stderr:write("Waiting for client connection...\n")
+
+  self.socket = server
+
+  -- Accept client connections (one at a time)
+  while true do
+    local client, err = server:accept()
+    if client then
+      io.stderr:write("Client connected\n")
+      self.client = client
+      client:settimeout(nil) -- Blocking mode
+
+      -- Handle this client session
+      local ok, err = pcall(function()
+        self:handle_tcp_client()
+      end)
+
+      if not ok then
+        io.stderr:write("Client session error: " .. tostring(err) .. "\n")
+      end
+
+      client:close()
+      self.client = nil
+      io.stderr:write("Client disconnected\n")
+
+      -- Reset state for next client
+      self.sequence = 1
+      self.initialized = false
+      self.configuration_done = false
+    else
+      io.stderr:write("Accept error: " .. tostring(err) .. "\n")
+      break
+    end
+  end
+
+  server:close()
+end
+
+---Handle TCP client session
+function DAPAdapter:handle_tcp_client()
+  while true do
+    local msg = self:read_message_tcp()
+    if not msg then break end
     self:handle_message(msg)
   end
 end
 
 ---Read Content-Length delimited message from stdin
 ---@return table|nil Parsed message or nil on EOF
-function DAPAdapter:read_message()
+function DAPAdapter:read_message_stdio()
   local headers = {}
 
   while true do
@@ -94,15 +184,70 @@ function DAPAdapter:read_message()
   return msg
 end
 
----Write message to stdout
+---Read Content-Length delimited message from TCP socket
+---@return table|nil Parsed message or nil on disconnect
+function DAPAdapter:read_message_tcp()
+  if not self.client then return nil end
+
+  local headers = {}
+
+  -- Read headers
+  while true do
+    local line, err = self.client:receive("*l")
+    if not line then
+      if err == "closed" then return nil end
+      io.stderr:write("TCP receive error: " .. tostring(err) .. "\n")
+      return nil
+    end
+
+    -- Remove trailing CR if present
+    line = line:gsub("\r$", "")
+
+    if line == "" then break end
+
+    local key, value = line:match("^([^:]+):%s*(.+)$")
+    if key then
+      headers[key:lower()] = value
+    end
+  end
+
+  local length = tonumber(headers["content-length"])
+  if not length then return nil end
+
+  -- Read body
+  local body, err = self.client:receive(length)
+  if not body then
+    io.stderr:write("TCP receive error: " .. tostring(err) .. "\n")
+    return nil
+  end
+
+  local ok, msg = pcall(json.decode, body)
+  if not ok then
+    io.stderr:write("Failed to parse JSON: " .. tostring(msg) .. "\n")
+    return nil
+  end
+
+  return msg
+end
+
+---Write message to client (stdio or TCP)
 ---@param msg table The message to send
 function DAPAdapter:write_message(msg)
   msg.seq = self.sequence
   self.sequence = self.sequence + 1
 
   local body = json.encode(msg)
-  io.write(string.format("Content-Length: %d\r\n\r\n%s", #body, body))
-  io.flush()
+  local data = string.format("Content-Length: %d\r\n\r\n%s", #body, body)
+
+  if self.transport == "tcp" and self.client then
+    local ok, err = self.client:send(data)
+    if not ok then
+      io.stderr:write("TCP send error: " .. tostring(err) .. "\n")
+    end
+  else
+    io.write(data)
+    io.flush()
+  end
 end
 
 ---Send response to client

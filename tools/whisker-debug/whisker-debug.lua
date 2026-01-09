@@ -61,6 +61,9 @@ end
 
 local function main()
   -- Parse arguments
+  local transport = "stdio"
+  local port = nil
+
   local i = 1
   while i <= #arg do
     local a = arg[i]
@@ -71,10 +74,19 @@ local function main()
       print_version()
       os.exit(0)
     elseif a == "--stdio" then
-      -- Default mode, continue
+      transport = "stdio"
     elseif a == "--port" then
-      print("Error: TCP mode not implemented")
-      os.exit(1)
+      i = i + 1
+      if i > #arg then
+        print("Error: --port requires a port number")
+        os.exit(1)
+      end
+      port = tonumber(arg[i])
+      if not port or port < 1 or port > 65535 then
+        print("Error: Invalid port number: " .. arg[i])
+        os.exit(1)
+      end
+      transport = "tcp"
     else
       print("Unknown option: " .. a)
       print("Use --help for usage information")
@@ -94,7 +106,7 @@ local function main()
     end
   end
 
-  local adapter = DAPAdapter.new()
+  local adapter = DAPAdapter.new(transport, port)
   adapter:run()
 end
 
