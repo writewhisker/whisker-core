@@ -4,7 +4,7 @@
 -- @author Whisker Core Team
 -- @license MIT
 
-local compat = require("whisker.compat")
+local compat = require("whisker.vendor.compat")
 
 local ExportCommand = {}
 ExportCommand._dependencies = {}

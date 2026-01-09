@@ -1,6 +1,6 @@
 --- Lua Version Compatibility Module
 -- Provides compatibility shims for Lua 5.1, 5.2, 5.3, 5.4, and LuaJIT
--- @module whisker.compat
+-- @module whisker.vendor.compat
 -- @author Whisker Core Team
 -- @license MIT
 

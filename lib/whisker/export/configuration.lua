@@ -5,7 +5,7 @@
 -- @license MIT
 
 local ExportUtils = require("whisker.export.utils")
-local compat = require("whisker.compat")
+local compat = require("whisker.vendor.compat")
 
 local Configuration = {}
 

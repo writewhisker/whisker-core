@@ -5,7 +5,7 @@
 local M = {}
 
 local error_codes = require("whisker.validators.error_codes")
-local compat = require("whisker.compat")
+local compat = require("whisker.vendor.compat")
 
 --- Default thresholds
 M.THRESHOLDS = {

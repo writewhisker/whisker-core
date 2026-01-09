@@ -10,7 +10,7 @@
 --   v2.0: choices = { { id = "ch_xxx", text = "Go", target = "room" } }
 -- - Auto-migration: v1.0 files automatically upgrade to v2.0 on load
 
-local compat = require("whisker.compat")
+local compat = require("whisker.vendor.compat")
 
 local whiskerFormat = {}
 

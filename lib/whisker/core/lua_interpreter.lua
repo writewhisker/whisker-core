@@ -1,7 +1,7 @@
 -- src/runtime/interpreter.lua
 -- Secure Lua sandbox with instruction counting
 
-local compat = require("whisker.compat")
+local compat = require("whisker.vendor.compat")
 
 local LuaInterpreter = {}
 LuaInterpreter.__index = LuaInterpreter
