@@ -1,6 +1,80 @@
 # Whisker Runtime Examples
 
-This directory contains working examples for each Whisker runtime platform.
+This directory contains working examples for each Whisker runtime platform and advanced features.
+
+## 🌟 NEW: Advanced Features Examples
+
+Three new examples demonstrating cutting-edge whisker-core capabilities:
+
+### 🤖 AI Story Generator (`ai_story_generator.lua`)
+Automatically generate complete interactive fiction stories using AI.
+
+```bash
+lua examples/ai_story_generator.lua
+```
+
+**Features:**
+- Multi-provider AI client (OpenAI, Anthropic, Ollama, Mock)
+- Automatic story outline generation
+- AI-powered passage writing
+- Intelligent choice generation
+- Text quality improvement
+- Story analysis and feedback
+
+**Configuration:**
+```bash
+# Use mock provider (no API key needed)
+lua examples/ai_story_generator.lua
+
+# Use real AI providers (set environment variables)
+export OPENAI_API_KEY="sk-..."
+lua examples/ai_story_generator.lua
+
+# Enable advanced features
+IMPROVE_QUALITY=1 ANALYZE_STORY=1 lua examples/ai_story_generator.lua
+```
+
+### 🔍 Full-Text Search Demo (`search_demo.lua`)
+Powerful search engine for discovering stories by content, theme, or genre.
+
+```bash
+lua examples/search_demo.lua
+```
+
+**Features:**
+- Inverted index for fast lookups
+- Multi-field search (title, author, tags, content)
+- Relevance scoring and ranking
+- Match highlighting with context excerpts
+- Stop word filtering
+- Configurable search parameters
+
+**Interactive mode:**
+```bash
+INTERACTIVE=1 lua examples/search_demo.lua
+```
+
+### 🤝 Collaboration Demo (`collaboration_demo.lua`)
+Real-time collaborative editing with Operational Transform.
+
+```bash
+lua examples/collaboration_demo.lua
+```
+
+**Features:**
+- Text-level operations (INSERT, DELETE, RETAIN)
+- Concurrent editing scenarios
+- Automatic conflict resolution
+- Story-level operations (passages, choices)
+- Operation composition
+- Eventual consistency guarantee
+
+**Demonstrates:**
+- How Google Docs-style collaboration works
+- OT algorithm fundamentals
+- Practical multi-author scenarios
+
+---
 
 ## WLS 1.0 Examples
 
@@ -383,6 +457,123 @@ For more information:
 - Runtime docs: `../../lib/whisker/runtime/README.md`
 - API Reference: `../../docs/API_REFERENCE.md`
 - Story format: `../../docs/FORMAT_REFERENCE.md`
+- **Advanced Features:**
+  - Phase 1 Testing: `../PHASE1_TESTING_COMPLETE.md`
+  - Phase 2 Infrastructure: `../PHASE2_COMPLETE.md`
+  - Phase 3 Advanced Features: `../PHASE3_COMPLETE.md`
+
+## 🚀 Advanced Feature Integration
+
+### Using AI Tools in Your Projects
+
+```lua
+local AIClient = require("whisker.ai.client")
+local AITools = require("whisker.ai.tools")
+
+-- Initialize
+local ai = AIClient.new({ provider = "mock" })
+local tools = AITools.new({ ai_client = ai })
+
+-- Generate content
+local outline = tools:generate_outline({ 
+  genre = "mystery", 
+  passages = 10 
+})
+
+local passage = tools:generate_passage({ 
+  context = "detective enters mansion",
+  mood = "tense" 
+})
+```
+
+### Using Search Engine
+
+```lua
+local SearchEngine = require("whisker.search.engine")
+
+-- Create and index
+local search = SearchEngine.new()
+search:index_story(story1)
+search:index_story(story2)
+
+-- Search
+local results = search:search("mystery detective", { 
+  limit = 10 
+})
+
+for _, result in ipairs(results) do
+  print(result.story.metadata.title, result.score)
+end
+```
+
+### Using Operational Transform
+
+```lua
+local OT = require("whisker.collaboration.ot")
+
+-- Text operations
+local op1 = OT.insert(5, "hello")
+local op2 = OT.delete(3, 2)
+
+-- Transform for concurrent editing
+local op1_prime = OT.transform(op1, op2)
+
+-- Apply
+local result = OT.apply(text, op1_prime)
+```
+
+## 🧪 Testing the Advanced Features
+
+Run the comprehensive test suites:
+
+```bash
+# Run all storage tests (Phase 1)
+busted tests/storage/
+
+# Run specific test suites
+busted tests/storage/service_spec.lua
+busted tests/storage/backends/sqlite_spec.lua
+busted tests/storage/migration_spec.lua
+busted tests/storage/autosave_spec.lua
+
+# Verbose output
+busted tests/storage/ --verbose
+```
+
+**Test Coverage:**
+- ✅ 330+ test cases across all modules
+- ✅ Storage backends (SQLite, Filesystem)
+- ✅ Migration system
+- ✅ Autosave functionality
+- ✅ Testing infrastructure (helpers, matchers, mocks)
+
+## 🎯 Example Projects You Can Build
+
+With these advanced features, you can create:
+
+1. **AI Story Assistant** - Help authors write better stories
+   - Generate outlines and content
+   - Improve existing passages
+   - Analyze story quality
+   - Suggest improvements
+
+2. **Story Library Manager** - Organize and discover stories
+   - Index large story collections
+   - Full-text search across content
+   - Filter by genre, theme, tags
+   - Relevance-based recommendations
+
+3. **Collaborative Writing Platform** - Multi-author storytelling
+   - Real-time co-authoring
+   - Conflict-free concurrent editing
+   - Track author contributions
+   - Merge different story branches
+
+4. **Complete Story Editor** - Production-ready tool
+   - Combine AI assistance with manual editing
+   - Search and organize passages
+   - Enable team collaboration
+   - Export to multiple formats
 
 ## 🤝 Contributing
 
@@ -397,4 +588,6 @@ See project LICENSE file.
 
 ---
 
-**Happy storytelling! 🎭**
+**Happy storytelling! 🎭✨**
+
+*Now with AI assistance, powerful search, and real-time collaboration!*
