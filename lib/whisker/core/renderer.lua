@@ -35,15 +35,48 @@ local platform_tags = {
 }
 
 -- Constructor
--- @param interpreter - Script interpreter (optional)
--- @param platform string - Platform type (console, web, plain)
--- @param hook_manager HookManager - Hook manager instance (optional)
-function Renderer.new(interpreter, platform, hook_manager)
+-- Supports multiple call patterns:
+--   Renderer.new("plain")                    -- platform only
+--   Renderer.new("plain", {max_line_width=40}) -- platform with options
+--   Renderer.new(interpreter, "plain", hook_manager) -- original pattern
+--   Renderer.new(nil, "plain", hook_manager) -- nil interpreter with platform
+-- @param arg1 - Platform string, interpreter, or nil
+-- @param arg2 - Options table, platform string, or HookManager
+-- @param arg3 - HookManager (optional)
+function Renderer.new(arg1, arg2, arg3)
   local self = setmetatable({}, Renderer)
+
+  local platform, interpreter, hook_mgr, opts
+
+  -- Pattern 1: Renderer.new("plain") or Renderer.new("plain", {options})
+  if type(arg1) == "string" and (type(arg2) == "table" or arg2 == nil) and arg3 == nil then
+    platform = arg1
+    opts = type(arg2) == "table" and arg2 or {}
+    interpreter = nil
+    hook_mgr = nil
+  -- Pattern 2: Renderer.new(interpreter, "platform", hook_manager) or Renderer.new(nil, "platform", hook_manager)
+  elseif type(arg2) == "string" then
+    interpreter = arg1  -- may be nil
+    platform = arg2
+    hook_mgr = arg3
+    opts = {}
+  -- Pattern 3: Fallback - first arg is interpreter
+  else
+    interpreter = arg1
+    platform = "plain"
+    hook_mgr = arg2
+    opts = {}
+  end
+
   self.interpreter = interpreter
-  self.platform = platform or "plain"
+  self.platform = platform
   self.tags = platform_tags[self.platform] or platform_tags.plain
-  self.hook_manager = hook_manager or HookManager.new()
+  self.hook_manager = hook_mgr or HookManager.new()
+
+  -- Wrapping options
+  self.max_line_width = opts.max_line_width or 80
+  self.enable_wrapping = opts.enable_wrapping or false
+
   return self
 end
 
@@ -178,13 +211,40 @@ function Renderer:apply_formatting(text)
   return formatted
 end
 
--- Apply text wrapping (stub for now)
+-- Apply text wrapping to text
 -- @param text string - Text to wrap
 -- @return wrapped_text string - Wrapped text
 function Renderer:apply_wrapping(text)
-  -- For now, just return text as-is
-  -- In a real implementation, this would handle line wrapping
-  return text
+  -- Skip wrapping if disabled or no max width set
+  if not self.enable_wrapping or not self.max_line_width then
+    return text
+  end
+
+  local max_width = self.max_line_width
+  local lines = {}
+  local current_line = ""
+
+  -- Split text into words
+  for word in text:gmatch("%S+") do
+    if #current_line == 0 then
+      -- First word on line
+      current_line = word
+    elseif #current_line + 1 + #word <= max_width then
+      -- Word fits on current line
+      current_line = current_line .. " " .. word
+    else
+      -- Word doesn't fit, start new line
+      table.insert(lines, current_line)
+      current_line = word
+    end
+  end
+
+  -- Add final line if not empty
+  if #current_line > 0 then
+    table.insert(lines, current_line)
+  end
+
+  return table.concat(lines, "\n")
 end
 
 -- Render passage with full pipeline including hooks

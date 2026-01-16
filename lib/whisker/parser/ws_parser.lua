@@ -534,6 +534,21 @@ function WSParser:parse_text()
       break
     end
 
+    -- Check if we're at the start of rich text formatting
+    -- Bold (**), italic (*), strikethrough (~~), inline code (`)
+    if remaining:match("^%*%*[^%*]") then  -- Bold: **text**
+      break
+    end
+    if remaining:match("^%*[^%*]") then  -- Italic: *text*
+      break
+    end
+    if remaining:match("^~~") then  -- Strikethrough: ~~text~~
+      break
+    end
+    if remaining:match("^`") then  -- Inline code: `code`
+      break
+    end
+
     table.insert(chars, char)
     self.position = self.position + 1
   end

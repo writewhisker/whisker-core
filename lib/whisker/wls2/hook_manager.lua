@@ -3,13 +3,16 @@
 
 local HookManager = {}
 HookManager.__index = HookManager
+HookManager._dependencies = {}
 
 --- Create a new HookManager instance
+-- @param deps table Optional dependencies container for dependency injection
 -- @return HookManager instance
-function HookManager.new()
+function HookManager.new(deps)
   local self = setmetatable({}, HookManager)
   self._hooks = {}           -- id -> Hook table
   self._passage_hooks = {}   -- passage_id -> hook_ids[]
+  self._deps = deps or {}    -- Store dependencies for future extensibility
   return self
 end
 
