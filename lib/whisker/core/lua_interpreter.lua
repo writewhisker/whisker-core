@@ -105,15 +105,109 @@ function LuaInterpreter:init_whisker_namespace()
         if not engine.current_passage then
           return nil
         end
-        
+
         local hook_id = engine.current_passage.id .. "_" .. hook_name
         local hook = engine.hook_manager:get_hook(hook_id)
-        
+
         if not hook or not hook.visible then
           return nil
         end
-        
+
         return tonumber(hook.current_content)
+      end,
+
+      -- Mutation Functions (M4: Expose whisker.hook mutation API)
+
+      ---Replace hook content entirely
+      ---@param hook_name string Hook name
+      ---@param content string New content
+      ---@return boolean True if successful
+      replace = function(hook_name, content)
+        if type(hook_name) ~= "string" then
+          error("whisker.hook.replace: name must be a string", 2)
+        end
+        if type(content) ~= "string" then
+          error("whisker.hook.replace: content must be a string", 2)
+        end
+        if not engine.current_passage then
+          return false
+        end
+
+        local hook_id = engine.current_passage.id .. "_" .. hook_name
+        local success, err = engine.hook_manager:replace_hook(hook_id, content)
+        return success
+      end,
+
+      ---Append content to hook
+      ---@param hook_name string Hook name
+      ---@param content string Content to append
+      ---@return boolean True if successful
+      append = function(hook_name, content)
+        if type(hook_name) ~= "string" then
+          error("whisker.hook.append: name must be a string", 2)
+        end
+        if type(content) ~= "string" then
+          error("whisker.hook.append: content must be a string", 2)
+        end
+        if not engine.current_passage then
+          return false
+        end
+
+        local hook_id = engine.current_passage.id .. "_" .. hook_name
+        local success, err = engine.hook_manager:append_hook(hook_id, content)
+        return success
+      end,
+
+      ---Prepend content to hook
+      ---@param hook_name string Hook name
+      ---@param content string Content to prepend
+      ---@return boolean True if successful
+      prepend = function(hook_name, content)
+        if type(hook_name) ~= "string" then
+          error("whisker.hook.prepend: name must be a string", 2)
+        end
+        if type(content) ~= "string" then
+          error("whisker.hook.prepend: content must be a string", 2)
+        end
+        if not engine.current_passage then
+          return false
+        end
+
+        local hook_id = engine.current_passage.id .. "_" .. hook_name
+        local success, err = engine.hook_manager:prepend_hook(hook_id, content)
+        return success
+      end,
+
+      ---Show a hidden hook
+      ---@param hook_name string Hook name
+      ---@return boolean True if successful
+      show = function(hook_name)
+        if type(hook_name) ~= "string" then
+          error("whisker.hook.show: name must be a string", 2)
+        end
+        if not engine.current_passage then
+          return false
+        end
+
+        local hook_id = engine.current_passage.id .. "_" .. hook_name
+        local success, err = engine.hook_manager:show_hook(hook_id)
+        return success
+      end,
+
+      ---Hide a visible hook
+      ---@param hook_name string Hook name
+      ---@return boolean True if successful
+      hide = function(hook_name)
+        if type(hook_name) ~= "string" then
+          error("whisker.hook.hide: name must be a string", 2)
+        end
+        if not engine.current_passage then
+          return false
+        end
+
+        local hook_id = engine.current_passage.id .. "_" .. hook_name
+        local success, err = engine.hook_manager:hide_hook(hook_id)
+        return success
       end
     }
   }
