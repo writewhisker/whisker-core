@@ -6,6 +6,7 @@
 
 local ExportUtils = require("whisker.export.utils")
 local Runtime = require("whisker.export.html.runtime")
+local CSSVariables = require("whisker.export.html.css_variables")
 
 local HTMLExporter = {}
 HTMLExporter._dependencies = {}
@@ -400,6 +401,193 @@ function HTMLExporter:minify_html(html)
   html = html:gsub("^%s+", ""):gsub("%s+$", "")
 
   return html
+end
+
+--- Get theme CSS for the story
+-- @param story table Story data with metadata.themes
+-- @return string CSS for themes
+function HTMLExporter:get_theme_css(story)
+  local themes = {}
+  if story.metadata and story.metadata.themes then
+    themes = story.metadata.themes
+  end
+  return CSSVariables.get_theme_css(themes)
+end
+
+--- Get theme classes for HTML element
+-- @param story table Story data
+-- @return string Space-separated CSS classes
+function HTMLExporter:get_theme_classes(story)
+  local themes = {}
+  if story.metadata and story.metadata.themes then
+    themes = story.metadata.themes
+  end
+  return CSSVariables.get_theme_classes(themes)
+end
+
+--- Get custom CSS from @style blocks
+-- @param story table Story data
+-- @return string Custom CSS wrapped in style tag or empty string
+function HTMLExporter:get_custom_css(story)
+  local styles = {}
+  if story.metadata and story.metadata.custom_styles then
+    styles = story.metadata.custom_styles
+  end
+
+  if #styles == 0 then
+    return ""
+  end
+
+  return "<style>\n/* Custom Story Styles */\n" .. table.concat(styles, "\n") .. "\n</style>"
+end
+
+--- Render an audio element to HTML
+-- @param node table Audio AST node
+-- @return string HTML audio element
+function HTMLExporter:render_audio(node)
+  local attrs = {}
+  table.insert(attrs, string.format('src="%s"', ExportUtils.escape_html(node.src)))
+
+  if node.autoplay then table.insert(attrs, "autoplay") end
+  if node.loop then table.insert(attrs, "loop") end
+  if node.muted then table.insert(attrs, "muted") end
+  if node.controls then table.insert(attrs, "controls") end
+
+  local volume_script = ""
+  if node.volume and node.volume ~= 1.0 then
+    -- Volume needs to be set via JavaScript
+    local audio_id = "whisker-audio-" .. tostring(node.position or os.time())
+    table.insert(attrs, 1, string.format('id="%s"', audio_id))
+    volume_script = string.format(
+      '<script>document.getElementById("%s").volume = %s;</script>',
+      audio_id,
+      tostring(node.volume)
+    )
+  end
+
+  return string.format('<audio class="whisker-audio" %s></audio>%s', table.concat(attrs, " "), volume_script)
+end
+
+--- Render a video element to HTML
+-- @param node table Video AST node
+-- @return string HTML video element
+function HTMLExporter:render_video(node)
+  local attrs = {}
+  table.insert(attrs, string.format('src="%s"', ExportUtils.escape_html(node.src)))
+
+  if node.width then table.insert(attrs, string.format('width="%d"', node.width)) end
+  if node.height then table.insert(attrs, string.format('height="%d"', node.height)) end
+  if node.autoplay then table.insert(attrs, "autoplay") end
+  if node.loop then table.insert(attrs, "loop") end
+  if node.muted then table.insert(attrs, "muted") end
+  if node.controls then table.insert(attrs, "controls") end
+  if node.poster then table.insert(attrs, string.format('poster="%s"', ExportUtils.escape_html(node.poster))) end
+
+  return string.format('<video class="whisker-video" %s></video>', table.concat(attrs, " "))
+end
+
+--- Render an embed/iframe element to HTML
+-- @param node table Embed AST node
+-- @return string HTML iframe element
+function HTMLExporter:render_embed(node)
+  local attrs = {}
+  table.insert(attrs, string.format('src="%s"', ExportUtils.escape_html(node.url)))
+  table.insert(attrs, string.format('width="%d"', node.width))
+  table.insert(attrs, string.format('height="%d"', node.height))
+  table.insert(attrs, string.format('title="%s"', ExportUtils.escape_html(node.title)))
+  table.insert(attrs, string.format('loading="%s"', node.loading))
+
+  -- Security: sandbox by default
+  if node.sandbox then
+    table.insert(attrs, 'sandbox="allow-scripts allow-same-origin"')
+  end
+
+  if node.allow and node.allow ~= "" then
+    table.insert(attrs, string.format('allow="%s"', ExportUtils.escape_html(node.allow)))
+  end
+
+  -- Security: prevent referrer leakage
+  table.insert(attrs, 'referrerpolicy="no-referrer"')
+
+  return string.format(
+    '<iframe class="whisker-embed" %s frameborder="0" allowfullscreen></iframe>',
+    table.concat(attrs, " ")
+  )
+end
+
+--- Render an image element to HTML with all attributes
+-- @param node table Image AST node
+-- @return string HTML img element
+function HTMLExporter:render_image(node)
+  local attrs = {}
+  table.insert(attrs, string.format('src="%s"', ExportUtils.escape_html(node.src)))
+  table.insert(attrs, string.format('alt="%s"', ExportUtils.escape_html(node.alt or "")))
+
+  if node.title then
+    table.insert(attrs, string.format('title="%s"', ExportUtils.escape_html(node.title)))
+  end
+  if node.width then
+    table.insert(attrs, string.format('width="%s"', tostring(node.width)))
+  end
+  if node.height then
+    table.insert(attrs, string.format('height="%s"', tostring(node.height)))
+  end
+  if node.loading then
+    table.insert(attrs, string.format('loading="%s"', node.loading))
+  end
+  if node.class then
+    table.insert(attrs, string.format('class="whisker-media %s"', ExportUtils.escape_html(node.class)))
+  else
+    table.insert(attrs, 'class="whisker-media"')
+  end
+  if node.id then
+    table.insert(attrs, string.format('id="%s"', ExportUtils.escape_html(node.id)))
+  end
+
+  return string.format('<img %s />', table.concat(attrs, " "))
+end
+
+--- Render media node to HTML based on type
+-- @param node table Media AST node
+-- @param platform string Output platform (web, console, plain)
+-- @return string Rendered output
+function HTMLExporter:render_media_node(node, platform)
+  platform = platform or "web"
+
+  if platform ~= "web" then
+    -- Non-web platforms: show placeholder
+    if node.type == "audio" then
+      return string.format("[Audio: %s]", node.src)
+    elseif node.type == "video" then
+      local dims = ""
+      if node.width and node.height then
+        dims = string.format(" (%dx%d)", node.width, node.height)
+      end
+      return string.format("[Video: %s%s]", node.src, dims)
+    elseif node.type == "embed" then
+      return string.format("[Embed: %s]", node.url)
+    elseif node.type == "image" then
+      local desc = node.alt or node.src
+      if node.width and node.height then
+        desc = desc .. string.format(" (%dx%d)", node.width, node.height)
+      end
+      return string.format("[Image: %s]", desc)
+    end
+    return ""
+  end
+
+  -- Web platform: render HTML
+  if node.type == "audio" then
+    return self:render_audio(node)
+  elseif node.type == "video" then
+    return self:render_video(node)
+  elseif node.type == "embed" then
+    return self:render_embed(node)
+  elseif node.type == "image" then
+    return self:render_image(node)
+  end
+
+  return ""
 end
 
 return HTMLExporter

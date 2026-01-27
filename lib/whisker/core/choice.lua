@@ -121,6 +121,91 @@ function Choice:is_sticky()
     return self:get_type() == Choice.TYPE_STICKY
 end
 
+-- ============================================================================
+-- WLS 1.0 GAP-016: Choice Availability
+-- ============================================================================
+
+--- Check if a choice is currently available
+---@param game_state table GameState instance
+---@param passage_id string ID of the containing passage
+---@return boolean
+function Choice:is_available(game_state, passage_id)
+    -- Sticky choices are always available (if condition passes)
+    if self:is_sticky() then
+        return self:evaluate_condition(game_state)
+    end
+
+    -- Once-only choices: check if already selected
+    local choice_id = passage_id .. "_" .. self.id
+    if game_state:is_choice_selected(choice_id) then
+        return false
+    end
+
+    -- Check condition
+    return self:evaluate_condition(game_state)
+end
+
+--- Evaluate choice condition
+---@param game_state table GameState instance
+---@return boolean
+function Choice:evaluate_condition(game_state)
+    if not self.condition or self.condition == "" then
+        return true
+    end
+
+    -- Create a sandboxed environment for evaluation
+    local env = {
+        -- Provide access to game state variables
+        _G = {},
+    }
+
+    -- Copy game state variables into environment
+    if game_state and game_state.variables then
+        for k, v in pairs(game_state.variables) do
+            env[k] = v
+        end
+    end
+
+    -- Add helper functions
+    env.visited = function(passage_id)
+        return game_state and game_state:has_visited(passage_id)
+    end
+
+    env.visit_count = function(passage_id)
+        return game_state and game_state:get_visit_count(passage_id) or 0
+    end
+
+    -- Try to evaluate the condition
+    local chunk, err = load("return " .. self.condition, "condition", "t", env)
+    if not chunk then
+        -- If it fails as an expression, try as a statement
+        chunk, err = load(self.condition, "condition", "t", env)
+    end
+
+    if not chunk then
+        -- Condition parsing failed, default to true (permissive)
+        return true
+    end
+
+    local success, result = pcall(chunk)
+    if not success then
+        -- Condition execution failed, default to true (permissive)
+        return true
+    end
+
+    return result == true
+end
+
+--- Mark this choice as selected in the game state
+---@param game_state table GameState instance
+---@param passage_id string ID of the containing passage
+function Choice:mark_selected(game_state, passage_id)
+    if game_state and self:is_once_only() then
+        local choice_id = passage_id .. "_" .. self.id
+        game_state:mark_choice_selected(choice_id)
+    end
+end
+
 function Choice:set_metadata(key, value)
     self.metadata[key] = value
 end

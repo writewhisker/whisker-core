@@ -1,10 +1,118 @@
 -- lib/whisker/core/renderer.lua
 -- WLS 2.0 Renderer with Hook Support
+-- WLS 1.0.0 compliant with:
+--   GAP-001: Escape sequences support
+--   GAP-002: Expression interpolation ${expr}
+--   GAP-032: Enhanced expression support in choices
+--   GAP-033: Escaped brackets support
+--   GAP-035: Block-level CSS classes
+--   GAP-036: Inline CSS classes
 
 local HookManager = require("lib.whisker.wls2.hook_manager")
 
 local Renderer = {}
 Renderer.__index = Renderer
+
+--- Process escape sequences in content text (GAP-001)
+-- Handles: \\, \[, \], \{, \}, \<, \>, \n, \t, \uXXXX
+-- @param text string The text with escape sequences
+-- @return string Text with escapes processed
+local function process_escapes(text)
+  if not text or text == "" then
+    return text
+  end
+
+  local result = {}
+  local i = 1
+  local len = #text
+
+  while i <= len do
+    local char = text:sub(i, i)
+
+    if char == "\\" and i < len then
+      local next_char = text:sub(i + 1, i + 1)
+
+      -- Handle standard escapes
+      if next_char == "\\" then
+        table.insert(result, "\\")
+        i = i + 2
+      elseif next_char == "[" then
+        table.insert(result, "[")
+        i = i + 2
+      elseif next_char == "]" then
+        table.insert(result, "]")
+        i = i + 2
+      elseif next_char == "{" then
+        table.insert(result, "{")
+        i = i + 2
+      elseif next_char == "}" then
+        table.insert(result, "}")
+        i = i + 2
+      elseif next_char == "<" then
+        table.insert(result, "<")
+        i = i + 2
+      elseif next_char == ">" then
+        table.insert(result, ">")
+        i = i + 2
+      elseif next_char == "n" then
+        table.insert(result, "\n")
+        i = i + 2
+      elseif next_char == "t" then
+        table.insert(result, "\t")
+        i = i + 2
+      elseif next_char == "u" and i + 5 <= len then
+        -- Unicode escape \uXXXX
+        local hex = text:sub(i + 2, i + 5)
+        if hex:match("^%x%x%x%x$") then
+          local codepoint = tonumber(hex, 16)
+          -- Use utf8.char if available (Lua 5.3+), otherwise encode manually
+          if utf8 and utf8.char then
+            local success, utf8_char = pcall(utf8.char, codepoint)
+            if success then
+              table.insert(result, utf8_char)
+            else
+              -- Invalid codepoint, keep literal
+              table.insert(result, text:sub(i, i + 5))
+            end
+          else
+            -- Manual UTF-8 encoding for older Lua versions
+            if codepoint < 0x80 then
+              table.insert(result, string.char(codepoint))
+            elseif codepoint < 0x800 then
+              table.insert(result, string.char(
+                0xC0 + math.floor(codepoint / 64),
+                0x80 + (codepoint % 64)
+              ))
+            elseif codepoint < 0x10000 then
+              table.insert(result, string.char(
+                0xE0 + math.floor(codepoint / 4096),
+                0x80 + math.floor((codepoint % 4096) / 64),
+                0x80 + (codepoint % 64)
+              ))
+            else
+              -- For codepoints >= 0x10000, keep literal (4-digit hex only)
+              table.insert(result, text:sub(i, i + 5))
+            end
+          end
+          i = i + 6
+        else
+          -- Invalid unicode escape, keep literal
+          table.insert(result, char)
+          i = i + 1
+        end
+      else
+        -- Unknown escape, keep backslash (preserves literal text)
+        table.insert(result, char)
+        i = i + 1
+      end
+    else
+      table.insert(result, char)
+      i = i + 1
+    end
+  end
+
+  return table.concat(result)
+end
 
 -- Platform-specific formatting tags
 local platform_tags = {
@@ -138,44 +246,251 @@ function Renderer:render_hooks(text, passage_id, game_state)
 end
 
 -- Evaluate expressions in text
+-- WLS 1.0 GAP-002 & GAP-032: Enhanced with ${expression} support
 -- @param text string - Text with expressions
 -- @param game_state table - Current game state
 -- @return processed_text string - Text with expressions evaluated
 function Renderer:evaluate_expressions(text, game_state)
   local processed = text
-  
-  -- Simple variable interpolation $varname
+
+  -- GAP-002/GAP-032: Full expression interpolation ${expr}
+  -- Process these first (more specific pattern)
+  processed = processed:gsub("%${(.-)}", function(expr)
+    -- Use interpreter to evaluate expression if available
+    if self.interpreter and self.interpreter.evaluate_expression then
+      local result, err = self.interpreter:evaluate_expression(expr, game_state)
+      if not err then
+        if result == nil then
+          return ""  -- Nil becomes empty string
+        end
+        return tostring(result)
+      else
+        -- On error, log if in debug mode, return empty string
+        if self.config and self.config.debug then
+          io.stderr:write("[Expression Error] " .. expr .. ": " .. tostring(err) .. "\n")
+        end
+        return ""  -- Graceful degradation per GAP-015
+      end
+    end
+
+    -- Fallback: Evaluate using Lua load() directly
+    -- Build environment from game_state
+    local env = {}
+    if game_state then
+      if type(game_state) == "table" then
+        if game_state.get_all_variables then
+          for k, v in pairs(game_state:get_all_variables()) do
+            env[k] = v
+          end
+        elseif game_state.variables then
+          for k, v in pairs(game_state.variables) do
+            env[k] = v
+          end
+        else
+          for k, v in pairs(game_state) do
+            if type(k) == "string" and type(v) ~= "function" then
+              env[k] = v
+            end
+          end
+        end
+      end
+    end
+    -- Add standard libraries for expressions like ${math.floor(x)}
+    env.math = math
+    env.string = string
+    env.tonumber = tonumber
+    env.tostring = tostring
+    env.type = type
+    env.pairs = pairs
+    env.ipairs = ipairs
+
+    -- Evaluate as return expression
+    local code = "return " .. expr
+    local func, load_err = load(code, "expr", "t", env)
+    if func then
+      local ok, result = pcall(func)
+      if ok then
+        if result == nil then
+          return ""
+        end
+        return tostring(result)
+      end
+    end
+    return ""  -- Graceful degradation
+  end)
+
+  -- Simple variable interpolation $varname (but not ${...})
   if game_state then
-    processed = processed:gsub("%$(%w+)", function(var_name)
-      return tostring(game_state[var_name] or "")
+    processed = processed:gsub("%$([%w_]+)", function(var_name)
+      -- Get value from game_state
+      local value
+      if type(game_state) == "table" then
+        if game_state.get then
+          value = game_state:get(var_name)
+        elseif game_state.variables then
+          value = game_state.variables[var_name]
+        else
+          value = game_state[var_name]
+        end
+      end
+      if value ~= nil then
+        return tostring(value)
+      end
+      return "$" .. var_name  -- Show original if undefined
     end)
   end
-  
+
   return processed
 end
 
+--- Set the interpreter for expression evaluation
+-- @param interpreter table - The interpreter instance
+function Renderer:set_interpreter(interpreter)
+  self.interpreter = interpreter
+end
+
 -- Apply formatting to text
+-- WLS 1.0 GAP-035 & GAP-036: Includes CSS class support
 -- @param text string - Text with formatting markers
 -- @return formatted_text string - Text with platform-specific formatting
 function Renderer:apply_formatting(text)
   local formatted = text
-  
+
+  -- GAP-035: Block-level CSS classes: .class1.class2::[content]
+  -- Must be processed before inline to distinguish :: from :
+  formatted = formatted:gsub("(%.([%w%-_%.]+))::%[(.-)%]", function(classes_str, _, inner_content)
+    local classes = {}
+    for class in classes_str:gmatch("%.([%w%-_]+)") do
+      -- GAP-006: Validate reserved prefixes
+      if not class:match("^whisker%-") and not class:match("^ws%-") then
+        table.insert(classes, class)
+      end
+    end
+
+    -- Process inner content recursively
+    local processed_content = self:apply_formatting(inner_content)
+
+    if self.platform == "web" and #classes > 0 then
+      local class_attr = table.concat(classes, " ")
+      return string.format('<div class="%s">%s</div>', class_attr, processed_content)
+    end
+    return processed_content
+  end)
+
+  -- GAP-036: Inline CSS classes: .class1.class2:[text]
+  -- Single colon, not double colon
+  formatted = formatted:gsub("(%.([%w%-_%.]+)):%[([^%]]+)%]", function(classes_str, _, inner_text)
+    -- Make sure this isn't a block class (would have :: which is already processed)
+    local classes = {}
+    for class in classes_str:gmatch("%.([%w%-_]+)") do
+      -- GAP-006: Validate reserved prefixes
+      if not class:match("^whisker%-") and not class:match("^ws%-") then
+        table.insert(classes, class)
+      end
+    end
+
+    -- Process inner text
+    local processed_text = self:apply_formatting(inner_text)
+
+    if self.platform == "web" and #classes > 0 then
+      local class_attr = table.concat(classes, " ")
+      return string.format('<span class="%s">%s</span>', class_attr, processed_text)
+    end
+    return processed_text
+  end)
+
   -- Bold: **text**
   formatted = formatted:gsub("%*%*(.-)%*%*", function(content)
     return self.tags.bold_start .. content .. self.tags.bold_end
   end)
-  
+
   -- Italic: *text*
   formatted = formatted:gsub("%*(.-)%*", function(content)
     return self.tags.italic_start .. content .. self.tags.italic_end
   end)
-  
+
   -- Underline: __text__
   formatted = formatted:gsub("__(.-)__", function(content)
     return self.tags.underline_start .. content .. self.tags.underline_end
   end)
-  
+
   return formatted
+end
+
+-- ============================================================================
+-- WLS 1.0 GAP-033: Escaped Brackets Support
+-- ============================================================================
+
+--- Unescape brackets in text
+-- Converts \[ to [ and \] to ]
+-- @param text string - Text with escaped brackets
+-- @return string - Text with brackets unescaped
+function Renderer:unescape_brackets(text)
+  if not text then return text end
+  local result = text
+  result = result:gsub("\\%[", "[")
+  result = result:gsub("\\%]", "]")
+  return result
+end
+
+--- Process choice text with full rendering pipeline
+-- WLS 1.0 GAP-032 & GAP-033: Handles expression interpolation and escaped brackets
+-- @param text string - Raw choice text
+-- @param game_state table - Current game state
+-- @return string - Processed choice text
+function Renderer:process_choice_text(text, game_state)
+  local processed = text
+
+  -- First, evaluate expressions
+  processed = self:evaluate_expressions(processed, game_state)
+
+  -- Then, apply formatting (includes CSS classes)
+  processed = self:apply_formatting(processed)
+
+  -- Finally, unescape brackets (GAP-033)
+  processed = self:unescape_brackets(processed)
+
+  return processed
+end
+
+-- ============================================================================
+-- WLS 1.0 GAP-035 & GAP-036: CSS Class Validation
+-- ============================================================================
+
+-- Reserved CSS class prefixes (GAP-006)
+local RESERVED_CSS_PREFIXES = { "whisker%-", "ws%-" }
+
+--- Validate a CSS class name
+-- @param class_name string - The class name to validate
+-- @return boolean - True if valid
+-- @return string|nil - Error message if invalid
+function Renderer:validate_css_class(class_name)
+  for _, prefix in ipairs(RESERVED_CSS_PREFIXES) do
+    if class_name:match("^" .. prefix) then
+      return false, "Reserved CSS class prefix: " .. prefix:gsub("%-", "-")
+    end
+  end
+  return true
+end
+
+--- Parse CSS classes from a class string
+-- @param class_str string - String like ".class1.class2"
+-- @return table - Array of class names
+-- @return table|nil - Array of validation errors
+function Renderer:parse_css_classes(class_str)
+  local classes = {}
+  local errors = {}
+
+  for class in class_str:gmatch("%.([%w%-_]+)") do
+    local valid, err = self:validate_css_class(class)
+    if valid then
+      table.insert(classes, class)
+    else
+      table.insert(errors, err)
+    end
+  end
+
+  return classes, #errors > 0 and errors or nil
 end
 
 -- Apply text wrapping (stub for now)
@@ -194,23 +509,26 @@ end
 -- @return rendered_text string - Final rendered output
 function Renderer:render_passage(passage, game_state, passage_id)
   local content = passage.content
-  
+
+  -- Phase 0: Process escape sequences first (GAP-001)
+  content = process_escapes(content)
+
   -- Phase 1: Extract hooks and register them
   local processed, hooks = self:extract_hooks(content, passage_id)
-  
+
   -- Phase 2: Evaluate expressions in main text (not in hooks yet)
   processed = self:evaluate_expressions(processed, game_state)
-  
+
   -- Phase 3: Apply formatting to main text (not in hooks yet)
   processed = self:apply_formatting(processed)
-  
+
   -- Phase 4: Render hooks (replace placeholders with processed hook content)
   -- This applies expressions and formatting to hook content
   processed = self:render_hooks(processed, passage_id, game_state)
-  
+
   -- Phase 5: Apply wrapping if needed
   processed = self:apply_wrapping(processed)
-  
+
   return processed
 end
 
@@ -221,7 +539,10 @@ end
 -- @return rendered_text string - Updated rendered output
 function Renderer:rerender_passage(passage, game_state, passage_id)
   local content = passage.content
-  
+
+  -- Process escape sequences first (GAP-001)
+  content = process_escapes(content)
+
   -- Replace hook definitions with placeholders directly
   -- (hooks already registered, don't register again)
   -- Use bracket counting for nested brackets

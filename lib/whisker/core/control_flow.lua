@@ -374,24 +374,82 @@ function ControlFlow:process_inline_conditionals(content)
 end
 
 --- Process text alternatives: {| a | b }, {&| }, {~| }, {!| }
+--- WLS 1.0 GAP-030: Also supports named alternatives: {@name:| a | b }, {@name&:| a | b }
 ---@param content string
 ---@return string
 function ControlFlow:process_alternatives(content)
     -- Get or create alternatives state for this passage
     local passage_id = self.context.passage_id or "unknown"
     local alt_state = self:get_alternatives_state(passage_id)
+    -- GAP-030: Named alternatives use global state
+    local named_state = self:get_named_alternatives_state()
 
     local alt_index = 0
 
-    -- Process each alternative
-    content = content:gsub("{([&~!]?)|(.-)}",  function(prefix, options_str)
-        alt_index = alt_index + 1
-        local alt_key = passage_id .. "_alt_" .. alt_index
+    -- GAP-030: First handle named alternatives with the @name: prefix
+    -- Pattern: {@name:| options } or {@name&:| options } etc.
+    content = content:gsub("{@([%w_]+)([&~!]?):|(.-)}", function(name, prefix, options_str)
+        local alt_key = name
+        local state_table = named_state
 
         -- Parse options (split by |, handling whitespace)
         local options = {}
         for opt in (options_str .. "|"):gmatch("%s*(.-)%s*|") do
-            table.insert(options, opt)
+            if opt ~= "" then
+                table.insert(options, opt)
+            end
+        end
+
+        if #options == 0 then
+            return ""
+        end
+
+        -- Get visit count for this alternative
+        local visit_count = state_table[alt_key] or 0
+
+        -- Select based on prefix type
+        local selected
+
+        if prefix == "" then
+            -- Sequence: show in order, stick at last
+            local index = math.min(visit_count + 1, #options)
+            selected = options[index]
+        elseif prefix == "&" then
+            -- Cycle: loop forever
+            local index = ((visit_count) % #options) + 1
+            selected = options[index]
+        elseif prefix == "~" then
+            -- Shuffle: random each time
+            local index = math.random(1, #options)
+            selected = options[index]
+        elseif prefix == "!" then
+            -- Once-only: each shown once, then empty
+            local index = visit_count + 1
+            if index <= #options then
+                selected = options[index]
+            else
+                selected = ""
+            end
+        end
+
+        -- Increment after selection
+        state_table[alt_key] = visit_count + 1
+
+        return selected or ""
+    end)
+
+    -- Now handle unnamed alternatives: {| }, {&| }, {~| }, {!| }
+    content = content:gsub("{([&~!]?)|(.-)}",  function(prefix, options_str)
+        alt_index = alt_index + 1
+        local alt_key = passage_id .. "_alt_" .. alt_index
+        local state_table = alt_state
+
+        -- Parse options (split by |, handling whitespace)
+        local options = {}
+        for opt in (options_str .. "|"):gmatch("%s*(.-)%s*|") do
+            if opt ~= "" then
+                table.insert(options, opt)
+            end
         end
 
         if #options == 0 then
@@ -399,7 +457,7 @@ function ControlFlow:process_alternatives(content)
         end
 
         -- Get visit count for this alternative (0-indexed, incremented AFTER use)
-        local visit_count = alt_state[alt_key] or 0
+        local visit_count = state_table[alt_key] or 0
 
         -- Select based on prefix type
         local selected
@@ -427,13 +485,15 @@ function ControlFlow:process_alternatives(content)
         end
 
         -- Increment after selection (so next render gets next item)
-        alt_state[alt_key] = visit_count + 1
+        state_table[alt_key] = visit_count + 1
 
         return selected or ""
     end)
 
     -- Save alternatives state back
     self:save_alternatives_state(passage_id, alt_state)
+    -- GAP-030: Save named alternatives state
+    self:save_named_alternatives_state(named_state)
 
     return content
 end
@@ -460,6 +520,135 @@ function ControlFlow:save_alternatives_state(passage_id, state)
     end
 end
 
+-- ============================================================================
+-- WLS 1.0 GAP-030: Named Alternatives State Management
+-- ============================================================================
+
+--- Get named alternatives state (global, not per-passage)
+---@return table
+function ControlFlow:get_named_alternatives_state()
+    if self.game_state and self.game_state.get then
+        return self.game_state:get("_named_alternatives") or {}
+    end
+    return {}
+end
+
+--- Save named alternatives state
+---@param state table
+function ControlFlow:save_named_alternatives_state(state)
+    if self.game_state and self.game_state.set then
+        self.game_state:set("_named_alternatives", state)
+    end
+end
+
+-- ============================================================================
+-- WLS 1.0 GAP-034: Reusable Alternatives Processing for Choice Text
+-- ============================================================================
+
+--- Process alternatives in any text with a custom context ID
+--- This allows processing alternatives in choice text with separate state tracking
+---@param content string The text to process
+---@param context_id string The context identifier for state tracking
+---@return string Processed content
+function ControlFlow:process_alternatives_in_text(content, context_id)
+    local alt_state = self:get_alternatives_state(context_id)
+    -- GAP-030: Named alternatives use global state
+    local named_state = self:get_named_alternatives_state()
+
+    local alt_index = 0
+
+    -- First handle named alternatives with the @name: prefix
+    content = content:gsub("{@([%w_]+)([&~!]?):|(.-)}", function(name, prefix, options_str)
+        local alt_key = name
+        local state_table = named_state
+
+        -- Parse options (split by |, handling whitespace)
+        local options = {}
+        for opt in (options_str .. "|"):gmatch("%s*(.-)%s*|") do
+            if opt ~= "" then
+                table.insert(options, opt)
+            end
+        end
+
+        if #options == 0 then
+            return ""
+        end
+
+        local visit_count = state_table[alt_key] or 0
+        local selected
+
+        if prefix == "" then
+            local index = math.min(visit_count + 1, #options)
+            selected = options[index]
+        elseif prefix == "&" then
+            local index = ((visit_count) % #options) + 1
+            selected = options[index]
+        elseif prefix == "~" then
+            local index = math.random(1, #options)
+            selected = options[index]
+        elseif prefix == "!" then
+            local index = visit_count + 1
+            if index <= #options then
+                selected = options[index]
+            else
+                selected = ""
+            end
+        end
+
+        state_table[alt_key] = visit_count + 1
+        return selected or ""
+    end)
+
+    -- Now handle unnamed alternatives
+    content = content:gsub("{([&~!]?)|(.-)}",  function(prefix, options_str)
+        alt_index = alt_index + 1
+        local alt_key = context_id .. "_alt_" .. alt_index
+        local state_table = alt_state
+
+        -- Parse options (split by |, handling whitespace)
+        local options = {}
+        for opt in (options_str .. "|"):gmatch("%s*(.-)%s*|") do
+            if opt ~= "" then
+                table.insert(options, opt)
+            end
+        end
+
+        if #options == 0 then
+            return ""
+        end
+
+        local visit_count = state_table[alt_key] or 0
+        local selected
+
+        if prefix == "" then
+            local index = math.min(visit_count + 1, #options)
+            selected = options[index]
+        elseif prefix == "&" then
+            local index = ((visit_count) % #options) + 1
+            selected = options[index]
+        elseif prefix == "~" then
+            local index = math.random(1, #options)
+            selected = options[index]
+        elseif prefix == "!" then
+            local index = visit_count + 1
+            if index <= #options then
+                selected = options[index]
+            else
+                selected = ""
+            end
+        end
+
+        state_table[alt_key] = visit_count + 1
+        return selected or ""
+    end)
+
+    -- Save state back
+    self:save_alternatives_state(context_id, alt_state)
+    self:save_named_alternatives_state(named_state)
+
+    return content
+end
+
 --- Trim leading/trailing whitespace and normalize blank lines
 ---@param content string
 ---@return string
@@ -468,6 +657,50 @@ function ControlFlow:trim_content(content)
     content = content:gsub("^[\n\r]+", "")
     content = content:gsub("[\n\r]+$", "")
     return content
+end
+
+-- ============================================================================
+-- WLS 1.0 GAP-009: Tunnel Operations
+-- ============================================================================
+
+--- Process tunnel operations in content
+-- Finds tunnel calls (-> Target ->) and tunnel returns (<-)
+---@param content string
+---@return string processed_content
+---@return table|nil tunnel_op { type, target, remaining }
+function ControlFlow:process_tunnels(content)
+    -- Tunnel call syntax: -> PassageName ->
+    local tunnel_pattern = "%->%s*([%w_]+)%s*%->"
+
+    -- Find first tunnel call
+    local start_pos, end_pos, target = content:find(tunnel_pattern)
+
+    if start_pos then
+        -- Content before tunnel
+        local before = content:sub(1, start_pos - 1)
+        -- Content after tunnel (if any)
+        local after = content:sub(end_pos + 1)
+
+        return before, {
+            type = "tunnel_call",
+            target = target,
+            remaining = after
+        }
+    end
+
+    -- Tunnel return syntax: <-
+    local return_pos = content:find("<%-")
+    if return_pos then
+        local before = content:sub(1, return_pos - 1)
+        local after = content:sub(return_pos + 2)
+
+        return before, {
+            type = "tunnel_return",
+            remaining = after
+        }
+    end
+
+    return content, nil
 end
 
 return ControlFlow

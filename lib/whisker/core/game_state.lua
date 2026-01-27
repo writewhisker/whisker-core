@@ -1,5 +1,8 @@
 -- src/core/game_state.lua
 -- Complete state management with undo/redo, inventory, and serialization
+-- GAP-017: Integrated seeded random number generation
+
+local Random = require("lib.whisker.core.random")
 
 local GameState = {}
 GameState.__index = GameState
@@ -37,6 +40,14 @@ function GameState.new(deps)
         arrays = {},              -- ARRAY declarations: { name = [...] }
         maps = {},                -- MAP declarations: { name = {...} }
 
+        -- WLS 1.0 GAP-009: Tunnel stack for -> Target -> and <- navigation
+        tunnel_stack = {},
+        tunnel_stack_limit = 100,  -- Configurable depth limit
+
+        -- WLS 1.0 GAP-017: Seeded random number generator
+        random = Random.new(),
+        random_seed = nil,  -- User-specified seed (stored for serialization)
+
         -- Undo system
         history_stack = {},
         max_history = 10,
@@ -67,6 +78,10 @@ function GameState:initialize(story)
     self.lists = {}
     self.arrays = {}
     self.maps = {}
+
+    -- WLS 1.0 GAP-009: Reset tunnel stack on init
+    self.tunnel_stack = {}
+    self.tunnel_stack_limit = self.tunnel_stack_limit or 100
 
     -- Initialize default variables from story
     if story.variables then
@@ -611,6 +626,181 @@ function GameState:clear_all_selected_choices()
     self.selected_choices = {}
 end
 
+-- ============================================================================
+-- WLS 1.0 GAP-009: Tunnel Stack Operations
+-- ============================================================================
+
+--- Push a return address onto the tunnel stack
+---@param passage_id string The passage to return to
+---@param position number|nil Optional position within passage
+---@return boolean success
+---@return string|nil error
+function GameState:tunnel_push(passage_id, position)
+    -- Check stack limit
+    if #self.tunnel_stack >= self.tunnel_stack_limit then
+        return false, string.format(
+            "Tunnel stack overflow: maximum depth %d exceeded",
+            self.tunnel_stack_limit
+        )
+    end
+
+    table.insert(self.tunnel_stack, {
+        passage_id = passage_id,
+        position = position or 0,
+        timestamp = os.time()
+    })
+
+    return true
+end
+
+--- Pop a return address from the tunnel stack
+---@return table|nil return_info { passage_id, position }
+---@return string|nil error
+function GameState:tunnel_pop()
+    if #self.tunnel_stack == 0 then
+        return nil, "Tunnel stack underflow: no return address available"
+    end
+
+    return table.remove(self.tunnel_stack)
+end
+
+--- Peek at the top of the tunnel stack without popping
+---@return table|nil return_info
+function GameState:tunnel_peek()
+    if #self.tunnel_stack == 0 then
+        return nil
+    end
+    return self.tunnel_stack[#self.tunnel_stack]
+end
+
+--- Get current tunnel stack depth
+---@return number
+function GameState:tunnel_depth()
+    return #self.tunnel_stack
+end
+
+--- Check if tunnel stack is empty
+---@return boolean
+function GameState:tunnel_empty()
+    return #self.tunnel_stack == 0
+end
+
+--- Clear the tunnel stack (for restart)
+function GameState:tunnel_clear()
+    self.tunnel_stack = {}
+end
+
+--- Set the tunnel stack limit
+---@param limit number
+function GameState:set_tunnel_limit(limit)
+    self.tunnel_stack_limit = limit
+end
+
+--- Get the full tunnel stack (for debugging/serialization)
+---@return table
+function GameState:get_tunnel_stack()
+    return self.tunnel_stack
+end
+
+-- ============================================================================
+-- WLS 1.0 GAP-017: Seeded Random Number Generation
+-- ============================================================================
+
+--- Initialize random seed
+---@param seed number|string|nil Custom seed, or nil for auto
+---@param story_ifid string|nil Story IFID for default seed
+function GameState:init_random(seed, story_ifid)
+    if seed then
+        self.random_seed = seed
+        self.random:set_seed(seed)
+    elseif story_ifid then
+        -- Default: hash of IFID + start time
+        local default_seed = story_ifid .. "_" .. tostring(self.start_time or os.time())
+        self.random_seed = default_seed
+        self.random:set_seed(default_seed)
+    else
+        -- Fallback: current time
+        self.random:set_seed(os.time())
+    end
+end
+
+--- Get random number (0-1)
+---@return number
+function GameState:random_next()
+    return self.random:next()
+end
+
+--- Get random integer in range [min, max]
+---@param min number
+---@param max number
+---@return number
+function GameState:random_int(min, max)
+    return self.random:int(min, max)
+end
+
+--- Get random float in range [min, max)
+---@param min number
+---@param max number
+---@return number
+function GameState:random_float(min, max)
+    return self.random:float(min, max)
+end
+
+--- Pick random element from list
+---@param list table
+---@return any
+function GameState:random_pick(list)
+    return self.random:pick(list)
+end
+
+--- Shuffle array in place
+---@param array table
+---@return table same array, shuffled
+function GameState:random_shuffle(array)
+    return self.random:shuffle(array)
+end
+
+--- Roll dice (e.g., 2d6)
+---@param count number Number of dice
+---@param sides number Number of sides per die
+---@return number Total
+function GameState:random_dice(count, sides)
+    return self.random:dice(count, sides)
+end
+
+--- Get random boolean with given probability
+---@param probability number Probability of true (0-1), default 0.5
+---@return boolean
+function GameState:random_bool(probability)
+    return self.random:bool(probability)
+end
+
+--- Get the random generator instance (for advanced usage)
+---@return Random
+function GameState:get_random()
+    return self.random
+end
+
+--- Get the random state for serialization
+---@return table
+function GameState:get_random_state()
+    return {
+        seed = self.random_seed,
+        state = self.random:get_state()
+    }
+end
+
+--- Restore random state from serialization
+---@param data table
+function GameState:set_random_state(data)
+    if data then
+        self.random_seed = data.seed
+        if data.state then
+            self.random:set_state(data.state)
+        end
+    end
+end
+
 function GameState:increment(key, amount)
     amount = amount or 1
     local current = self:get(key, 0)
@@ -659,6 +849,8 @@ function GameState:push_to_history()
         lists = self:clone_table(self.lists),
         arrays = self:clone_table(self.arrays),
         maps = self:clone_table(self.maps),
+        -- WLS 1.0 GAP-009: Include tunnel stack in snapshot
+        tunnel_stack = self:clone_table(self.tunnel_stack),
         timestamp = os.time()
     }
 
@@ -689,6 +881,8 @@ function GameState:undo()
     self.lists = self:clone_table(snapshot.lists or {})
     self.arrays = self:clone_table(snapshot.arrays or {})
     self.maps = self:clone_table(snapshot.maps or {})
+    -- WLS 1.0 GAP-009: Restore tunnel stack from snapshot
+    self.tunnel_stack = self:clone_table(snapshot.tunnel_stack or {})
 
     return snapshot
 end
@@ -724,17 +918,61 @@ function GameState:serialize()
         -- WLS 1.0 Gap 3: Persist collections
         lists = self.lists,
         arrays = self.arrays,
-        maps = self.maps
+        maps = self.maps,
+        -- WLS 1.0 GAP-013: Persist tunnel stack for save state
+        tunnel_stack = self:serialize_tunnel_stack(),
+        tunnel_stack_limit = self.tunnel_stack_limit,
+        -- WLS 1.0 GAP-017: Persist random state
+        random_state = self:get_random_state()
     }
 
     return data
 end
 
+--- Serialize tunnel stack for save state (GAP-013)
+---@return table
+function GameState:serialize_tunnel_stack()
+    local stack = {}
+    for _, entry in ipairs(self.tunnel_stack) do
+        table.insert(stack, {
+            passage_id = entry.passage_id,
+            position = entry.position or 0
+            -- Omit timestamp to reduce save size
+        })
+    end
+    return stack
+end
+
+--- GAP-068: Deserialize with migration support
 function GameState:deserialize(data)
-    if not data or data.version ~= self.version then
-        return false, "Incompatible save data version"
+    -- Try to load SaveMigrator for version migration
+    local success_load, SaveMigrator = pcall(require, "lib.whisker.core.save_migrator")
+
+    if success_load and SaveMigrator then
+        local migrator = SaveMigrator.new()
+
+        -- Migrate if needed
+        if migrator:needs_migration(data) then
+            local migrated, err = migrator:migrate(data)
+            if err then
+                return false, "Migration failed: " .. err
+            end
+            data = migrated
+        end
+
+        -- Validate
+        local valid, errors = migrator:validate(data)
+        if not valid then
+            return false, "Invalid save data: " .. table.concat(errors, "; ")
+        end
+    else
+        -- Fallback: simple version check if SaveMigrator not available
+        if not data or data.version ~= self.version then
+            return false, "Incompatible save data version"
+        end
     end
 
+    self.version = data.version or self.version
     self.story_id = data.story_id
     self.start_time = data.start_time
     self.save_time = data.save_time
@@ -749,8 +987,61 @@ function GameState:deserialize(data)
     self.lists = data.lists or {}
     self.arrays = data.arrays or {}
     self.maps = data.maps or {}
+    -- WLS 1.0 GAP-013: Restore tunnel stack from save state
+    self.tunnel_stack = self:deserialize_tunnel_stack(data.tunnel_stack)
+    self.tunnel_stack_limit = data.tunnel_stack_limit or 100
+    -- WLS 1.0 GAP-017: Restore random state
+    if data.random_state then
+        self:set_random_state(data.random_state)
+    end
 
     return true
+end
+
+--- Deserialize tunnel stack from save state (GAP-013)
+---@param stack_data table
+---@return table
+function GameState:deserialize_tunnel_stack(stack_data)
+    if not stack_data then
+        return {}
+    end
+
+    local stack = {}
+    for _, entry in ipairs(stack_data) do
+        table.insert(stack, {
+            passage_id = entry.passage_id,
+            position = entry.position or 0,
+            timestamp = os.time()  -- Reset timestamp on load
+        })
+    end
+    return stack
+end
+
+--- Validate tunnel stack after loading (GAP-013)
+---@param story table The story object
+---@return boolean valid
+---@return table|nil errors
+function GameState:validate_tunnel_stack(story)
+    local errors = {}
+
+    for i, entry in ipairs(self.tunnel_stack) do
+        if not entry.passage_id then
+            table.insert(errors, string.format(
+                "Tunnel stack entry %d missing passage_id",
+                i
+            ))
+        elseif story and story.get_passage then
+            local passage = story:get_passage(entry.passage_id)
+            if not passage then
+                table.insert(errors, string.format(
+                    "Tunnel stack entry %d references unknown passage: %s",
+                    i, entry.passage_id
+                ))
+            end
+        end
+    end
+
+    return #errors == 0, errors
 end
 
 function GameState:reset()
@@ -766,6 +1057,8 @@ function GameState:reset()
     self.lists = {}
     self.arrays = {}
     self.maps = {}
+    -- WLS 1.0 GAP-009: Clear tunnel stack on reset
+    self.tunnel_stack = {}
 end
 
 return GameState

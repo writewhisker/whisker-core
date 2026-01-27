@@ -1,5 +1,15 @@
 -- lib/whisker/parser/ws_parser.lua
 -- WLS 2.0 Parser with Hook and Rich Text Support
+-- GAP-016: @fallback directive support
+-- GAP-017: @seed directive support
+-- GAP-020: @set directive support
+-- GAP-021: IFID validation
+
+-- UUID module is optional for IFID validation
+local UUID
+pcall(function()
+  UUID = require("whisker.utils.uuid")
+end)
 
 local WSParser = {}
 WSParser.__index = WSParser
@@ -120,7 +130,7 @@ function WSParser:parse_media()
   return nil
 end
 
--- Parse markdown image: ![alt](src)
+-- Parse markdown image: ![alt](src "title" width=X height=Y loading="lazy" class="..." id="...")
 function WSParser:parse_markdown_image()
   local remaining = self.content:sub(self.position)
 
@@ -129,9 +139,9 @@ function WSParser:parse_markdown_image()
     return nil
   end
 
-  -- Parse ![alt](src)
-  local alt, src = remaining:match("^!%[(.-)%]%((.-)%)")
-  if not alt or not src then
+  -- Parse ![alt](src...)
+  local alt, inner = remaining:match("^!%[(.-)%]%((.-)%)")
+  if not alt or not inner then
     return nil
   end
 
@@ -139,13 +149,56 @@ function WSParser:parse_markdown_image()
   local full_match = remaining:match("^!%[.-%]%(.-%)")
   self.position = self.position + #full_match
 
-  -- Parse optional title from src
+  -- Parse inner content: src "title" attr=value ...
+  -- First extract src (up to first space or quote after src)
+  local clean_src = inner
   local title = nil
-  local clean_src = src
-  local src_part, title_part = src:match('^(.-)%s+"(.-)"$')
+  local rest = ""
+
+  -- Try to match src followed by optional title in quotes
+  local src_part, title_part, rest_part = inner:match('^(%S+)%s+"([^"]+)"%s*(.*)$')
   if src_part and title_part then
     clean_src = src_part
     title = title_part
+    rest = rest_part or ""
+  else
+    -- Try src followed by title in single quotes
+    src_part, title_part, rest_part = inner:match("^(%S+)%s+'([^']+)'%s*(.*)$")
+    if src_part and title_part then
+      clean_src = src_part
+      title = title_part
+      rest = rest_part or ""
+    else
+      -- Try just src followed by attributes
+      src_part, rest_part = inner:match("^(%S+)%s+(.*)$")
+      if src_part then
+        clean_src = src_part
+        rest = rest_part or ""
+      end
+    end
+  end
+
+  -- Remove quotes from src if present
+  clean_src = clean_src:match('^"(.-)"$') or clean_src:match("^'(.-)'$") or clean_src
+
+  -- Parse additional attributes: key=value or key="value"
+  local attributes = {
+    width = nil,
+    height = nil,
+    loading = nil,
+    class = nil,
+    id = nil
+  }
+
+  for key, value in rest:gmatch('([%w%-_]+)%s*=%s*"?([^%s"]+)"?') do
+    -- Remove quotes from value if present
+    value = value:match('^"(.-)"$') or value:match("^'(.-)'$") or value
+
+    if key == "width" or key == "height" then
+      attributes[key] = tonumber(value) or value
+    else
+      attributes[key] = value
+    end
   end
 
   return {
@@ -153,40 +206,141 @@ function WSParser:parse_markdown_image()
     alt = alt,
     src = clean_src:match("^%s*(.-)%s*$"), -- trim
     title = title,
+    width = attributes.width,
+    height = attributes.height,
+    loading = attributes.loading,
+    class = attributes.class,
+    id = attributes.id,
     position = start_pos
   }
 end
 
--- Parse directive-based media: @image(src), @video(src), @embed(url)
+-- Parse directive-based media: @image(src), @video(src), @embed(url), @audio(src)
 function WSParser:parse_media_directive()
   local remaining = self.content:sub(self.position)
 
-  -- Look for @image, @video, or @embed pattern
-  local directive, src = remaining:match("^@(image)%((.-)%)")
-  if not directive then
-    directive, src = remaining:match("^@(video)%((.-)%)")
+  -- Look for @image, @video, @embed, or @audio pattern
+  local directive_type = remaining:match("^@(image)%(")
+  if not directive_type then
+    directive_type = remaining:match("^@(video)%(")
   end
-  if not directive then
-    directive, src = remaining:match("^@(embed)%((.-)%)")
+  if not directive_type then
+    directive_type = remaining:match("^@(embed)%(")
+  end
+  if not directive_type then
+    directive_type = remaining:match("^@(audio)%(")
   end
 
-  if not directive or not src then
+  if not directive_type then
     return nil
   end
 
   local start_pos = self.position
-  local full_match = remaining:match("^@%w+%(.-%)")
-  self.position = self.position + #full_match
 
-  -- Remove quotes if present
-  local clean_src = src:match('^"(.-)"$') or src:match("^'(.-)'$") or src
-  clean_src = clean_src:match("^%s*(.-)%s*$") -- trim
+  -- Find matching closing paren (handle nested parens)
+  local paren_start = remaining:find("%(")
+  local paren_depth = 1
+  local paren_end = paren_start + 1
 
-  return {
-    type = directive,
-    src = clean_src,
-    position = start_pos
-  }
+  while paren_end <= #remaining and paren_depth > 0 do
+    local char = remaining:sub(paren_end, paren_end)
+    if char == "(" then paren_depth = paren_depth + 1
+    elseif char == ")" then paren_depth = paren_depth - 1
+    end
+    paren_end = paren_end + 1
+  end
+
+  local content = remaining:sub(paren_start + 1, paren_end - 2)
+
+  -- Parse src (quoted or unquoted)
+  local src, attrs_str = content:match('^"([^"]+)"(.*)$')
+  if not src then
+    src, attrs_str = content:match("^'([^']+)'(.*)$")
+  end
+  if not src then
+    -- Unquoted src: take until first comma or end
+    local first_part = content:match("^([^,]+)")
+    if first_part then
+      src = first_part:match("^%s*(.-)%s*$")
+      attrs_str = content:sub(#first_part + 1)
+    else
+      src = content
+      attrs_str = ""
+    end
+  end
+  attrs_str = attrs_str or ""
+
+  -- Parse attributes: key: value or key=value
+  local attributes = {}
+  -- Match both key: value and key=value patterns
+  for key, value in attrs_str:gmatch(",?%s*([%w_%-]+)%s*[:=]%s*([^,]+)") do
+    key = key:match("^%s*(.-)%s*$")
+    value = value:match("^%s*(.-)%s*$")
+    -- Remove quotes from value if present
+    value = value:match('^"(.-)"$') or value:match("^'(.-)'$") or value
+    if value == "true" then value = true
+    elseif value == "false" then value = false
+    elseif tonumber(value) then value = tonumber(value)
+    end
+    attributes[key] = value
+  end
+
+  self.position = self.position + paren_end - 1
+
+  local clean_src = src:match("^%s*(.-)%s*$") -- trim
+
+  -- Build node based on directive type
+  if directive_type == "audio" then
+    return {
+      type = "audio",
+      src = clean_src,
+      autoplay = attributes.autoplay or false,
+      loop = attributes.loop or false,
+      controls = attributes.controls ~= false, -- default true
+      volume = attributes.volume or 1.0,
+      muted = attributes.muted or false,
+      position = start_pos
+    }
+  elseif directive_type == "video" then
+    return {
+      type = "video",
+      src = clean_src,
+      width = attributes.width,
+      height = attributes.height,
+      autoplay = attributes.autoplay or false,
+      loop = attributes.loop or false,
+      muted = attributes.muted or false,
+      controls = attributes.controls ~= false, -- default true
+      poster = attributes.poster,
+      position = start_pos
+    }
+  elseif directive_type == "embed" then
+    return {
+      type = "embed",
+      url = clean_src,
+      width = attributes.width or 560,
+      height = attributes.height or 315,
+      sandbox = attributes.sandbox ~= false, -- default true for security
+      allow = attributes.allow or "",
+      title = attributes.title or "Embedded content",
+      loading = attributes.loading or "lazy",
+      position = start_pos
+    }
+  else
+    -- image (default)
+    return {
+      type = "image",
+      src = clean_src,
+      alt = attributes.alt or "",
+      title = attributes.title,
+      width = attributes.width,
+      height = attributes.height,
+      loading = attributes.loading,
+      class = attributes.class,
+      id = attributes.id,
+      position = start_pos
+    }
+  end
 end
 
 -- Parse bold text (**text**)
@@ -550,8 +704,330 @@ function WSParser:parse_text()
 end
 
 -- ============================================================================
--- Module System Parsing (WLS Chapter 12)
+-- WLS 1.0 GAP-033: Escaped Brackets Support in Choices
 -- ============================================================================
+
+--- Parse choice text with support for escaped brackets
+-- Scans for matching closing bracket while respecting \[ and \] escapes
+-- @param text string The text starting after the choice prefix (e.g., after + or *)
+-- @return string|nil The extracted choice text (with escapes still present)
+-- @return string|nil The remaining text after the closing bracket
+function WSParser:parse_choice_text_with_escapes(text)
+  -- Skip whitespace and find opening bracket
+  local ws, bracket_start = text:match("^(%s*)%[")
+  if not ws then
+    -- Fallback to simple pattern for backwards compatibility
+    local simple_text = text:match("^%s*%[([^%]]+)%]")
+    if simple_text then
+      local after_bracket = text:match("^%s*%[[^%]]+%](.*)$")
+      return simple_text, after_bracket
+    end
+    return nil, nil
+  end
+
+  local start_pos = #ws + 2  -- After whitespace and opening [
+  local pos = start_pos
+  local depth = 1
+  local in_escape = false
+  local chars = {}
+
+  while pos <= #text and depth > 0 do
+    local char = text:sub(pos, pos)
+
+    if in_escape then
+      -- Previous char was backslash, include this char literally
+      table.insert(chars, char)
+      in_escape = false
+    elseif char == "\\" then
+      -- Escape character - include it, mark next char as escaped
+      table.insert(chars, char)
+      in_escape = true
+    elseif char == "[" then
+      -- Non-escaped opening bracket - this actually adds to depth
+      -- for nested brackets (e.g., [[inner]])
+      depth = depth + 1
+      table.insert(chars, char)
+    elseif char == "]" then
+      depth = depth - 1
+      if depth > 0 then
+        table.insert(chars, char)
+      end
+      -- If depth == 0, we found the closing bracket, don't include it
+    else
+      table.insert(chars, char)
+    end
+
+    pos = pos + 1
+  end
+
+  if depth == 0 then
+    local choice_text = table.concat(chars)
+    local remaining = text:sub(pos)
+    return choice_text, remaining
+  end
+
+  -- Malformed - no closing bracket found
+  return nil, nil
+end
+
+-- ============================================================================
+-- Module System Parsing (WLS Chapter 12)
+-- Implements GAP-045 (Qualified Names) and GAP-046 (Nested Namespaces)
+-- ============================================================================
+
+--- GAP-045: Parse a qualified name (identifier.identifier.identifier)
+-- @return table|nil A qualified name AST node with parts, full_name, namespace, and name
+function WSParser:parse_qualified_name()
+    local remaining = self.content:sub(self.position)
+
+    -- Match identifier.identifier... pattern
+    local full_name = remaining:match("^([%w_]+%.[%w_%.]+)")
+    if not full_name then
+        return nil
+    end
+
+    local start_pos = self.position
+    self.position = self.position + #full_name
+
+    -- Split into parts
+    local parts = {}
+    for part in full_name:gmatch("([%w_]+)") do
+        table.insert(parts, part)
+    end
+
+    return {
+        type = "qualified_name",
+        parts = parts,
+        full_name = full_name,
+        namespace = table.concat(parts, ".", 1, #parts - 1),
+        name = parts[#parts],
+        position = start_pos
+    }
+end
+
+--- GAP-046: Parse a NAMESPACE block with support for nested namespaces
+-- @param parent_namespace string|nil The parent namespace path
+-- @return table|nil A namespace AST node
+function WSParser:parse_namespace_block(parent_namespace)
+    local remaining = self.content:sub(self.position)
+
+    -- Match NAMESPACE name
+    local name = remaining:match("^NAMESPACE[ \t]+(%w+)")
+    if not name then
+        return nil
+    end
+
+    local start_pos = self.position
+    self.position = self.position + #("NAMESPACE " .. name)
+
+    -- Skip trailing whitespace/newline
+    remaining = self.content:sub(self.position)
+    local ws = remaining:match("^([ \t]*\n?)")
+    if ws then
+        self.position = self.position + #ws
+    end
+
+    local namespace = {
+        type = "namespace_declaration",
+        name = name,
+        full_name = parent_namespace and (parent_namespace .. "." .. name) or name,
+        parent = parent_namespace,
+        passages = {},
+        functions = {},
+        nested_namespaces = {},
+        position = start_pos
+    }
+
+    -- Parse content until END NAMESPACE
+    while self.position <= #self.content do
+        remaining = self.content:sub(self.position)
+
+        -- Skip whitespace/newlines
+        local leading_ws = remaining:match("^([ \t\n]+)")
+        if leading_ws then
+            self.position = self.position + #leading_ws
+            remaining = self.content:sub(self.position)
+        end
+
+        -- Check for END NAMESPACE
+        if remaining:match("^END%s+NAMESPACE") then
+            local end_match = remaining:match("^END%s+NAMESPACE")
+            self.position = self.position + #end_match
+            break
+        end
+
+        -- Check for nested NAMESPACE
+        if remaining:match("^NAMESPACE%s+%w+") then
+            local nested = self:parse_namespace_block(namespace.full_name)
+            if nested then
+                namespace.nested_namespaces[nested.name] = nested
+            end
+            goto ns_continue
+        end
+
+        -- Check for passage (::)
+        local passage_name = remaining:match("^::%s*([%w_]+)")
+        if passage_name then
+            local passage = self:parse_passage_in_namespace(namespace.full_name)
+            if passage then
+                namespace.passages[passage.name] = passage
+            end
+            goto ns_continue
+        end
+
+        -- Check for FUNCTION
+        if remaining:match("^FUNCTION%s+%w+") then
+            local func = self:parse_function_in_namespace(namespace.full_name)
+            if func then
+                namespace.functions[func.name] = func
+            end
+            goto ns_continue
+        end
+
+        -- Skip any other content (single character at a time to avoid infinite loop)
+        if self.position <= #self.content then
+            self.position = self.position + 1
+        end
+
+        ::ns_continue::
+    end
+
+    return namespace
+end
+
+--- GAP-046: Parse a passage within a namespace context
+-- @param namespace_path string The full namespace path
+-- @return table|nil A passage AST node
+function WSParser:parse_passage_in_namespace(namespace_path)
+    local remaining = self.content:sub(self.position)
+
+    -- Match :: PassageName
+    local passage_name = remaining:match("^::%s*([%w_]+)")
+    if not passage_name then
+        return nil
+    end
+
+    local start_pos = self.position
+    self.position = self.position + #"::" + #(passage_name:match("^%s*") or "") + #passage_name
+
+    -- Skip optional whitespace after name
+    remaining = self.content:sub(self.position)
+    local ws = remaining:match("^([ \t]*)")
+    if ws then
+        self.position = self.position + #ws
+    end
+
+    -- Collect content until next passage, function, namespace, or END NAMESPACE
+    local content_parts = {}
+    while self.position <= #self.content do
+        remaining = self.content:sub(self.position)
+
+        -- Check for end markers
+        if remaining:match("^::%s*%w+") or
+           remaining:match("^FUNCTION%s+%w+") or
+           remaining:match("^NAMESPACE%s+%w+") or
+           remaining:match("^END%s+NAMESPACE") then
+            break
+        end
+
+        -- Add character to content
+        table.insert(content_parts, self.content:sub(self.position, self.position))
+        self.position = self.position + 1
+    end
+
+    return {
+        type = "passage",
+        name = passage_name,
+        qualified_name = namespace_path .. "." .. passage_name,
+        namespace = namespace_path,
+        content = table.concat(content_parts),
+        position = start_pos
+    }
+end
+
+--- GAP-046: Parse a function within a namespace context
+-- @param namespace_path string The full namespace path
+-- @return table|nil A function AST node
+function WSParser:parse_function_in_namespace(namespace_path)
+    local remaining = self.content:sub(self.position)
+
+    -- Match FUNCTION name
+    local func_name = remaining:match("^FUNCTION%s+(%w+)")
+    if not func_name then
+        return nil
+    end
+
+    local start_pos = self.position
+    self.position = self.position + #("FUNCTION " .. func_name)
+
+    remaining = self.content:sub(self.position)
+
+    -- Parse optional parameters
+    local params = {}
+    if remaining:match("^%s*%(") then
+        local ws_paren = remaining:match("^(%s*)%(")
+        self.position = self.position + #ws_paren + 1
+        remaining = self.content:sub(self.position)
+
+        -- Parse parameters until closing paren
+        while not remaining:match("^%)") and self.position <= #self.content do
+            local ws_before = remaining:match("^(%s*)")
+            if ws_before then
+                self.position = self.position + #ws_before
+                remaining = self.content:sub(self.position)
+            end
+
+            local param = remaining:match("^(%w+)")
+            if param then
+                table.insert(params, { name = param })
+                self.position = self.position + #param
+                remaining = self.content:sub(self.position)
+            end
+
+            local sep = remaining:match("^([%s,]*)")
+            if sep then
+                self.position = self.position + #sep
+                remaining = self.content:sub(self.position)
+            end
+
+            if remaining:match("^%)") then
+                break
+            end
+        end
+
+        if remaining:match("^%)") then
+            self.position = self.position + 1
+        end
+    end
+
+    -- Collect body until END
+    local body_parts = {}
+    while self.position <= #self.content do
+        remaining = self.content:sub(self.position)
+
+        -- Check for END (but not END NAMESPACE)
+        if remaining:match("^END%s*$") or remaining:match("^END[%s\n]") then
+            if not remaining:match("^END%s+NAMESPACE") then
+                local end_match = remaining:match("^END[%s\n]*") or "END"
+                self.position = self.position + #end_match
+                break
+            end
+        end
+
+        table.insert(body_parts, self.content:sub(self.position, self.position))
+        self.position = self.position + 1
+    end
+
+    return {
+        type = "function_declaration",
+        name = func_name,
+        qualified_name = namespace_path .. "." .. func_name,
+        namespace = namespace_path,
+        params = params,
+        body = table.concat(body_parts):match("^%s*(.-)%s*$"),  -- Trim
+        position = start_pos
+    }
+end
 
 -- Parse INCLUDE declaration: INCLUDE "path"
 function WSParser:parse_include(content)
@@ -577,6 +1053,29 @@ function WSParser:parse_include(content)
     path = path,
     position = start_pos
   }
+end
+
+-- Process an INCLUDE and load the referenced file
+-- @param include_path string The path from the INCLUDE statement
+-- @param location table|nil Source location for error reporting
+-- @return table|nil The included story content
+-- @return string|nil Error message if loading failed
+function WSParser:process_include(include_path, location)
+  if not self.modules_runtime then
+    return nil, "No modules runtime configured for include processing"
+  end
+
+  local module_content, err = self.modules_runtime:load_include(
+    include_path,
+    self.current_file,
+    location
+  )
+
+  if not module_content then
+    return nil, err
+  end
+
+  return module_content
 end
 
 -- Parse FUNCTION declaration: FUNCTION name(param1, param2) ... END
@@ -833,6 +1332,9 @@ function WSParser:parse(input)
           end
         elseif directive_name == "onEnter" then
           current_passage.on_enter_script = directive_value
+        -- GAP-016: Passage-level fallback
+        elseif directive_name == "fallback" then
+          current_passage.fallback = directive_value:match("^%s*(.-)%s*$")  -- trim
         end
       else
         -- Story-level directives
@@ -842,15 +1344,142 @@ function WSParser:parse(input)
           result.story.metadata.author = directive_value
         elseif directive_name == "version" then
           result.story.metadata.version = directive_value
+        -- GAP-021: IFID with validation
         elseif directive_name == "ifid" then
-          result.story.metadata.ifid = directive_value
+          local ifid = directive_value:match("^%s*(.-)%s*$")  -- trim
+          -- Normalize to uppercase
+          ifid = UUID.normalize(ifid)
+          -- Validate format
+          if UUID.is_valid(ifid) then
+            result.story.metadata.ifid = ifid
+          else
+            table.insert(result.warnings, {
+              code = "WLS-META-001",
+              message = "Invalid IFID format: " .. directive_value,
+              location = { line = i },
+              suggestion = "Use UUID format: XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
+            })
+            -- Store anyway but mark as invalid
+            result.story.metadata.ifid = directive_value
+            result.story.metadata.ifid_invalid = true
+          end
         elseif directive_name == "start" then
           result.story.start_passage_name = directive_value
+        -- GAP-017: Random seed directive
+        elseif directive_name == "seed" then
+          local seed_value = directive_value:match("^%s*(.-)%s*$")  -- trim
+          -- Try to parse as number
+          local num_seed = tonumber(seed_value)
+          if num_seed then
+            result.story.random_seed = num_seed
+          else
+            -- Remove quotes if present and keep as string (will be hashed)
+            seed_value = seed_value:match('^"(.-)"$') or seed_value:match("^'(.-)'$") or seed_value
+            result.story.random_seed = seed_value
+          end
+        -- GAP-016: Story-level default fallback
+        elseif directive_name == "fallback" then
+          result.story.default_fallback = directive_value:match("^%s*(.-)%s*$")  -- trim
+        elseif directive_name == "theme" then
+          -- Parse theme(s) - can be comma-separated
+          local themes = {}
+          for theme in directive_value:gmatch("([^,]+)") do
+            theme = theme:match("^%s*(.-)%s*$")  -- trim
+            -- Remove quotes if present
+            theme = theme:match('^"(.-)"$') or theme:match("^'(.-)'$") or theme
+            table.insert(themes, theme)
+          end
+          result.story.metadata.themes = themes
         else
           result.story.metadata[directive_name] = directive_value
         end
       end
       i = i + 1
+      goto continue
+    end
+
+    -- GAP-020: Check for @set directive (story-level settings)
+    local set_key, set_value = trimmed:match("^@set%s+([%w_]+)%s*=%s*(.+)$")
+    if set_key and not current_passage then
+      -- Initialize settings if needed
+      if not result.story.settings then
+        result.story.settings = {}
+      end
+
+      -- Parse value type
+      local parsed_value
+      set_value = set_value:match("^%s*(.-)%s*$")  -- trim
+      if set_value == "true" then
+        parsed_value = true
+      elseif set_value == "false" then
+        parsed_value = false
+      elseif tonumber(set_value) then
+        parsed_value = tonumber(set_value)
+      elseif set_value:match('^"(.-)"$') then
+        parsed_value = set_value:match('^"(.-)"$')
+      elseif set_value:match("^'(.-)'$") then
+        parsed_value = set_value:match("^'(.-)'$")
+      else
+        parsed_value = set_value
+      end
+
+      result.story.settings[set_key] = parsed_value
+      i = i + 1
+      goto continue
+    end
+
+    -- Check for @style block start
+    if trimmed:match("^@style%s*{") or trimmed == "@style {" then
+      -- Parse entire style block - find matching closing brace
+      local style_content = {}
+      local brace_depth = 1
+      -- Check if opening brace is on same line
+      local inline_content = trimmed:match("^@style%s*{(.*)$")
+      if inline_content and inline_content ~= "" then
+        -- Count braces in inline content
+        for c in inline_content:gmatch(".") do
+          if c == "{" then brace_depth = brace_depth + 1
+          elseif c == "}" then brace_depth = brace_depth - 1
+          end
+        end
+        if brace_depth > 0 then
+          table.insert(style_content, inline_content)
+        else
+          -- Closing brace was on same line
+          local css = inline_content:match("^(.-)%}%s*$") or inline_content
+          if not result.story.metadata.custom_styles then
+            result.story.metadata.custom_styles = {}
+          end
+          table.insert(result.story.metadata.custom_styles, css)
+          i = i + 1
+          goto continue
+        end
+      end
+
+      i = i + 1
+      while i <= #lines and brace_depth > 0 do
+        local style_line = lines[i]
+        for c in style_line:gmatch(".") do
+          if c == "{" then brace_depth = brace_depth + 1
+          elseif c == "}" then brace_depth = brace_depth - 1
+          end
+        end
+        if brace_depth > 0 then
+          table.insert(style_content, style_line)
+        else
+          -- Last line may have content before closing brace
+          local final_content = style_line:match("^(.-)%}") or ""
+          if final_content ~= "" then
+            table.insert(style_content, final_content)
+          end
+        end
+        i = i + 1
+      end
+
+      if not result.story.metadata.custom_styles then
+        result.story.metadata.custom_styles = {}
+      end
+      table.insert(result.story.metadata.custom_styles, table.concat(style_content, "\n"))
       goto continue
     end
 
@@ -938,8 +1567,11 @@ function WSParser:parse(input)
 
         -- Match choice: +/* [text] -> Target or +/* [text]
         local rest = trimmed:sub(#choice_prefix + 1)
-        local choice_text = rest:match("^%s*%[([^%]]+)%]")
-        local choice_target = rest:match("%->%s*(.+)$")
+
+        -- GAP-033: Handle escaped brackets in choice text
+        -- Use bracket-counting approach that skips escaped brackets
+        local choice_text, remaining = self:parse_choice_text_with_escapes(rest)
+        local choice_target = remaining and remaining:match("%->%s*(.+)$")
 
         if choice_text then
           choice_target = choice_target and choice_target:match("^%s*(.-)%s*$") or nil

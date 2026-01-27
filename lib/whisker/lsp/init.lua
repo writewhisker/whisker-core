@@ -15,6 +15,9 @@ M.Hover = require("whisker.lsp.hover")
 M.Navigation = require("whisker.lsp.navigation")
 M.Symbols = require("whisker.lsp.symbols")
 M.Diagnostics = require("whisker.lsp.diagnostics")
+M.CodeActions = require("whisker.lsp.code_actions")
+M.SemanticTokens = require("whisker.lsp.semantic_tokens")
+M.Rename = require("whisker.lsp.rename")
 
 --- Create a new LSP server instance
 -- @param options table Server options

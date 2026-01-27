@@ -319,4 +319,140 @@ describe("ModulesRuntime", function()
             end)
         end)
     end)
+
+    -- ============================================================================
+    -- GAP-004: Include Path Resolution Tests
+    -- ============================================================================
+
+    describe("path resolver integration (GAP-004)", function()
+        local runtime
+
+        before_each(function()
+            runtime = ModulesRuntime.new(nil, {
+                project_root = "/project",
+                search_paths = {"/project/lib"}
+            })
+        end)
+
+        it("has a path resolver", function()
+            assert.is_not_nil(runtime:get_resolver())
+        end)
+
+        it("can set project root", function()
+            runtime:set_project_root("/new/root")
+            assert.are.equal("/new/root", runtime.resolver.project_root)
+        end)
+
+        it("can add search paths", function()
+            runtime:add_search_path("/extra/path")
+            assert.are.equal(2, #runtime.resolver.search_paths)
+        end)
+    end)
+
+    -- ============================================================================
+    -- GAP-005: Circular Include Detection Tests
+    -- ============================================================================
+
+    describe("circular include detection (GAP-005)", function()
+        local runtime
+
+        before_each(function()
+            runtime = ModulesRuntime.new(nil, {
+                project_root = "/project"
+            })
+        end)
+
+        it("has MAX_INCLUDE_DEPTH constant", function()
+            assert.are.equal(50, ModulesRuntime.MAX_INCLUDE_DEPTH)
+        end)
+
+        it("has MOD error codes", function()
+            assert.are.equal("WLS-MOD-001", ModulesRuntime.ERROR_CODES.CIRCULAR_INCLUDE)
+            assert.are.equal("WLS-MOD-002", ModulesRuntime.ERROR_CODES.INCLUDE_NOT_FOUND)
+            assert.are.equal("WLS-MOD-003", ModulesRuntime.ERROR_CODES.INCLUDE_PARSE_ERROR)
+            assert.are.equal("WLS-MOD-004", ModulesRuntime.ERROR_CODES.MAX_DEPTH_EXCEEDED)
+        end)
+
+        it("detects circular includes via path resolver", function()
+            local resolver = runtime:get_resolver()
+
+            resolver:push_include("/project/a.ws")
+            resolver:push_include("/project/b.ws")
+
+            local is_circular, cycle = resolver:push_include("/project/a.ws")
+
+            assert.is_true(is_circular)
+            assert.is_not_nil(cycle)
+        end)
+    end)
+
+    describe("format_error()", function()
+        local runtime
+
+        before_each(function()
+            runtime = ModulesRuntime.new()
+        end)
+
+        it("formats basic error", function()
+            local err = runtime:format_error("WLS-MOD-001", "Test error", nil, nil, nil)
+            assert.is_not_nil(err)
+            assert.has.match("WLS%-MOD%-001", err)
+            assert.has.match("Test error", err)
+        end)
+
+        it("includes location when provided", function()
+            local err = runtime:format_error(
+                "WLS-MOD-001",
+                "Test error",
+                { file = "test.ws", line = 10, column = 5 },
+                nil,
+                nil
+            )
+            assert.has.match("test.ws:10:5", err)
+        end)
+
+        it("includes suggestion when provided", function()
+            local err = runtime:format_error(
+                "WLS-MOD-001",
+                "Test error",
+                nil,
+                "Fix the issue",
+                nil
+            )
+            assert.has.match("Fix the issue", err)
+        end)
+
+        it("includes cycle details when provided", function()
+            local err = runtime:format_error(
+                "WLS-MOD-001",
+                "Circular include",
+                nil,
+                nil,
+                { cycle = "a.ws -> b.ws -> a.ws" }
+            )
+            assert.has.match("a.ws %-> b.ws %-> a.ws", err)
+        end)
+    end)
+
+    describe("clear_module_cache()", function()
+        local runtime
+
+        before_each(function()
+            runtime = ModulesRuntime.new(nil, {
+                project_root = "/project"
+            })
+        end)
+
+        it("clears loaded modules", function()
+            runtime.loaded_modules["/project/test.ws"] = { test = true }
+            runtime:clear_module_cache()
+            assert.are.same({}, runtime.loaded_modules)
+        end)
+
+        it("clears include stack", function()
+            runtime.resolver:push_include("/project/a.ws")
+            runtime:clear_module_cache()
+            assert.are.equal(0, runtime.resolver:get_include_depth())
+        end)
+    end)
 end)

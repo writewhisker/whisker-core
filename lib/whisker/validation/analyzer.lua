@@ -1,8 +1,16 @@
 --- Story Analyzer - Advanced Validation & Analysis
 -- @module whisker.validation.analyzer
+-- WLS 1.0 compliant with:
+--   Gaps 24-29: Validation error codes (STR, LNK, FLW, VAR, AST, META, SCR, COL, MOD, PRS)
+--   GAP-015: Expression errors (EXP)
 
 local Analyzer = {}
 Analyzer.__index = Analyzer
+
+-- Optional validator imports (loaded on demand)
+local AssetValidator
+local ScriptValidator
+local Diagnostic
 
 -- Special navigation targets
 local SPECIAL_TARGETS = {
@@ -41,11 +49,68 @@ Analyzer.ERROR_CODES = {
   VARIABLE_SHADOWING = "WLS-VAR-005",
   LONE_DOLLAR = "WLS-VAR-006",
   UNCLOSED_INTERPOLATION = "WLS-VAR-007",
-  TEMP_CROSS_PASSAGE = "WLS-VAR-008"
+  TEMP_CROSS_PASSAGE = "WLS-VAR-008",
+  -- Asset errors (AST) - GAP-024
+  MISSING_ASSET = "WLS-AST-001",
+  INVALID_ASSET_PATH = "WLS-AST-002",
+  UNSUPPORTED_ASSET_TYPE = "WLS-AST-003",
+  ASSET_TOO_LARGE = "WLS-AST-004",
+  -- Metadata errors (META) - GAP-025
+  MISSING_METADATA = "WLS-META-001",
+  INVALID_METADATA = "WLS-META-002",
+  DEPRECATED_METADATA = "WLS-META-003",
+  -- Script errors (SCR) - GAP-026
+  SCRIPT_SYNTAX_ERROR = "WLS-SCR-001",
+  SCRIPT_UNDEFINED_VAR = "WLS-SCR-002",
+  SCRIPT_FORBIDDEN_CALL = "WLS-SCR-003",
+  SCRIPT_TIMEOUT_RISK = "WLS-SCR-004",
+  -- Collection errors (COL) - GAP-027
+  DUPLICATE_COLLECTION = "WLS-COL-001",
+  INVALID_COLLECTION_SYNTAX = "WLS-COL-002",
+  INVALID_COLLECTION_TYPE = "WLS-COL-003",
+  -- Module errors (MOD) - GAP-028
+  CIRCULAR_INCLUDE = "WLS-MOD-001",
+  INCLUDE_NOT_FOUND = "WLS-MOD-002",
+  INCLUDE_PARSE_ERROR = "WLS-MOD-003",
+  MAX_INCLUDE_DEPTH = "WLS-MOD-004",
+  DUPLICATE_NAMESPACE = "WLS-MOD-005",
+  INVALID_FUNCTION_SIGNATURE = "WLS-MOD-006",
+  -- Presentation errors (PRS)
+  RESERVED_CSS_PREFIX = "WLS-PRS-001",
+  -- Expression errors (EXP) - GAP-015
+  TYPE_MISMATCH = "WLS-EXP-001",
+  INVALID_OPERATOR = "WLS-EXP-002",
+  DIVISION_BY_ZERO = "WLS-EXP-003",
+  UNDEFINED_FUNCTION = "WLS-EXP-004",
+  PROPERTY_ON_NON_OBJECT = "WLS-EXP-005",
+}
+
+-- Required metadata fields
+Analyzer.REQUIRED_METADATA = {
+  "title",  -- Story must have a title
+}
+
+-- Recommended metadata fields
+Analyzer.RECOMMENDED_METADATA = {
+  "author",
+  "ifid",
+  "version",
+}
+
+-- Deprecated metadata fields
+Analyzer.DEPRECATED_METADATA = {
+  format = "Use 'wls' field instead",
+  creator = "Use 'author' field instead",
 }
 
 -- Reserved prefixes for variables
 local RESERVED_PREFIXES = { "_", "__", "whisker_", "wls_" }
+
+-- Reserved CSS class prefixes (GAP-006)
+local RESERVED_CSS_PREFIXES = {
+  "whisker-",
+  "ws-",
+}
 
 -- System variables (allowed to use reserved prefixes)
 local SYSTEM_VARIABLES = {
@@ -820,9 +885,603 @@ function Analyzer:analyze_flow(story)
   }
 end
 
+--- Check if a CSS class name uses a reserved prefix (GAP-006)
+---@param class_name string
+---@return boolean is_reserved
+---@return string|nil prefix
+local function has_reserved_css_prefix(class_name)
+  for _, prefix in ipairs(RESERVED_CSS_PREFIXES) do
+    if class_name:sub(1, #prefix) == prefix then
+      return true, prefix
+    end
+  end
+  return false, nil
+end
+
+--- Validate CSS classes in content (GAP-006)
+---@param content string Passage content
+---@param passage_id string Passage identifier
+---@return table diagnostics
+function Analyzer:validate_css_classes(content, passage_id)
+  local diagnostics = {}
+
+  if not content or type(content) ~= "string" then
+    return diagnostics
+  end
+
+  -- Pattern for inline CSS classes: .class:[text]
+  for class_name in content:gmatch("%.([%w_%-]+):%[") do
+    local is_reserved, prefix = has_reserved_css_prefix(class_name)
+    if is_reserved then
+      table.insert(diagnostics, create_diagnostic(
+        self.ERROR_CODES.RESERVED_CSS_PREFIX,
+        string.format(
+          'CSS class "%s" uses reserved prefix "%s"',
+          class_name, prefix
+        ),
+        "warning",
+        passage_id,
+        nil,
+        string.format(
+          'Rename to "user-%s" to avoid conflicts with system styles',
+          class_name:sub(#prefix + 1)
+        )
+      ))
+    end
+  end
+
+  -- Pattern for block CSS classes: .class::[content]
+  for class_name in content:gmatch("%.([%w_%-]+)::%[") do
+    local is_reserved, prefix = has_reserved_css_prefix(class_name)
+    if is_reserved then
+      table.insert(diagnostics, create_diagnostic(
+        self.ERROR_CODES.RESERVED_CSS_PREFIX,
+        string.format(
+          'CSS class "%s" uses reserved prefix "%s"',
+          class_name, prefix
+        ),
+        "warning",
+        passage_id,
+        nil,
+        string.format(
+          'Rename to "user-%s" to avoid conflicts with system styles',
+          class_name:sub(#prefix + 1)
+        )
+      ))
+    end
+  end
+
+  return diagnostics
+end
+
+-- ============================================================================
+-- GAP-024: Asset Validation
+-- ============================================================================
+
+--- Extract asset references from content
+---@param content string|table Content to search
+---@return table assets Array of {type, path, location}
+function Analyzer:extract_assets(content)
+  local assets = {}
+
+  local content_str = content
+  if type(content) == "table" then
+    -- Join content nodes
+    local parts = {}
+    for _, node in ipairs(content) do
+      if node.value then
+        table.insert(parts, node.value)
+      elseif node.type == "text" and type(node) == "table" then
+        table.insert(parts, tostring(node.value or ""))
+      end
+    end
+    content_str = table.concat(parts)
+  end
+
+  if type(content_str) ~= "string" then
+    return assets
+  end
+
+  -- Markdown images: ![alt](path)
+  for alt, path in content_str:gmatch("!%[(.-)%]%((.-)%)") do
+    table.insert(assets, {
+      type = "image",
+      path = path:match("^([^%s\"]+)") or path,
+      alt = alt
+    })
+  end
+
+  -- @image directive: @image(path) or @image("path")
+  for path in content_str:gmatch("@image%(([^%)]+)%)") do
+    path = path:match('^"?(.-)"?$')  -- Remove quotes
+    table.insert(assets, { type = "image", path = path })
+  end
+
+  -- @audio directive
+  for path in content_str:gmatch("@audio%(([^%)]+)%)") do
+    path = path:match('^"?(.-)"?$')
+    table.insert(assets, { type = "audio", path = path })
+  end
+
+  -- @video directive
+  for path in content_str:gmatch("@video%(([^%)]+)%)") do
+    path = path:match('^"?(.-)"?$')
+    table.insert(assets, { type = "video", path = path })
+  end
+
+  -- @embed directive
+  for url in content_str:gmatch("@embed%(([^%)]+)%)") do
+    url = url:match('^"?(.-)"?$')
+    table.insert(assets, { type = "embed", path = url })
+  end
+
+  return assets
+end
+
+--- Validate all assets in story (GAP-024)
+---@param story table The story to validate
+---@param config table|nil Validation config
+---@return table diagnostics
+function Analyzer:validate_assets(story, config)
+  local diagnostics = {}
+
+  -- Lazy load AssetValidator
+  if not AssetValidator then
+    local ok, validator = pcall(require, "whisker.validation.asset_validator")
+    if ok then
+      AssetValidator = validator
+    else
+      return diagnostics  -- Validator not available
+    end
+  end
+
+  local validator = AssetValidator.new(config or {})
+
+  if not story or not story.passages then
+    return diagnostics
+  end
+
+  for passage_id, passage in pairs(story.passages) do
+    local content = passage.content or ""
+    local assets = self:extract_assets(content)
+
+    for _, asset in ipairs(assets) do
+      local asset_diagnostics = validator:validate(
+        asset.type,
+        asset.path,
+        { passage_id = passage_id }
+      )
+
+      for _, d in ipairs(asset_diagnostics) do
+        d.passage_id = passage_id
+        table.insert(diagnostics, d)
+      end
+    end
+  end
+
+  return diagnostics
+end
+
+-- ============================================================================
+-- GAP-025: Metadata Validation
+-- ============================================================================
+
+--- Validate story metadata (GAP-025)
+---@param story table The story to validate
+---@return table diagnostics
+function Analyzer:validate_metadata(story)
+  local diagnostics = {}
+
+  if not story then
+    return diagnostics
+  end
+
+  local metadata = story.metadata or {}
+  -- Also check top-level fields
+  local name = story.name or story.title or metadata.title
+  local ifid = story.ifid or metadata.ifid
+
+  -- Check required fields
+  if not name or name == "" then
+    table.insert(diagnostics, create_diagnostic(
+      self.ERROR_CODES.MISSING_METADATA,
+      "Missing required metadata: title/name",
+      "error",
+      nil,
+      nil,
+      "Add @title: Your Story Title directive"
+    ))
+  end
+
+  -- Check recommended fields (warnings)
+  if not story.author and not metadata.author then
+    table.insert(diagnostics, create_diagnostic(
+      self.ERROR_CODES.MISSING_METADATA,
+      "Missing recommended metadata: author",
+      "warning",
+      nil,
+      nil,
+      "Add @author: Author Name directive"
+    ))
+  end
+
+  if not ifid then
+    table.insert(diagnostics, create_diagnostic(
+      self.ERROR_CODES.MISSING_METADATA,
+      "Missing recommended metadata: ifid",
+      "warning",
+      nil,
+      nil,
+      "Add @ifid: UUID directive or let it be auto-generated"
+    ))
+  end
+
+  -- Validate IFID format if present
+  if ifid then
+    -- Simple UUID v4 pattern check
+    local uuid_pattern = "^%x%x%x%x%x%x%x%x%-%x%x%x%x%-[14]%x%x%x%-[89ABab]%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x$"
+    if not ifid:match(uuid_pattern) then
+      table.insert(diagnostics, create_diagnostic(
+        self.ERROR_CODES.INVALID_METADATA,
+        string.format('Invalid IFID format: "%s"', ifid),
+        "error",
+        nil,
+        nil,
+        "Use UUID format: XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
+      ))
+    end
+  end
+
+  -- Validate version format if present
+  local version = story.version or metadata.version
+  if version then
+    if not version:match("^%d+%.%d+%.?%d*$") then
+      table.insert(diagnostics, create_diagnostic(
+        self.ERROR_CODES.INVALID_METADATA,
+        string.format('Invalid version format: "%s"', version),
+        "warning",
+        nil,
+        nil,
+        "Use semantic versioning: X.Y.Z"
+      ))
+    end
+  end
+
+  -- Check for deprecated fields
+  for field, suggestion in pairs(self.DEPRECATED_METADATA) do
+    if metadata[field] then
+      table.insert(diagnostics, create_diagnostic(
+        self.ERROR_CODES.DEPRECATED_METADATA,
+        string.format('Deprecated metadata field: %s', field),
+        "warning",
+        nil,
+        nil,
+        suggestion
+      ))
+    end
+  end
+
+  return diagnostics
+end
+
+-- ============================================================================
+-- GAP-026: Script Validation
+-- ============================================================================
+
+--- Extract script blocks from content
+---@param content string|table Content to search
+---@return table scripts Array of {script, type}
+function Analyzer:extract_scripts(content)
+  local scripts = {}
+
+  local content_str = content
+  if type(content) == "table" then
+    local parts = {}
+    for _, node in ipairs(content) do
+      if node.value then
+        table.insert(parts, node.value)
+      end
+    end
+    content_str = table.concat(parts)
+  end
+
+  if type(content_str) ~= "string" then
+    return scripts
+  end
+
+  -- Script blocks: {@ ... @}
+  for script in content_str:gmatch("{@(.-)@}") do
+    table.insert(scripts, { script = script, type = "block" })
+  end
+
+  -- onEnter scripts
+  for script in content_str:gmatch("@onEnter:%s*(.-)[\r\n]") do
+    table.insert(scripts, { script = script, type = "onEnter" })
+  end
+
+  return scripts
+end
+
+--- Validate scripts in story (GAP-026)
+---@param story table The story to validate
+---@return table diagnostics
+function Analyzer:validate_scripts(story)
+  local diagnostics = {}
+
+  -- Lazy load ScriptValidator
+  if not ScriptValidator then
+    local ok, validator = pcall(require, "whisker.validation.script_validator")
+    if ok then
+      ScriptValidator = validator
+    else
+      return diagnostics  -- Validator not available
+    end
+  end
+
+  local validator = ScriptValidator.new()
+
+  if not story or not story.passages then
+    return diagnostics
+  end
+
+  for passage_id, passage in pairs(story.passages) do
+    local content = passage.content or ""
+    local scripts = self:extract_scripts(content)
+
+    for _, s in ipairs(scripts) do
+      local script_diags = validator:validate(s.script, {
+        passage_id = passage_id,
+        script_type = s.type
+      })
+      for _, d in ipairs(script_diags) do
+        d.passage_id = passage_id
+        table.insert(diagnostics, d)
+      end
+    end
+
+    -- Check onEnter script
+    if passage.on_enter_script then
+      local script_diags = validator:validate(passage.on_enter_script, {
+        passage_id = passage_id,
+        script_type = "onEnter"
+      })
+      for _, d in ipairs(script_diags) do
+        d.passage_id = passage_id
+        table.insert(diagnostics, d)
+      end
+    end
+  end
+
+  return diagnostics
+end
+
+-- ============================================================================
+-- GAP-027: Collection Validation
+-- ============================================================================
+
+--- Validate collection declarations (GAP-027)
+---@param story table The story to validate
+---@return table diagnostics
+function Analyzer:validate_collections(story)
+  local diagnostics = {}
+  local seen_names = {}
+
+  if not story then return diagnostics end
+
+  -- Check lists
+  for name, list in pairs(story.lists or {}) do
+    if seen_names[name] then
+      table.insert(diagnostics, create_diagnostic(
+        self.ERROR_CODES.DUPLICATE_COLLECTION,
+        string.format('Duplicate collection name: %s', name),
+        "error"
+      ))
+    end
+    seen_names[name] = "list"
+
+    -- Validate list items are valid types
+    if type(list) == "table" then
+      local items = list.values or list
+      if type(items) == "table" then
+        for i, item in ipairs(items) do
+          local item_type = type(item)
+          if item_type ~= "string" and item_type ~= "number" and item_type ~= "boolean" and item_type ~= "table" then
+            table.insert(diagnostics, create_diagnostic(
+              self.ERROR_CODES.INVALID_COLLECTION_TYPE,
+              string.format('Invalid list item type in %s[%d]: %s', name, i, item_type),
+              "error"
+            ))
+          end
+        end
+      end
+    end
+  end
+
+  -- Check arrays
+  for name, _ in pairs(story.arrays or {}) do
+    if seen_names[name] then
+      table.insert(diagnostics, create_diagnostic(
+        self.ERROR_CODES.DUPLICATE_COLLECTION,
+        string.format('Duplicate collection name: %s (conflicts with %s)', name, seen_names[name]),
+        "error"
+      ))
+    end
+    seen_names[name] = "array"
+  end
+
+  -- Check maps
+  for name, map in pairs(story.maps or {}) do
+    if seen_names[name] then
+      table.insert(diagnostics, create_diagnostic(
+        self.ERROR_CODES.DUPLICATE_COLLECTION,
+        string.format('Duplicate collection name: %s (conflicts with %s)', name, seen_names[name]),
+        "error"
+      ))
+    end
+    seen_names[name] = "map"
+
+    -- Validate map keys are strings
+    if type(map) == "table" then
+      local entries = map.entries or map
+      if type(entries) == "table" then
+        for key, _ in pairs(entries) do
+          if type(key) ~= "string" then
+            table.insert(diagnostics, create_diagnostic(
+              self.ERROR_CODES.INVALID_COLLECTION_TYPE,
+              string.format('Map %s has non-string key: %s', name, type(key)),
+              "error"
+            ))
+          end
+        end
+      end
+    end
+  end
+
+  return diagnostics
+end
+
+-- ============================================================================
+-- GAP-028: Module Validation
+-- ============================================================================
+
+--- Validate module declarations (GAP-028)
+---@param story table The story to validate
+---@return table diagnostics
+function Analyzer:validate_modules(story)
+  local diagnostics = {}
+  local seen_namespaces = {}
+  local seen_functions = {}
+
+  if not story then return diagnostics end
+
+  -- Check namespaces
+  for name, ns in pairs(story.namespaces or {}) do
+    if seen_namespaces[name] then
+      table.insert(diagnostics, create_diagnostic(
+        self.ERROR_CODES.DUPLICATE_NAMESPACE,
+        string.format('Duplicate namespace: %s', name),
+        "error"
+      ))
+    end
+    seen_namespaces[name] = true
+
+    -- Validate nested namespaces
+    if type(ns) == "table" and ns.nested_namespaces then
+      for nested_name, _ in pairs(ns.nested_namespaces) do
+        local full_name = name .. "::" .. nested_name
+        if seen_namespaces[full_name] then
+          table.insert(diagnostics, create_diagnostic(
+            self.ERROR_CODES.DUPLICATE_NAMESPACE,
+            string.format('Duplicate nested namespace: %s', full_name),
+            "error"
+          ))
+        end
+        seen_namespaces[full_name] = true
+      end
+    end
+  end
+
+  -- Check functions
+  for name, func in pairs(story.functions or {}) do
+    if seen_functions[name] then
+      table.insert(diagnostics, create_diagnostic(
+        self.ERROR_CODES.INVALID_FUNCTION_SIGNATURE,
+        string.format('Duplicate function: %s', name),
+        "error"
+      ))
+    end
+    seen_functions[name] = true
+
+    -- Validate function parameters
+    if type(func) == "table" and func.params then
+      local seen_params = {}
+      for _, param in ipairs(func.params) do
+        local param_name = type(param) == "table" and param.name or param
+        if seen_params[param_name] then
+          table.insert(diagnostics, create_diagnostic(
+            self.ERROR_CODES.INVALID_FUNCTION_SIGNATURE,
+            string.format('Duplicate parameter in %s: %s', name, param_name),
+            "error"
+          ))
+        end
+        seen_params[param_name] = true
+      end
+    end
+  end
+
+  return diagnostics
+end
+
+--- Validate includes (static analysis) (GAP-028)
+---@param story table The story to validate
+---@return table diagnostics
+function Analyzer:validate_includes(story)
+  local diagnostics = {}
+
+  if not story or not story.includes then
+    return diagnostics
+  end
+
+  for _, include in ipairs(story.includes) do
+    -- Check for obviously invalid paths
+    local path = type(include) == "table" and include.path or include
+    if not path or path == "" then
+      table.insert(diagnostics, create_diagnostic(
+        self.ERROR_CODES.INCLUDE_NOT_FOUND,
+        "Empty include path",
+        "error",
+        nil,
+        nil,
+        "Provide a valid file path for the include"
+      ))
+    elseif type(path) == "string" and path:match("^%.%.") and path:match("%.%..*%.%.") then
+      -- Multiple parent traversals might be suspicious
+      table.insert(diagnostics, create_diagnostic(
+        "WLS-MOD-007",  -- Path traversal warning
+        string.format('Suspicious include path: %s', path),
+        "warning",
+        nil,
+        nil,
+        "Avoid excessive parent directory traversal"
+      ))
+    end
+  end
+
+  return diagnostics
+end
+
 --- Run all analyses
 function Analyzer:analyze(story)
   local var_validation = self:validate_variables(story)
+
+  -- Collect CSS class diagnostics (GAP-006)
+  local css_diagnostics = {}
+  if story and story.passages then
+    for passage_id, passage in pairs(story.passages) do
+      -- Handle both string content and table content (AST nodes)
+      local content_str = nil
+      if type(passage.content) == "string" then
+        content_str = passage.content
+      elseif type(passage.content) == "table" then
+        -- Extract text from content nodes
+        local texts = {}
+        for _, node in ipairs(passage.content) do
+          if node.type == "text" and node.value then
+            table.insert(texts, node.value)
+          end
+        end
+        content_str = table.concat(texts, "")
+      end
+
+      if content_str then
+        local css_issues = self:validate_css_classes(content_str, passage_id)
+        for _, issue in ipairs(css_issues) do
+          table.insert(css_diagnostics, issue)
+        end
+      end
+    end
+  end
+
   return {
     dead_ends = self:detect_dead_ends(story),
     orphans = self:detect_orphans(story),
@@ -830,8 +1489,84 @@ function Analyzer:analyze(story)
     variables = var_validation.variables,
     variable_diagnostics = var_validation.diagnostics,
     accessibility = self:check_accessibility(story),
-    flow = self:analyze_flow(story)
+    flow = self:analyze_flow(story),
+    css_diagnostics = css_diagnostics,  -- GAP-006
+    -- GAP-024 through GAP-028
+    asset_diagnostics = self:validate_assets(story),
+    metadata_diagnostics = self:validate_metadata(story),
+    script_diagnostics = self:validate_scripts(story),
+    collection_diagnostics = self:validate_collections(story),
+    module_diagnostics = self:validate_modules(story),
+    include_diagnostics = self:validate_includes(story),
   }
+end
+
+--- Get all diagnostics as a flat array (GAP-029)
+---@param story table The story to validate
+---@return table diagnostics All diagnostics in a single array
+function Analyzer:get_all_diagnostics(story)
+  local result = self:analyze(story)
+  local all = {}
+
+  -- Helper to add all from array
+  local function add_all(arr)
+    if arr then
+      for _, d in ipairs(arr) do
+        table.insert(all, d)
+      end
+    end
+  end
+
+  -- Collect all diagnostics
+  add_all(result.dead_ends)
+  add_all(result.orphans)
+  add_all(result.invalid_links)
+  add_all(result.variable_diagnostics)
+  add_all(result.accessibility and result.accessibility.diagnostics)
+  add_all(result.flow and result.flow.diagnostics)
+  add_all(result.css_diagnostics)
+  add_all(result.asset_diagnostics)
+  add_all(result.metadata_diagnostics)
+  add_all(result.script_diagnostics)
+  add_all(result.collection_diagnostics)
+  add_all(result.module_diagnostics)
+  add_all(result.include_diagnostics)
+
+  return all
+end
+
+--- Get diagnostics filtered by severity (GAP-029)
+---@param story table The story to validate
+---@param severity string "error", "warning", or "info"
+---@return table diagnostics Filtered diagnostics
+function Analyzer:get_diagnostics_by_severity(story, severity)
+  local all = self:get_all_diagnostics(story)
+  local filtered = {}
+
+  for _, d in ipairs(all) do
+    if d.severity == severity then
+      table.insert(filtered, d)
+    end
+  end
+
+  return filtered
+end
+
+--- Get diagnostics filtered by code prefix (GAP-029)
+---@param story table The story to validate
+---@param prefix string Code prefix (e.g., "WLS-VAR", "WLS-AST")
+---@return table diagnostics Filtered diagnostics
+function Analyzer:get_diagnostics_by_code(story, prefix)
+  local all = self:get_all_diagnostics(story)
+  local filtered = {}
+
+  for _, d in ipairs(all) do
+    if d.code and d.code:sub(1, #prefix) == prefix then
+      table.insert(filtered, d)
+    end
+  end
+
+  return filtered
 end
 
 return Analyzer
