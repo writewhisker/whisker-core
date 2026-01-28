@@ -614,11 +614,12 @@ function Engine:render_passage_content(passage)
   local state = self.game_state or self.state
 
   -- Handle escape sequences - temporarily replace with placeholders
-  -- Use string.char(0) for null byte (Lua 5.1/LuaJIT compatible)
-  local NUL = string.char(0)
-  local ESCAPE_DOLLAR = NUL .. "ESC_DOLLAR" .. NUL
-  local ESCAPE_BRACE_OPEN = NUL .. "ESC_BRACE_O" .. NUL
-  local ESCAPE_BRACE_CLOSE = NUL .. "ESC_BRACE_C" .. NUL
+  -- Use string.char(1) (SOH) as delimiter for Lua 5.1/LuaJIT compatibility
+  -- Null bytes (\0) cause issues with pattern matching in older Lua versions
+  local SOH = string.char(1)
+  local ESCAPE_DOLLAR = SOH .. "ESC_DOLLAR" .. SOH
+  local ESCAPE_BRACE_OPEN = SOH .. "ESC_BRACE_O" .. SOH
+  local ESCAPE_BRACE_CLOSE = SOH .. "ESC_BRACE_C" .. SOH
 
   content = content:gsub("\\%$", ESCAPE_DOLLAR)
   content = content:gsub("\\{", ESCAPE_BRACE_OPEN)
