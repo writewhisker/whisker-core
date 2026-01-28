@@ -325,10 +325,18 @@ function Engine:navigate_to_passage(passage_id, skip_history)
     -- Cache the rendered content so get_current_content doesn't re-render
     self._last_rendered_content = rendered_content
 
+    -- Get choices - handle both passage objects with get_choices method and plain tables
+    local choices = {}
+    if passage.get_choices and type(passage.get_choices) == "function" then
+      choices = passage:get_choices()
+    elseif passage.choices then
+      choices = passage.choices
+    end
+
     return {
       passage = passage,
       passage_id = passage_id,
-      choices = passage:get_choices(),
+      choices = choices,
       content = rendered_content
     }
   end

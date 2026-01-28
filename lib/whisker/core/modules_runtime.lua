@@ -10,7 +10,9 @@ local ModulesRuntime = {}
 ModulesRuntime.__index = ModulesRuntime
 
 -- Dependencies for DI pattern
-ModulesRuntime._dependencies = {}
+ModulesRuntime._dependencies = {
+    PathResolver = "whisker.core.path_resolver"
+}
 
 -- Maximum include depth to prevent stack overflow
 ModulesRuntime.MAX_INCLUDE_DEPTH = 50
@@ -33,11 +35,12 @@ ModulesRuntime.ERROR_CODES = {
 -- @param game_state table The game state for variable access
 -- @param config table|nil Optional configuration (project_root, search_paths)
 -- @return ModulesRuntime
-function ModulesRuntime.new(game_state, config)
+function ModulesRuntime.new(game_state, config, deps)
     config = config or {}
+    deps = deps or {}
 
-    -- Lazy load PathResolver to avoid circular dependency
-    local PathResolver = require("whisker.core.path_resolver")
+    -- Use injected PathResolver or lazy load to avoid circular dependency
+    local PathResolver = deps.PathResolver or require("whisker.core.path_resolver")
 
     local instance = {
         -- Function registry: name -> { params = {...}, body = "..." }
