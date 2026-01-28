@@ -9,6 +9,23 @@ local Choice = require("lib.whisker.core.choice")
 local Engine = {}
 Engine.__index = Engine
 
+-- Helper function for Lua version compatible code loading with environment
+-- Lua 5.2+ uses load(chunk, chunkname, mode, env)
+-- Lua 5.1/LuaJIT uses loadstring + setfenv
+local function load_with_env(code, chunkname, env)
+  if setfenv then
+    -- Lua 5.1/LuaJIT path
+    local func, err = loadstring(code, chunkname)
+    if func then
+      setfenv(func, env)
+    end
+    return func, err
+  else
+    -- Lua 5.2+ path
+    return load(code, chunkname, "t", env)
+  end
+end
+
 --- Create a new Engine instance
 -- Supports multiple call patterns:
 -- 1. Engine.new(story, game_state) - story object and game state
@@ -1061,8 +1078,8 @@ function Engine:evaluate_condition(condition, state)
     end
   })
 
-  -- Evaluate expression
-  local func, err = load("return " .. lua_expr, "condition", "t", env)
+  -- Evaluate expression (use helper for Lua 5.1/LuaJIT compatibility)
+  local func, err = load_with_env("return " .. lua_expr, "condition", env)
   if not func then
     return false
   end
@@ -1118,7 +1135,7 @@ function Engine:interpolate_variables(content, state)
       return args[math.random(1, #args)]
     end
 
-    local func, load_err = load("return " .. expr, "interpolate", "t", env)
+    local func, load_err = load_with_env("return " .. expr, "interpolate", env)
     if func then
       local success, eval_result = pcall(func)
       if success and eval_result ~= nil then
@@ -1164,7 +1181,7 @@ function Engine:interpolate_variables(content, state)
     env.tonumber = tonumber
     env.tostring = tostring
 
-    local func, load_err = load("return " .. expr, "interpolate_legacy", "t", env)
+    local func, load_err = load_with_env("return " .. expr, "interpolate_legacy", env)
     if func then
       local success, eval_result = pcall(func)
       if success and eval_result ~= nil then
