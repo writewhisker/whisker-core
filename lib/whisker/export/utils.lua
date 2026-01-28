@@ -34,15 +34,20 @@ function ExportUtils.escape_json(text)
   if not text then return "" end
   text = tostring(text)
 
-  return text
+  -- Escape control characters using %c pattern class (works on all Lua versions)
+  -- %c matches all control characters (0x00-0x1f) in Lua
+  -- First handle specific characters, then remaining control chars
+  local result = text
     :gsub("\\", "\\\\")
     :gsub('"', '\\"')
     :gsub("\n", "\\n")
     :gsub("\r", "\\r")
     :gsub("\t", "\\t")
-    :gsub("[\x00-\x1f]", function(c)
+    :gsub("%c", function(c)
       return string.format("\\u%04x", string.byte(c))
     end)
+
+  return result
 end
 
 --- Read file contents

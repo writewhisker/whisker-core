@@ -1,8 +1,12 @@
 --- Static Site Exporter Tests
 -- Tests for the Static Site export functionality
 -- @module tests.export.test_static_exporter
+--
+-- Note: Some serialization tests may have different behavior on Lua 5.1
+-- due to table iteration ordering differences in JSON encoding.
 
 local StaticExporter = require("whisker.export.static.static_exporter")
+local LuaVersion = require("tests.helpers.lua_version")
 
 describe("Static Site Exporter", function()
   local function create_basic_story()

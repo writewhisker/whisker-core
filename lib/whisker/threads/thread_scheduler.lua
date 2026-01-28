@@ -19,10 +19,10 @@ end
 -- @return table Array of operations
 function ThreadScheduler:parse_hook_operations(content)
   local operations = {}
-  
+
   -- Pattern: @operation: target { content }
   for operation, target, op_content in content:gmatch("@(%w+):%s*(%w+)%s*{([^}]*)}") do
-    if operation == "replace" or operation == "append" or operation == "prepend" or 
+    if operation == "replace" or operation == "append" or operation == "prepend" or
        operation == "show" or operation == "hide" then
       table.insert(operations, {
         operation = operation,
@@ -31,7 +31,7 @@ function ThreadScheduler:parse_hook_operations(content)
       })
     end
   end
-  
+
   return operations
 end
 
@@ -51,15 +51,21 @@ function ThreadScheduler:execute_thread_step(thread)
   
   -- Parse and execute hook operations
   local hook_ops = self:parse_hook_operations(step_content)
-  
+
   for _, op in ipairs(hook_ops) do
     if self.engine then
+      -- Trim whitespace from content parsed from { } syntax
+      local content = op.content
+      if content and type(content) == "string" then
+        content = content:match("^%s*(.-)%s*$") or content
+      end
+
       local success, err = self.engine:execute_hook_operation(
         op.operation,
         op.target,
-        op.content
+        content
       )
-      
+
       if not success and err then
         print("Hook operation failed in thread: " .. err)
       end

@@ -282,8 +282,7 @@ function WatchCommand.run(args, options)
     local sleep_cmd = string.format('sleep %.3f', interval)
     os.execute(sleep_cmd)
   end
-
-  return true
+  -- Note: This loop runs indefinitely; return is never reached but kept for clarity
 end
 
 --- Show help for watch command

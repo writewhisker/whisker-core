@@ -6,8 +6,13 @@
 --
 -- Creates valid PNG files using uncompressed deflate blocks.
 -- Suitable for generating simple colored icons with text.
+-- Compatible with Lua 5.1, 5.2, 5.3, 5.4, and LuaJIT.
 
 local PNGEncoder = {}
+
+-- Use compat module for cross-version bitwise operations
+local compat = require("whisker.vendor.compat")
+local bxor = compat.bit.bxor
 
 -- PNG signature
 local PNG_SIGNATURE = string.char(0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
@@ -19,8 +24,7 @@ do
     local c = i
     for _ = 1, 8 do
       if c % 2 == 1 then
-        c = bit32 and bit32.bxor(0xEDB88320, math.floor(c / 2)) or
-            (0xEDB88320 ~ math.floor(c / 2))
+        c = bxor(0xEDB88320, math.floor(c / 2))
       else
         c = math.floor(c / 2)
       end
@@ -36,10 +40,10 @@ local function crc32(data)
   local crc = 0xFFFFFFFF
   for i = 1, #data do
     local byte = data:byte(i)
-    local index = (crc ~ byte) % 256
-    crc = (crc_table[index] ~ math.floor(crc / 256)) % 0x100000000
+    local index = bxor(crc, byte) % 256
+    crc = bxor(crc_table[index], math.floor(crc / 256)) % 0x100000000
   end
-  return (crc ~ 0xFFFFFFFF) % 0x100000000
+  return bxor(crc, 0xFFFFFFFF) % 0x100000000
 end
 
 --- Calculate Adler-32 checksum for zlib

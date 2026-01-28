@@ -59,12 +59,13 @@ function CoreExtension.register(container, events)
     return {
       create = function(self, story, game_state, config)
         local Engine = require("whisker.core.engine")
-        return Engine.new(story, game_state, config, {
-          story_factory = c:resolve("story_factory"),
-          game_state_factory = c:resolve("game_state_factory"),
-          lua_interpreter_factory = c:resolve("lua_interpreter_factory"),
-          event_bus = c:resolve("events")
-        })
+        -- Create default game_state if none provided (needed for structured results)
+        local gs = game_state
+        if not gs then
+          local gsf = c:resolve("game_state_factory")
+          gs = gsf:create()
+        end
+        return Engine.new(story, gs)
       end
     }
   end, {

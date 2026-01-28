@@ -42,11 +42,13 @@ ignore = {
     "431",  -- Shadowing upvalue
     "432",  -- Shadowing upvalue argument
     "512",  -- Loop executed at most once
+    "511",  -- Unreachable code (intentional infinite loops)
     "542",  -- Empty if branch
     "581",  -- Negation simplification
     "611",  -- Line contains only whitespace
     "612",  -- Trailing whitespace
     "613",  -- Trailing whitespace in string
+    "614",  -- Trailing whitespace in comment
     "631",  -- Line too long
 }
 
@@ -58,6 +60,7 @@ exclude_files = {
     ".luarocks/",
     "**/vendor/**",  -- Vendor code anywhere in tree
     "lib/whisker/vendor/tinta/**",  -- Tinta vendor source
+    "lib/whisker/twine/export/format_template_provider.lua",  -- Contains embedded JS with [[ ]] patterns
 }
 
 -- =============================================================================
@@ -93,6 +96,14 @@ files = {
             "lazy_setup",
             "lazy_teardown",
         },
+    },
+
+    -- Testing library can register custom matchers
+    ["lib/whisker/testing/matchers.lua"] = {
+        globals = {
+            "assert",
+        },
+        ignore = { "143" },  -- Accessing undefined field of global (assert.register)
     },
 
     -- Tools have relaxed rules

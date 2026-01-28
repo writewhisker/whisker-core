@@ -6,25 +6,33 @@
 -- @license MIT
 
 local lfs = require("lfs")
-local json = require("cjson")
+local JsonCodec = require("whisker.vendor.codecs.json_codec")
 
 local FilesystemBackend = {}
 FilesystemBackend.__index = FilesystemBackend
 
+--- Dependencies for DI pattern
+FilesystemBackend._dependencies = { "json_codec" }
+
 --- Create new filesystem backend
 -- @param options table Configuration options
 -- @param options.path string Root directory for storage (default: "./whisker_storage")
+-- @param deps table Dependencies from container (optional)
 -- @return FilesystemBackend New backend instance
-function FilesystemBackend.new(options)
+function FilesystemBackend.new(options, deps)
   options = options or {}
-  
+  deps = deps or {}
+
   local self = setmetatable({}, FilesystemBackend)
   self.root = options.path or "./whisker_storage"
   self.stories_dir = self.root .. "/stories"
   self.metadata_dir = self.root .. "/metadata"
   self.index_file = self.root .. "/.index.json"
   self.index = {}
-  
+
+  -- Use injected json_codec or create new one
+  self.json = deps.json_codec or JsonCodec.new()
+
   return self
 end
 
@@ -101,7 +109,7 @@ function FilesystemBackend:initialize()
   -- Load or create index
   local index_content = read_file(self.index_file)
   if index_content then
-    local success, decoded = pcall(json.decode, index_content)
+    local success, decoded = pcall(function() return self.json:decode(index_content) end)
     if success then
       self.index = decoded
     else
@@ -118,7 +126,7 @@ end
 --- Save index to disk
 -- @return boolean success
 function FilesystemBackend:save_index()
-  local index_json = json.encode(self.index)
+  local index_json = self.json:encode(self.index)
   return atomic_write(self.index_file, index_json)
 end
 
@@ -144,7 +152,7 @@ end
 -- @return string|nil error
 function FilesystemBackend:save(key, data, metadata)
   -- Serialize story data
-  local data_json = json.encode(data)
+  local data_json = self.json:encode(data)
   local story_path = self:get_story_path(key)
   
   local success, err = atomic_write(story_path, data_json)
@@ -170,7 +178,7 @@ function FilesystemBackend:save(key, data, metadata)
   }
   
   -- Save metadata file
-  local meta_json = json.encode(meta)
+  local meta_json = self.json:encode(meta)
   local meta_path = self:get_metadata_path(key)
   success, err = atomic_write(meta_path, meta_json)
   if not success then
@@ -196,7 +204,7 @@ function FilesystemBackend:load(key)
     return nil, "Story not found"
   end
   
-  local success, data = pcall(json.decode, content)
+  local success, data = pcall(function() return self.json:decode(content) end)
   if not success then
     return nil, "Failed to decode story data"
   end
@@ -320,7 +328,7 @@ function FilesystemBackend:update_metadata(key, metadata)
   self.index[key].updated_at = os.time()
   
   -- Save updated metadata file
-  local meta_json = json.encode(self.index[key])
+  local meta_json = self.json:encode(self.index[key])
   local meta_path = self:get_metadata_path(key)
   atomic_write(meta_path, meta_json)
   
@@ -340,7 +348,7 @@ function FilesystemBackend:export(key)
     return nil, err
   end
   
-  return json.encode(data)
+  return self.json:encode(data)
 end
 
 --- Import a story from JSON
@@ -351,7 +359,7 @@ function FilesystemBackend:import_data(data)
   local story_data
   
   if type(data) == "string" then
-    local success, decoded = pcall(json.decode, data)
+    local success, decoded = pcall(function() return self.json:decode(data) end)
     if not success then
       return nil, "Failed to decode JSON"
     end
@@ -418,7 +426,7 @@ function FilesystemBackend:rebuild_index()
       local content = read_file(meta_path)
       
       if content then
-        local success, meta = pcall(json.decode, content)
+        local success, meta = pcall(function() return self.json:decode(content) end)
         if success then
           self.index[key] = meta
           count = count + 1

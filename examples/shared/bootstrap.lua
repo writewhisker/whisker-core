@@ -10,9 +10,11 @@ local Bootstrap = {}
 --- Initialize the whisker-core framework
 -- @return table Context object with container, events, and convenience accessors
 function Bootstrap.init()
-  -- Initialize kernel
-  local kernel = require("whisker.kernel")
-  local container, events = kernel.bootstrap()
+  -- Initialize kernel bootstrap module
+  local KernelBootstrap = require("whisker.kernel.bootstrap")
+  local kernel_result = KernelBootstrap.init()
+  local container = kernel_result.container
+  local events = kernel_result.events
 
   return {
     container = container,
@@ -21,7 +23,8 @@ function Bootstrap.init()
     story_factory = container:resolve("story_factory"),
     passage_factory = container:resolve("passage_factory"),
     choice_factory = container:resolve("choice_factory"),
-    engine = container:resolve("engine"),
+    engine_factory = container:resolve("engine_factory"),
+    game_state_factory = container:resolve("game_state_factory"),
   }
 end
 

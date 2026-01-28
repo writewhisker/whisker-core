@@ -80,12 +80,21 @@ local RULES = {
       "wls2%..*",             -- WLS2 module intra-module
       "api%..*",              -- API module intra-module
       "lsp%..*",              -- LSP module intra-module
+      "storage%..*",          -- Storage module intra-module
+      "ai%..*",               -- AI module intra-module
+      "collaboration%..*",    -- Collaboration module intra-module
+      "game_systems",         -- Game systems self-reference
+      "dev",                  -- Dev environment
+      "dev%..*",              -- Dev module intra-module
+      "core%.event_system",   -- Event system is core infrastructure
     },
     -- Files where direct requires are allowed
     allowed_files = {
       "init%.lua$",           -- Init files wire things together
       "kernel/init%.lua$",    -- Kernel init wires core services
       "kernel/bootstrap%.lua$", -- Bootstrap creates the container
+      "cli/commands/.*%.lua$", -- CLI commands can require modules
+      "providers/.*%.lua$",   -- Providers can require parent modules
     },
   },
 
@@ -155,6 +164,15 @@ local RULES = {
     allowed_files = {
       "vendor/codecs/.*%.lua$",
       "vendor/runtimes/.*%.lua$",
+      "vendor/tinta/.*%.lua$",   -- Third-party Ink runtime
+      "testing/helpers%.lua$",   -- Testing utilities can use direct requires
+      "storage/backends/.*%.lua$",  -- Storage backends manage their own JSON
+      "storage/migration%.lua$",    -- Migration needs direct JSON access
+      "storage/autosave%.lua$",     -- Autosave needs direct JSON access
+      "storage/sync/transports/.*%.lua$",  -- Transports manage their own JSON
+      "ai/client%.lua$",            -- AI client manages its own JSON
+      "ai/providers/.*%.lua$",      -- AI providers manage their own JSON
+      "export/html%.lua$",          -- Export modules manage their own JSON
     },
   },
 
