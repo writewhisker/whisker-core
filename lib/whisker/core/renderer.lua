@@ -35,16 +35,60 @@ local platform_tags = {
 }
 
 -- Constructor
--- @param interpreter - Script interpreter (optional)
--- @param platform string - Platform type (console, web, plain)
--- @param hook_manager HookManager - Hook manager instance (optional)
-function Renderer.new(interpreter, platform, hook_manager)
+-- Supports two API patterns:
+-- 1. New API: Renderer.new(platform, options_table)
+--    Options: max_line_width, enable_wrapping, enable_formatting
+-- 2. Legacy API: Renderer.new(interpreter, platform, hook_manager)
+-- @param first_arg - Platform string (new API) or interpreter (legacy API)
+-- @param second_arg - Options table (new API) or platform string (legacy API)
+-- @param third_arg - Hook manager (legacy API only)
+function Renderer.new(first_arg, second_arg, third_arg)
   local self = setmetatable({}, Renderer)
-  self.interpreter = interpreter
-  self.platform = platform or "plain"
+
+  -- Detect which API is being used
+  if type(first_arg) == "string" and (second_arg == nil or type(second_arg) == "table") then
+    -- New API: Renderer.new(platform, options)
+    self.platform = first_arg
+    local options = second_arg or {}
+    self.max_line_width = options.max_line_width
+    self.enable_wrapping = options.enable_wrapping
+    self.enable_formatting = options.enable_formatting
+    self.interpreter = nil
+    self.hook_manager = HookManager.new()
+  else
+    -- Legacy API: Renderer.new(interpreter, platform, hook_manager)
+    self.interpreter = first_arg
+    self.platform = second_arg or "plain"
+    self.hook_manager = third_arg or HookManager.new()
+  end
+
   self.tags = platform_tags[self.platform] or platform_tags.plain
-  self.hook_manager = hook_manager or HookManager.new()
   return self
+end
+
+-- Set interpreter after construction
+-- @param interpreter - Script interpreter
+function Renderer:set_interpreter(interpreter)
+  self.interpreter = interpreter
+end
+
+-- Render text to plain format, stripping all formatting markers
+-- @param text string - Text with formatting markers
+-- @param game_state table - Current game state (for variable evaluation)
+-- @return string - Plain text with formatting stripped
+function Renderer:render_plain(text, game_state)
+  local plain = text
+
+  -- Strip bold markers: **text**
+  plain = plain:gsub("%*%*(.-)%*%*", "%1")
+
+  -- Strip italic markers: *text*
+  plain = plain:gsub("%*(.-)%*", "%1")
+
+  -- Strip underline markers: __text__
+  plain = plain:gsub("__(.-)__", "%1")
+
+  return plain
 end
 
 -- Extract hooks from text and register them
@@ -143,14 +187,83 @@ end
 -- @return processed_text string - Text with expressions evaluated
 function Renderer:evaluate_expressions(text, game_state)
   local processed = text
-  
-  -- Simple variable interpolation $varname
+
   if game_state then
-    processed = processed:gsub("%$(%w+)", function(var_name)
-      return tostring(game_state[var_name] or "")
+    -- Handle escaped $ (replace temporarily)
+    processed = processed:gsub("\\%$", "\0ESCAPED_DOLLAR\0")
+
+    -- Handle {{variable}} syntax (allows underscores in variable names)
+    processed = processed:gsub("{{([%w_]+)}}", function(var_name)
+      local value
+      if game_state.get then
+        value = game_state:get(var_name)
+      else
+        value = game_state[var_name]
+      end
+      return tostring(value or "")
     end)
+
+    -- Handle ${expression} syntax (evaluate Lua expressions)
+    -- Use load (Lua 5.2+) or loadstring (Lua 5.1)
+    local load_fn = load or loadstring
+    processed = processed:gsub("%${([^}]+)}", function(expr)
+      -- Try to evaluate the expression
+      local chunk = load_fn("return " .. expr)
+      if chunk then
+        -- Set up environment with game state variables
+        local env = {}
+        setmetatable(env, {__index = function(_, k)
+          if game_state.get then
+            return game_state:get(k)
+          else
+            return game_state[k]
+          end
+        end})
+        -- Handle both Lua 5.1 and 5.2+ environments
+        if setfenv then
+          setfenv(chunk, env)
+        else
+          -- Lua 5.2+ doesn't have setfenv, need to use debug.setupvalue
+          debug.setupvalue(chunk, 1, env)
+        end
+        local ok, result = pcall(chunk)
+        if ok then
+          return tostring(result)
+        end
+      end
+      return "${" .. expr .. "}"
+    end)
+
+    -- Handle $_varname for temp variables
+    processed = processed:gsub("%$_([%w_]+)", function(var_name)
+      local value
+      if game_state.get_temp then
+        value = game_state:get_temp(var_name)
+      end
+      if value ~= nil then
+        return tostring(value)
+      end
+      return "$_" .. var_name  -- Leave undefined as-is
+    end)
+
+    -- Simple variable interpolation $varname
+    processed = processed:gsub("%$([%w_]+)", function(var_name)
+      local value
+      if game_state.get then
+        value = game_state:get(var_name)
+      else
+        value = game_state[var_name]
+      end
+      if value ~= nil then
+        return tostring(value)
+      end
+      return "$" .. var_name  -- Leave undefined as-is
+    end)
+
+    -- Restore escaped $ signs
+    processed = processed:gsub("\0ESCAPED_DOLLAR\0", "$")
   end
-  
+
   return processed
 end
 
@@ -178,13 +291,37 @@ function Renderer:apply_formatting(text)
   return formatted
 end
 
--- Apply text wrapping (stub for now)
+-- Apply text wrapping
 -- @param text string - Text to wrap
 -- @return wrapped_text string - Wrapped text
 function Renderer:apply_wrapping(text)
-  -- For now, just return text as-is
-  -- In a real implementation, this would handle line wrapping
-  return text
+  -- Only wrap if wrapping is enabled and max_line_width is set
+  if not self.enable_wrapping or not self.max_line_width then
+    return text
+  end
+
+  local max_width = self.max_line_width
+  local result = {}
+  local current_line = ""
+
+  -- Split text into words
+  for word in text:gmatch("%S+") do
+    if current_line == "" then
+      current_line = word
+    elseif #current_line + 1 + #word <= max_width then
+      current_line = current_line .. " " .. word
+    else
+      table.insert(result, current_line)
+      current_line = word
+    end
+  end
+
+  -- Add remaining line
+  if current_line ~= "" then
+    table.insert(result, current_line)
+  end
+
+  return table.concat(result, "\n")
 end
 
 -- Render passage with full pipeline including hooks

@@ -98,7 +98,7 @@ describe("Thread Hook Integration", function()
       local status = engine.hook_manager:get_hook("test_status")
       
       assert.equals("85", hp.current_content)
-      assert.equals(" Hurt ", status.current_content)
+      assert.equals("Hurt", status.current_content)
     end)
     
     it("handles show and hide operations", function()

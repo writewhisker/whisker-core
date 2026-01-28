@@ -526,14 +526,40 @@ function WSParser:parse_text()
   local chars = {}
 
   while self.position <= #self.content do
-    local char = self.content:sub(self.position, self.position)
+    local remaining = self.content:sub(self.position)
 
     -- Check if we're at the start of a hook definition or operation
-    local remaining = self.content:sub(self.position)
     if remaining:match("^|%w+>%[") or remaining:match("^@%w+:%s*%w+%s*{") then
       break
     end
 
+    -- Check if we're at the start of formatting markers
+    -- Bold: **
+    if remaining:match("^%*%*") then
+      break
+    end
+    -- Strikethrough: ~~
+    if remaining:match("^~~") then
+      break
+    end
+    -- Underline: __
+    if remaining:match("^__") then
+      break
+    end
+    -- Inline code: ` (but not ```)
+    if remaining:match("^`[^`]") then
+      break
+    end
+    -- Code fence: ```
+    if remaining:match("^```") then
+      break
+    end
+    -- Italic: * (but not **)
+    if remaining:match("^%*[^%*]") then
+      break
+    end
+
+    local char = self.content:sub(self.position, self.position)
     table.insert(chars, char)
     self.position = self.position + 1
   end
