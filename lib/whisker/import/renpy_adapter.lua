@@ -39,28 +39,28 @@ local function tokenize(data)
   
   for line in data:gmatch("([^\n]*)\n?") do
     line_num = line_num + 1
-    
-    -- Skip empty lines and comments
-    if line:match("^%s*$") or line:match("^%s*#") then
-      goto continue
-    end
-    
-    -- Calculate indentation
-    local indent = 0
-    for _ in line:gmatch("^%s") do
-      indent = indent + 1
-    end
-    
-    -- Trim line
-    local trimmed = line:match("^%s*(.-)%s*$")
-    
-    table.insert(tokens, {
-      line = line_num,
-      indent = indent,
-      content = trimmed
-    })
-    
-    ::continue::
+
+    repeat
+      -- Skip empty lines and comments
+      if line:match("^%s*$") or line:match("^%s*#") then
+        break
+      end
+
+      -- Calculate indentation
+      local indent = 0
+      for _ in line:gmatch("^%s") do
+        indent = indent + 1
+      end
+
+      -- Trim line
+      local trimmed = line:match("^%s*(.-)%s*$")
+
+      table.insert(tokens, {
+        line = line_num,
+        indent = indent,
+        content = trimmed
+      })
+    until true
   end
   
   return tokens

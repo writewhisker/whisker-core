@@ -670,11 +670,10 @@ function ChoiceScriptImporter:_parse_choice_block(lines, start_index)
       end
 
       table.insert(options, option)
-      goto continue
+      -- Don't increment i here - inner loop already advanced past option body
+    else
+      i = i + 1
     end
-
-    i = i + 1
-    ::continue::
   end
 
   return { options = options, end_index = i - 1 }

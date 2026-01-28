@@ -209,45 +209,46 @@ function Engine:get_filtered_choices()
   if self.game_state then
     local filtered_choices = {}
     for _, choice in ipairs(choices) do
-      local choice_id = choice.id or (choice.get_id and choice:get_id())
-      local is_once_only = false
+      -- Use repeat...until true pattern for Lua 5.1 compatibility (no goto)
+      repeat
+        local choice_id = choice.id or (choice.get_id and choice:get_id())
+        local is_once_only = false
 
-      -- Check if once-only using various methods
-      if choice.choice_type then
-        is_once_only = choice.choice_type == "once"
-      elseif type(choice.is_once_only) == "function" then
-        is_once_only = choice:is_once_only()
-      elseif choice.once_only then
-        is_once_only = choice.once_only
-      end
-
-      -- Check if choice was selected
-      local was_selected = false
-      if choice_id then
-        if type(self.game_state.is_choice_selected) == "function" then
-          was_selected = self.game_state:is_choice_selected(choice_id)
-        elseif self.game_state.selected_choices then
-          was_selected = self.game_state.selected_choices[choice_id] == true
+        -- Check if once-only using various methods
+        if choice.choice_type then
+          is_once_only = choice.choice_type == "once"
+        elseif type(choice.is_once_only) == "function" then
+          is_once_only = choice:is_once_only()
+        elseif choice.once_only then
+          is_once_only = choice.once_only
         end
-      end
 
-      -- Skip once-only choices that have been selected
-      if is_once_only and was_selected then
-        goto continue
-      end
-
-      -- Check choice condition if present
-      local choice_condition = choice.condition or (type(choice.get_condition) == "function" and choice:get_condition())
-      if choice_condition and choice_condition ~= "" then
-        local condition_result = self:evaluate_condition(choice_condition, self.game_state)
-        if not condition_result then
-          goto continue
+        -- Check if choice was selected
+        local was_selected = false
+        if choice_id then
+          if type(self.game_state.is_choice_selected) == "function" then
+            was_selected = self.game_state:is_choice_selected(choice_id)
+          elseif self.game_state.selected_choices then
+            was_selected = self.game_state.selected_choices[choice_id] == true
+          end
         end
-      end
 
-      table.insert(filtered_choices, choice)
+        -- Skip once-only choices that have been selected
+        if is_once_only and was_selected then
+          break  -- continue to next iteration
+        end
 
-      ::continue::
+        -- Check choice condition if present
+        local choice_condition = choice.condition or (type(choice.get_condition) == "function" and choice:get_condition())
+        if choice_condition and choice_condition ~= "" then
+          local condition_result = self:evaluate_condition(choice_condition, self.game_state)
+          if not condition_result then
+            break  -- continue to next iteration
+          end
+        end
+
+        table.insert(filtered_choices, choice)
+      until true
     end
     return filtered_choices
   end

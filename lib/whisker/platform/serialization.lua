@@ -124,41 +124,41 @@ function Serialization.filter_serializable(data, seen, max_depth, current_depth)
   local is_array = Serialization.is_array(data)
 
   for k, v in pairs(data) do
-    local key_type = type(k)
-    local val_type = type(v)
+    repeat
+      local key_type = type(k)
+      local val_type = type(v)
 
-    -- Handle keys: JSON requires string keys (or numeric for arrays)
-    local json_key = k
-    if is_array and key_type == "number" then
-      json_key = k  -- Keep numeric keys for arrays
-    elseif key_type == "string" then
-      json_key = k  -- Keep string keys
-    elseif key_type == "number" then
-      json_key = tostring(k)  -- Convert numeric keys to strings for objects
-    else
-      -- Skip non-serializable key types
-      goto continue
-    end
-
-    -- Handle values: only serialize JSON-compatible types
-    if val_type == "string" or val_type == "number" or val_type == "boolean" then
-      filtered[json_key] = v
-    elseif val_type == "table" then
-      -- Recursively filter nested tables
-      local nested, nested_err = Serialization.filter_serializable(v, seen, max_depth, current_depth + 1)
-      if nested then
-        filtered[json_key] = nested
-      elseif nested_err then
-        -- Propagate critical errors (cycles, depth limits)
-        return nil, nested_err
+      -- Handle keys: JSON requires string keys (or numeric for arrays)
+      local json_key = k
+      if is_array and key_type == "number" then
+        json_key = k  -- Keep numeric keys for arrays
+      elseif key_type == "string" then
+        json_key = k  -- Keep string keys
+      elseif key_type == "number" then
+        json_key = tostring(k)  -- Convert numeric keys to strings for objects
+      else
+        -- Skip non-serializable key types
+        break
       end
-    elseif v == nil then
-      -- Explicitly handle nil (though pairs() doesn't return nil values)
-      -- JSON null is represented differently
-    end
-    -- Skip functions, userdata, threads, coroutines
 
-    ::continue::
+      -- Handle values: only serialize JSON-compatible types
+      if val_type == "string" or val_type == "number" or val_type == "boolean" then
+        filtered[json_key] = v
+      elseif val_type == "table" then
+        -- Recursively filter nested tables
+        local nested, nested_err = Serialization.filter_serializable(v, seen, max_depth, current_depth + 1)
+        if nested then
+          filtered[json_key] = nested
+        elseif nested_err then
+          -- Propagate critical errors (cycles, depth limits)
+          return nil, nested_err
+        end
+      elseif v == nil then
+        -- Explicitly handle nil (though pairs() doesn't return nil values)
+        -- JSON null is represented differently
+      end
+      -- Skip functions, userdata, threads, coroutines
+    until true
   end
 
   seen[data] = nil

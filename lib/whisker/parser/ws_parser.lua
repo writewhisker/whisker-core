@@ -40,38 +40,38 @@ function WSParser:parse_passage_content(content)
   local ast = { type = "passage_content", nodes = {} }
 
   while self.position <= #content do
-    -- Try to match hook definition
-    local hook_def = self:parse_hook_definition()
-    if hook_def then
-      table.insert(ast.nodes, hook_def)
-      goto continue
-    end
+    repeat
+      -- Try to match hook definition
+      local hook_def = self:parse_hook_definition()
+      if hook_def then
+        table.insert(ast.nodes, hook_def)
+        break
+      end
 
-    -- Try to match hook operation
-    local hook_op = self:parse_hook_operation()
-    if hook_op then
-      table.insert(ast.nodes, hook_op)
-      goto continue
-    end
+      -- Try to match hook operation
+      local hook_op = self:parse_hook_operation()
+      if hook_op then
+        table.insert(ast.nodes, hook_op)
+        break
+      end
 
-    -- Try to match rich text elements
-    local rich_text = self:parse_rich_text()
-    if rich_text then
-      table.insert(ast.nodes, rich_text)
-      goto continue
-    end
+      -- Try to match rich text elements
+      local rich_text = self:parse_rich_text()
+      if rich_text then
+        table.insert(ast.nodes, rich_text)
+        break
+      end
 
-    -- Try to parse text (everything else)
-    local text_node = self:parse_text()
-    if text_node then
-      table.insert(ast.nodes, text_node)
-      goto continue
-    end
+      -- Try to parse text (everything else)
+      local text_node = self:parse_text()
+      if text_node then
+        table.insert(ast.nodes, text_node)
+        break
+      end
 
-    -- Advance position to avoid infinite loop
-    self.position = self.position + 1
-
-    ::continue::
+      -- Advance position to avoid infinite loop
+      self.position = self.position + 1
+    until true
   end
 
   return ast
@@ -882,40 +882,40 @@ function WSParser:parse_namespace_block(parent_namespace)
             break
         end
 
-        -- Check for nested NAMESPACE
-        if remaining:match("^NAMESPACE%s+%w+") then
-            local nested = self:parse_namespace_block(namespace.full_name)
-            if nested then
-                namespace.nested_namespaces[nested.name] = nested
-            end
-            goto ns_continue
-        end
+        repeat
+          -- Check for nested NAMESPACE
+          if remaining:match("^NAMESPACE%s+%w+") then
+              local nested = self:parse_namespace_block(namespace.full_name)
+              if nested then
+                  namespace.nested_namespaces[nested.name] = nested
+              end
+              break
+          end
 
-        -- Check for passage (::)
-        local passage_name = remaining:match("^::%s*([%w_]+)")
-        if passage_name then
-            local passage = self:parse_passage_in_namespace(namespace.full_name)
-            if passage then
-                namespace.passages[passage.name] = passage
-            end
-            goto ns_continue
-        end
+          -- Check for passage (::)
+          local passage_name = remaining:match("^::%s*([%w_]+)")
+          if passage_name then
+              local passage = self:parse_passage_in_namespace(namespace.full_name)
+              if passage then
+                  namespace.passages[passage.name] = passage
+              end
+              break
+          end
 
-        -- Check for FUNCTION
-        if remaining:match("^FUNCTION%s+%w+") then
-            local func = self:parse_function_in_namespace(namespace.full_name)
-            if func then
-                namespace.functions[func.name] = func
-            end
-            goto ns_continue
-        end
+          -- Check for FUNCTION
+          if remaining:match("^FUNCTION%s+%w+") then
+              local func = self:parse_function_in_namespace(namespace.full_name)
+              if func then
+                  namespace.functions[func.name] = func
+              end
+              break
+          end
 
-        -- Skip any other content (single character at a time to avoid infinite loop)
-        if self.position <= #self.content then
-            self.position = self.position + 1
-        end
-
-        ::ns_continue::
+          -- Skip any other content (single character at a time to avoid infinite loop)
+          if self.position <= #self.content then
+              self.position = self.position + 1
+          end
+        until true
     end
 
     return namespace
@@ -1293,338 +1293,339 @@ function WSParser:parse(input)
   local i = 1
 
   while i <= #lines do
-    local line = lines[i]
-    local trimmed = line:match("^%s*(.-)%s*$")
+    repeat
+      local line = lines[i]
+      local trimmed = line:match("^%s*(.-)%s*$")
 
-    -- Check for passage marker first (ends @vars block, starts new passage)
-    local passage_name = trimmed:match("^::%s*(.+)$")
+      -- Check for passage marker first (ends @vars block, starts new passage)
+      local passage_name = trimmed:match("^::%s*(.+)$")
 
-    if passage_name then
-      in_vars_block = false
-      passage_name = passage_name:match("^%s*(.-)%s*$") -- trim
+      if passage_name then
+        in_vars_block = false
+        passage_name = passage_name:match("^%s*(.-)%s*$") -- trim
 
-      -- Save previous passage
-      if current_passage then
-        current_passage.content = table.concat(current_content, "\n")
-        current_passage.location.end_pos = line_positions[i] - 1
-        current_passage.location["end"] = { line = i - 1, column = 1 }
-        result.story.passages[current_passage.name] = current_passage
-        result.story.passage_by_name[current_passage.name] = current_passage
-      end
+        -- Save previous passage
+        if current_passage then
+          current_passage.content = table.concat(current_content, "\n")
+          current_passage.location.end_pos = line_positions[i] - 1
+          current_passage.location["end"] = { line = i - 1, column = 1 }
+          result.story.passages[current_passage.name] = current_passage
+          result.story.passage_by_name[current_passage.name] = current_passage
+        end
 
-      -- Check for duplicate passage
-      if seen_passages[passage_name] then
-        table.insert(result.warnings, {
-          code = "WLS-STR-001",
-          message = "Duplicate passage: " .. passage_name,
-          location = { line = i },
-          suggestion = "Rename one of the passages to have a unique name"
-        })
-      end
-      seen_passages[passage_name] = true
+        -- Check for duplicate passage
+        if seen_passages[passage_name] then
+          table.insert(result.warnings, {
+            code = "WLS-STR-001",
+            message = "Duplicate passage: " .. passage_name,
+            location = { line = i },
+            suggestion = "Rename one of the passages to have a unique name"
+          })
+        end
+        seen_passages[passage_name] = true
 
-      -- Start new passage
-      current_passage = {
-        name = passage_name,
-        tags = {},
-        content = "",
-        choices = {},
-        gathers = {},
-        tunnel_calls = {},
-        has_tunnel_return = false,
-        on_enter_script = nil,
-        location = {
-          line = i,
-          start_pos = line_positions[i],
-          end_pos = nil,
-          start = { line = i, column = 1 },
-          ["end"] = nil
+        -- Start new passage
+        current_passage = {
+          name = passage_name,
+          tags = {},
+          content = "",
+          choices = {},
+          gathers = {},
+          tunnel_calls = {},
+          has_tunnel_return = false,
+          on_enter_script = nil,
+          location = {
+            line = i,
+            start_pos = line_positions[i],
+            end_pos = nil,
+            start = { line = i, column = 1 },
+            ["end"] = nil
+          }
         }
-      }
 
-      current_content = {}
-      i = i + 1
-      goto continue
-    end
+        current_content = {}
+        i = i + 1
+        break
+      end
 
-    -- Check for directives (@title:, @author:, @tags:, @onEnter:, etc.)
-    local directive_name, directive_value = trimmed:match("^@([%w_]+):%s*(.*)$")
-    if directive_name then
-      if current_passage then
-        -- Passage-level directives
-        if directive_name == "tags" then
-          for tag in directive_value:gmatch("([^,%s]+)") do
-            table.insert(current_passage.tags, tag)
+      -- Check for directives (@title:, @author:, @tags:, @onEnter:, etc.)
+      local directive_name, directive_value = trimmed:match("^@([%w_]+):%s*(.*)$")
+      if directive_name then
+        if current_passage then
+          -- Passage-level directives
+          if directive_name == "tags" then
+            for tag in directive_value:gmatch("([^,%s]+)") do
+              table.insert(current_passage.tags, tag)
+            end
+          elseif directive_name == "onEnter" then
+            current_passage.on_enter_script = directive_value
+          -- GAP-016: Passage-level fallback
+          elseif directive_name == "fallback" then
+            current_passage.fallback = directive_value:match("^%s*(.-)%s*$")  -- trim
           end
-        elseif directive_name == "onEnter" then
-          current_passage.on_enter_script = directive_value
-        -- GAP-016: Passage-level fallback
-        elseif directive_name == "fallback" then
-          current_passage.fallback = directive_value:match("^%s*(.-)%s*$")  -- trim
-        end
-      else
-        -- Story-level directives
-        if directive_name == "title" then
-          result.story.metadata.title = directive_value
-        elseif directive_name == "author" then
-          result.story.metadata.author = directive_value
-        elseif directive_name == "version" then
-          result.story.metadata.version = directive_value
-        -- GAP-021: IFID with validation
-        elseif directive_name == "ifid" then
-          local ifid = directive_value:match("^%s*(.-)%s*$")  -- trim
-          -- Normalize to uppercase
-          ifid = UUID.normalize(ifid)
-          -- Validate format
-          if UUID.is_valid(ifid) then
-            result.story.metadata.ifid = ifid
+        else
+          -- Story-level directives
+          if directive_name == "title" then
+            result.story.metadata.title = directive_value
+          elseif directive_name == "author" then
+            result.story.metadata.author = directive_value
+          elseif directive_name == "version" then
+            result.story.metadata.version = directive_value
+          -- GAP-021: IFID with validation
+          elseif directive_name == "ifid" then
+            local ifid = directive_value:match("^%s*(.-)%s*$")  -- trim
+            -- Normalize to uppercase
+            ifid = UUID.normalize(ifid)
+            -- Validate format
+            if UUID.is_valid(ifid) then
+              result.story.metadata.ifid = ifid
+            else
+              table.insert(result.warnings, {
+                code = "WLS-META-001",
+                message = "Invalid IFID format: " .. directive_value,
+                location = { line = i },
+                suggestion = "Use UUID format: XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
+              })
+              -- Store anyway but mark as invalid
+              result.story.metadata.ifid = directive_value
+              result.story.metadata.ifid_invalid = true
+            end
+          elseif directive_name == "start" then
+            result.story.start_passage_name = directive_value
+          -- GAP-017: Random seed directive
+          elseif directive_name == "seed" then
+            local seed_value = directive_value:match("^%s*(.-)%s*$")  -- trim
+            -- Try to parse as number
+            local num_seed = tonumber(seed_value)
+            if num_seed then
+              result.story.random_seed = num_seed
+            else
+              -- Remove quotes if present and keep as string (will be hashed)
+              seed_value = seed_value:match('^"(.-)"$') or seed_value:match("^'(.-)'$") or seed_value
+              result.story.random_seed = seed_value
+            end
+          -- GAP-016: Story-level default fallback
+          elseif directive_name == "fallback" then
+            result.story.default_fallback = directive_value:match("^%s*(.-)%s*$")  -- trim
+          elseif directive_name == "theme" then
+            -- Parse theme(s) - can be comma-separated
+            local themes = {}
+            for theme in directive_value:gmatch("([^,]+)") do
+              theme = theme:match("^%s*(.-)%s*$")  -- trim
+              -- Remove quotes if present
+              theme = theme:match('^"(.-)"$') or theme:match("^'(.-)'$") or theme
+              table.insert(themes, theme)
+            end
+            result.story.metadata.themes = themes
           else
-            table.insert(result.warnings, {
-              code = "WLS-META-001",
-              message = "Invalid IFID format: " .. directive_value,
-              location = { line = i },
-              suggestion = "Use UUID format: XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
-            })
-            -- Store anyway but mark as invalid
-            result.story.metadata.ifid = directive_value
-            result.story.metadata.ifid_invalid = true
-          end
-        elseif directive_name == "start" then
-          result.story.start_passage_name = directive_value
-        -- GAP-017: Random seed directive
-        elseif directive_name == "seed" then
-          local seed_value = directive_value:match("^%s*(.-)%s*$")  -- trim
-          -- Try to parse as number
-          local num_seed = tonumber(seed_value)
-          if num_seed then
-            result.story.random_seed = num_seed
-          else
-            -- Remove quotes if present and keep as string (will be hashed)
-            seed_value = seed_value:match('^"(.-)"$') or seed_value:match("^'(.-)'$") or seed_value
-            result.story.random_seed = seed_value
-          end
-        -- GAP-016: Story-level default fallback
-        elseif directive_name == "fallback" then
-          result.story.default_fallback = directive_value:match("^%s*(.-)%s*$")  -- trim
-        elseif directive_name == "theme" then
-          -- Parse theme(s) - can be comma-separated
-          local themes = {}
-          for theme in directive_value:gmatch("([^,]+)") do
-            theme = theme:match("^%s*(.-)%s*$")  -- trim
-            -- Remove quotes if present
-            theme = theme:match('^"(.-)"$') or theme:match("^'(.-)'$") or theme
-            table.insert(themes, theme)
-          end
-          result.story.metadata.themes = themes
-        else
-          result.story.metadata[directive_name] = directive_value
-        end
-      end
-      i = i + 1
-      goto continue
-    end
-
-    -- GAP-020: Check for @set directive (story-level settings)
-    local set_key, set_value = trimmed:match("^@set%s+([%w_]+)%s*=%s*(.+)$")
-    if set_key and not current_passage then
-      -- Initialize settings if needed
-      if not result.story.settings then
-        result.story.settings = {}
-      end
-
-      -- Parse value type
-      local parsed_value
-      set_value = set_value:match("^%s*(.-)%s*$")  -- trim
-      if set_value == "true" then
-        parsed_value = true
-      elseif set_value == "false" then
-        parsed_value = false
-      elseif tonumber(set_value) then
-        parsed_value = tonumber(set_value)
-      elseif set_value:match('^"(.-)"$') then
-        parsed_value = set_value:match('^"(.-)"$')
-      elseif set_value:match("^'(.-)'$") then
-        parsed_value = set_value:match("^'(.-)'$")
-      else
-        parsed_value = set_value
-      end
-
-      result.story.settings[set_key] = parsed_value
-      i = i + 1
-      goto continue
-    end
-
-    -- Check for @style block start
-    if trimmed:match("^@style%s*{") or trimmed == "@style {" then
-      -- Parse entire style block - find matching closing brace
-      local style_content = {}
-      local brace_depth = 1
-      -- Check if opening brace is on same line
-      local inline_content = trimmed:match("^@style%s*{(.*)$")
-      if inline_content and inline_content ~= "" then
-        -- Count braces in inline content
-        for c in inline_content:gmatch(".") do
-          if c == "{" then brace_depth = brace_depth + 1
-          elseif c == "}" then brace_depth = brace_depth - 1
-          end
-        end
-        if brace_depth > 0 then
-          table.insert(style_content, inline_content)
-        else
-          -- Closing brace was on same line
-          local css = inline_content:match("^(.-)%}%s*$") or inline_content
-          if not result.story.metadata.custom_styles then
-            result.story.metadata.custom_styles = {}
-          end
-          table.insert(result.story.metadata.custom_styles, css)
-          i = i + 1
-          goto continue
-        end
-      end
-
-      i = i + 1
-      while i <= #lines and brace_depth > 0 do
-        local style_line = lines[i]
-        for c in style_line:gmatch(".") do
-          if c == "{" then brace_depth = brace_depth + 1
-          elseif c == "}" then brace_depth = brace_depth - 1
-          end
-        end
-        if brace_depth > 0 then
-          table.insert(style_content, style_line)
-        else
-          -- Last line may have content before closing brace
-          local final_content = style_line:match("^(.-)%}") or ""
-          if final_content ~= "" then
-            table.insert(style_content, final_content)
+            result.story.metadata[directive_name] = directive_value
           end
         end
         i = i + 1
+        break
       end
 
-      if not result.story.metadata.custom_styles then
-        result.story.metadata.custom_styles = {}
-      end
-      table.insert(result.story.metadata.custom_styles, table.concat(style_content, "\n"))
-      goto continue
-    end
+      -- GAP-020: Check for @set directive (story-level settings)
+      local set_key, set_value = trimmed:match("^@set%s+([%w_]+)%s*=%s*(.+)$")
+      if set_key and not current_passage then
+        -- Initialize settings if needed
+        if not result.story.settings then
+          result.story.settings = {}
+        end
 
-    -- Check for @vars block start
-    if trimmed == "@vars" then
-      in_vars_block = true
-      i = i + 1
-      goto continue
-    end
-
-    -- Parse variable definitions in @vars block
-    if in_vars_block and trimmed ~= "" then
-      local var_name, var_value = trimmed:match("^([%w_]+):%s*(.+)$")
-      if var_name then
-        local parsed_value
         -- Parse value type
-        if var_value:match("^%-?%d+%.?%d*$") then
-          parsed_value = tonumber(var_value)
-        elseif var_value == "true" then
+        local parsed_value
+        set_value = set_value:match("^%s*(.-)%s*$")  -- trim
+        if set_value == "true" then
           parsed_value = true
-        elseif var_value == "false" then
+        elseif set_value == "false" then
           parsed_value = false
-        elseif var_value:match('^"(.*)"$') then
-          parsed_value = var_value:match('^"(.*)"$')
+        elseif tonumber(set_value) then
+          parsed_value = tonumber(set_value)
+        elseif set_value:match('^"(.-)"$') then
+          parsed_value = set_value:match('^"(.-)"$')
+        elseif set_value:match("^'(.-)'$") then
+          parsed_value = set_value:match("^'(.-)'$")
         else
-          parsed_value = var_value
+          parsed_value = set_value
         end
-        result.story.variables[var_name] = { value = parsed_value, name = var_name }
-      end
-      i = i + 1
-      goto continue
-    end
 
-    -- Parse passage content
-    if current_passage then
-      -- Check for tunnel return: <-
-      if trimmed == "<-" then
-        current_passage.has_tunnel_return = true
-        table.insert(current_content, line)
+        result.story.settings[set_key] = parsed_value
         i = i + 1
-        goto continue
+        break
       end
 
-      -- Check for tunnel call: -> Target ->
-      local tunnel_target = trimmed:match("^%->%s*([%w_]+)%s*%->$")
-      if tunnel_target then
-        table.insert(current_passage.tunnel_calls, {
-          target = tunnel_target,
-          location = { line = i, start_pos = line_positions[i] }
-        })
-        table.insert(current_content, line)
-        i = i + 1
-        goto continue
-      end
-
-      -- Check for gather points: - or - - (spaced for depth)
-      -- Match patterns like "- text" or "- - text" (spaced dashes for depth)
-      local gather_content_check = trimmed:match("^%-[%s%-]*(.*)$")
-      if gather_content_check and not trimmed:match("^%->") then
-        -- Count depth by counting dashes (with optional spaces between)
-        local depth = 0
-        local rest = trimmed
-        while rest:match("^%-%s*") do
-          depth = depth + 1
-          rest = rest:gsub("^%-%s*", "", 1)
+      -- Check for @style block start
+      if trimmed:match("^@style%s*{") or trimmed == "@style {" then
+        -- Parse entire style block - find matching closing brace
+        local style_content = {}
+        local brace_depth = 1
+        -- Check if opening brace is on same line
+        local inline_content = trimmed:match("^@style%s*{(.*)$")
+        if inline_content and inline_content ~= "" then
+          -- Count braces in inline content
+          for c in inline_content:gmatch(".") do
+            if c == "{" then brace_depth = brace_depth + 1
+            elseif c == "}" then brace_depth = brace_depth - 1
+            end
+          end
+          if brace_depth > 0 then
+            table.insert(style_content, inline_content)
+          else
+            -- Closing brace was on same line
+            local css = inline_content:match("^(.-)%}%s*$") or inline_content
+            if not result.story.metadata.custom_styles then
+              result.story.metadata.custom_styles = {}
+            end
+            table.insert(result.story.metadata.custom_styles, css)
+            i = i + 1
+            break
+          end
         end
-        if depth > 0 then
-          table.insert(current_passage.gathers, {
-            depth = depth,
-            content = rest,
+
+        i = i + 1
+        while i <= #lines and brace_depth > 0 do
+          local style_line = lines[i]
+          for c in style_line:gmatch(".") do
+            if c == "{" then brace_depth = brace_depth + 1
+            elseif c == "}" then brace_depth = brace_depth - 1
+            end
+          end
+          if brace_depth > 0 then
+            table.insert(style_content, style_line)
+          else
+            -- Last line may have content before closing brace
+            local final_content = style_line:match("^(.-)%}") or ""
+            if final_content ~= "" then
+              table.insert(style_content, final_content)
+            end
+          end
+          i = i + 1
+        end
+
+        if not result.story.metadata.custom_styles then
+          result.story.metadata.custom_styles = {}
+        end
+        table.insert(result.story.metadata.custom_styles, table.concat(style_content, "\n"))
+        break
+      end
+
+      -- Check for @vars block start
+      if trimmed == "@vars" then
+        in_vars_block = true
+        i = i + 1
+        break
+      end
+
+      -- Parse variable definitions in @vars block
+      if in_vars_block and trimmed ~= "" then
+        local var_name, var_value = trimmed:match("^([%w_]+):%s*(.+)$")
+        if var_name then
+          local parsed_value
+          -- Parse value type
+          if var_value:match("^%-?%d+%.?%d*$") then
+            parsed_value = tonumber(var_value)
+          elseif var_value == "true" then
+            parsed_value = true
+          elseif var_value == "false" then
+            parsed_value = false
+          elseif var_value:match('^"(.*)"$') then
+            parsed_value = var_value:match('^"(.*)"$')
+          else
+            parsed_value = var_value
+          end
+          result.story.variables[var_name] = { value = parsed_value, name = var_name }
+        end
+        i = i + 1
+        break
+      end
+
+      -- Parse passage content
+      if current_passage then
+        -- Check for tunnel return: <-
+        if trimmed == "<-" then
+          current_passage.has_tunnel_return = true
+          table.insert(current_content, line)
+          i = i + 1
+          break
+        end
+
+        -- Check for tunnel call: -> Target ->
+        local tunnel_target = trimmed:match("^%->%s*([%w_]+)%s*%->$")
+        if tunnel_target then
+          table.insert(current_passage.tunnel_calls, {
+            target = tunnel_target,
             location = { line = i, start_pos = line_positions[i] }
           })
           table.insert(current_content, line)
           i = i + 1
-          goto continue
+          break
         end
-      end
 
-      -- Check for choices (with depth support)
-      local choice_prefix = trimmed:match("^([%+%*]+)")
-      if choice_prefix then
-        local depth = #choice_prefix
-        local choice_char = choice_prefix:sub(1, 1)
-        local choice_type = (choice_char == "+") and "once" or "sticky"
-
-        -- Match choice: +/* [text] -> Target or +/* [text]
-        local rest = trimmed:sub(#choice_prefix + 1)
-
-        -- GAP-033: Handle escaped brackets in choice text
-        -- Use bracket-counting approach that skips escaped brackets
-        local choice_text, remaining = self:parse_choice_text_with_escapes(rest)
-        local choice_target = remaining and remaining:match("%->%s*(.+)$")
-
-        if choice_text then
-          choice_target = choice_target and choice_target:match("^%s*(.-)%s*$") or nil
-          table.insert(current_passage.choices, {
-            choice_type = choice_type,
-            text = choice_text,
-            target = choice_target,
-            depth = depth,
-            location = {
-              line = i,
-              start_pos = line_positions[i],
-              end_pos = line_positions[i] + #line,
-              start = { line = i, column = 1 },
-              ["end"] = { line = i, column = #line }
-            }
-          })
+        -- Check for gather points: - or - - (spaced for depth)
+        -- Match patterns like "- text" or "- - text" (spaced dashes for depth)
+        local gather_content_check = trimmed:match("^%-[%s%-]*(.*)$")
+        if gather_content_check and not trimmed:match("^%->") then
+          -- Count depth by counting dashes (with optional spaces between)
+          local depth = 0
+          local rest = trimmed
+          while rest:match("^%-%s*") do
+            depth = depth + 1
+            rest = rest:gsub("^%-%s*", "", 1)
+          end
+          if depth > 0 then
+            table.insert(current_passage.gathers, {
+              depth = depth,
+              content = rest,
+              location = { line = i, start_pos = line_positions[i] }
+            })
+            table.insert(current_content, line)
+            i = i + 1
+            break
+          end
         end
+
+        -- Check for choices (with depth support)
+        local choice_prefix = trimmed:match("^([%+%*]+)")
+        if choice_prefix then
+          local depth = #choice_prefix
+          local choice_char = choice_prefix:sub(1, 1)
+          local choice_type = (choice_char == "+") and "once" or "sticky"
+
+          -- Match choice: +/* [text] -> Target or +/* [text]
+          local rest = trimmed:sub(#choice_prefix + 1)
+
+          -- GAP-033: Handle escaped brackets in choice text
+          -- Use bracket-counting approach that skips escaped brackets
+          local choice_text, remaining = self:parse_choice_text_with_escapes(rest)
+          local choice_target = remaining and remaining:match("%->%s*(.+)$")
+
+          if choice_text then
+            choice_target = choice_target and choice_target:match("^%s*(.-)%s*$") or nil
+            table.insert(current_passage.choices, {
+              choice_type = choice_type,
+              text = choice_text,
+              target = choice_target,
+              depth = depth,
+              location = {
+                line = i,
+                start_pos = line_positions[i],
+                end_pos = line_positions[i] + #line,
+                start = { line = i, column = 1 },
+                ["end"] = { line = i, column = #line }
+              }
+            })
+          end
+          table.insert(current_content, line)
+          i = i + 1
+          break
+        end
+
         table.insert(current_content, line)
-        i = i + 1
-        goto continue
       end
 
-      table.insert(current_content, line)
-    end
-
-    i = i + 1
-    ::continue::
+      i = i + 1
+    until true
   end
 
   -- Save last passage

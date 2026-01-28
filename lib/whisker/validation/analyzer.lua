@@ -302,69 +302,69 @@ function Analyzer:validate_links(story)
       for _, choice in ipairs(passage.choices) do
         local target = choice.target_passage
 
-        -- Check for empty target (WLS-LNK-005)
-        if not target or target == "" then
-          table.insert(diagnostics, create_diagnostic(
-            self.ERROR_CODES.EMPTY_CHOICE_TARGET,
-            string.format('Empty choice target in passage "%s"', passage_id),
-            "error",
-            passage_id,
-            nil,
-            "Add a target passage name or use END/BACK/RESTART"
-          ))
-          goto continue
-        end
+        repeat
+          -- Check for empty target (WLS-LNK-005)
+          if not target or target == "" then
+            table.insert(diagnostics, create_diagnostic(
+              self.ERROR_CODES.EMPTY_CHOICE_TARGET,
+              string.format('Empty choice target in passage "%s"', passage_id),
+              "error",
+              passage_id,
+              nil,
+              "Add a target passage name or use END/BACK/RESTART"
+            ))
+            break
+          end
 
-        -- Check for special target case (WLS-LNK-003)
-        if is_special_target(target) and not has_correct_case(target) then
-          local correct = get_correct_case(target)
-          table.insert(diagnostics, create_diagnostic(
-            self.ERROR_CODES.SPECIAL_TARGET_CASE,
-            string.format('Special target "%s" should be "%s"', target, correct),
-            "warning",
-            passage_id,
-            target,
-            string.format('Use "%s" instead of "%s"', correct, target)
-          ))
-        end
+          -- Check for special target case (WLS-LNK-003)
+          if is_special_target(target) and not has_correct_case(target) then
+            local correct = get_correct_case(target)
+            table.insert(diagnostics, create_diagnostic(
+              self.ERROR_CODES.SPECIAL_TARGET_CASE,
+              string.format('Special target "%s" should be "%s"', target, correct),
+              "warning",
+              passage_id,
+              target,
+              string.format('Use "%s" instead of "%s"', correct, target)
+            ))
+          end
 
-        -- Check for BACK on start passage (WLS-LNK-004)
-        if target:upper() == "BACK" and passage_id == start_passage then
-          table.insert(diagnostics, create_diagnostic(
-            self.ERROR_CODES.BACK_ON_START,
-            string.format('BACK target on start passage "%s" will have no effect', passage_id),
-            "warning",
-            passage_id,
-            target,
-            "Remove BACK from start passage or use a different navigation"
-          ))
-        end
+          -- Check for BACK on start passage (WLS-LNK-004)
+          if target:upper() == "BACK" and passage_id == start_passage then
+            table.insert(diagnostics, create_diagnostic(
+              self.ERROR_CODES.BACK_ON_START,
+              string.format('BACK target on start passage "%s" will have no effect', passage_id),
+              "warning",
+              passage_id,
+              target,
+              "Remove BACK from start passage or use a different navigation"
+            ))
+          end
 
-        -- Check for dead links (WLS-LNK-001)
-        if not is_special_target(target) and not passage_names[target] then
-          table.insert(diagnostics, create_diagnostic(
-            self.ERROR_CODES.DEAD_LINK,
-            string.format('Dead link: passage "%s" does not exist', target),
-            "error",
-            passage_id,
-            target,
-            string.format('Create passage "%s" or fix the target name', target)
-          ))
-        end
+          -- Check for dead links (WLS-LNK-001)
+          if not is_special_target(target) and not passage_names[target] then
+            table.insert(diagnostics, create_diagnostic(
+              self.ERROR_CODES.DEAD_LINK,
+              string.format('Dead link: passage "%s" does not exist', target),
+              "error",
+              passage_id,
+              target,
+              string.format('Create passage "%s" or fix the target name', target)
+            ))
+          end
 
-        -- Check for self-link without state change (WLS-LNK-002)
-        if target == passage_id and not has_state_change(choice) then
-          table.insert(diagnostics, create_diagnostic(
-            self.ERROR_CODES.SELF_LINK_NO_CHANGE,
-            string.format('Self-link in passage "%s" without state change creates infinite loop', passage_id),
-            "warning",
-            passage_id,
-            target,
-            "Add an action to modify state or change the target"
-          ))
-        end
-
-        ::continue::
+          -- Check for self-link without state change (WLS-LNK-002)
+          if target == passage_id and not has_state_change(choice) then
+            table.insert(diagnostics, create_diagnostic(
+              self.ERROR_CODES.SELF_LINK_NO_CHANGE,
+              string.format('Self-link in passage "%s" without state change creates infinite loop', passage_id),
+              "warning",
+              passage_id,
+              target,
+              "Add an action to modify state or change the target"
+            ))
+          end
+        until true
       end
     end
   end
@@ -607,87 +607,87 @@ function Analyzer:validate_variables(story)
   local variables = self:track_variables(story)
 
   for name, info in pairs(variables) do
-    -- Skip system variables
-    if SYSTEM_VARIABLES[name] then
-      goto continue
-    end
-
-    -- Check for invalid variable name (WLS-VAR-003)
-    if not is_valid_variable_name(name) then
-      table.insert(diagnostics, create_diagnostic(
-        self.ERROR_CODES.INVALID_VARIABLE_NAME,
-        string.format('Invalid variable name "%s"', name),
-        "error",
-        nil,
-        nil,
-        "Variable names must start with a letter or underscore and contain only alphanumeric characters"
-      ))
-    end
-
-    -- Check for reserved prefix (WLS-VAR-004)
-    local reserved_prefix = has_reserved_prefix(name)
-    if reserved_prefix then
-      table.insert(diagnostics, create_diagnostic(
-        self.ERROR_CODES.RESERVED_PREFIX,
-        string.format('Variable "%s" uses reserved prefix "%s"', name, reserved_prefix),
-        "warning",
-        nil,
-        nil,
-        string.format('Avoid using "%s" prefix as it\'s reserved for system use', reserved_prefix)
-      ))
-    end
-
-    -- Check for undefined variable (WLS-VAR-001)
-    if #info.used_in > 0 and #info.defined_in == 0 then
-      table.insert(diagnostics, create_diagnostic(
-        self.ERROR_CODES.UNDEFINED_VARIABLE,
-        string.format('Variable "%s" is used but never defined', name),
-        "error",
-        nil,
-        nil,
-        string.format('Define "%s" before using it, or declare it in the story header', name)
-      ))
-    end
-
-    -- Check for unused variable (WLS-VAR-002)
-    if #info.defined_in > 0 and #info.used_in == 0 and not info.is_global then
-      table.insert(diagnostics, create_diagnostic(
-        self.ERROR_CODES.UNUSED_VARIABLE,
-        string.format('Variable "%s" is defined but never used', name),
-        "warning",
-        nil,
-        nil,
-        "Remove unused variable or use it in your story"
-      ))
-    end
-
-    -- Check for temp variable cross-passage usage (WLS-VAR-008)
-    if info.is_temp then
-      local all_passages = {}
-      for _, p in ipairs(info.defined_in) do
-        if not table_contains(all_passages, p) then
-          table.insert(all_passages, p)
-        end
-      end
-      for _, p in ipairs(info.used_in) do
-        if not table_contains(all_passages, p) then
-          table.insert(all_passages, p)
-        end
+    repeat
+      -- Skip system variables
+      if SYSTEM_VARIABLES[name] then
+        break
       end
 
-      if #all_passages > 1 then
+      -- Check for invalid variable name (WLS-VAR-003)
+      if not is_valid_variable_name(name) then
         table.insert(diagnostics, create_diagnostic(
-          self.ERROR_CODES.TEMP_CROSS_PASSAGE,
-          string.format('Temp variable "%s" is used across multiple passages', name),
+          self.ERROR_CODES.INVALID_VARIABLE_NAME,
+          string.format('Invalid variable name "%s"', name),
+          "error",
+          nil,
+          nil,
+          "Variable names must start with a letter or underscore and contain only alphanumeric characters"
+        ))
+      end
+
+      -- Check for reserved prefix (WLS-VAR-004)
+      local reserved_prefix = has_reserved_prefix(name)
+      if reserved_prefix then
+        table.insert(diagnostics, create_diagnostic(
+          self.ERROR_CODES.RESERVED_PREFIX,
+          string.format('Variable "%s" uses reserved prefix "%s"', name, reserved_prefix),
           "warning",
           nil,
           nil,
-          "Temp variables (starting with _) should only be used within a single passage"
+          string.format('Avoid using "%s" prefix as it\'s reserved for system use', reserved_prefix)
         ))
       end
-    end
 
-    ::continue::
+      -- Check for undefined variable (WLS-VAR-001)
+      if #info.used_in > 0 and #info.defined_in == 0 then
+        table.insert(diagnostics, create_diagnostic(
+          self.ERROR_CODES.UNDEFINED_VARIABLE,
+          string.format('Variable "%s" is used but never defined', name),
+          "error",
+          nil,
+          nil,
+          string.format('Define "%s" before using it, or declare it in the story header', name)
+        ))
+      end
+
+      -- Check for unused variable (WLS-VAR-002)
+      if #info.defined_in > 0 and #info.used_in == 0 and not info.is_global then
+        table.insert(diagnostics, create_diagnostic(
+          self.ERROR_CODES.UNUSED_VARIABLE,
+          string.format('Variable "%s" is defined but never used', name),
+          "warning",
+          nil,
+          nil,
+          "Remove unused variable or use it in your story"
+        ))
+      end
+
+      -- Check for temp variable cross-passage usage (WLS-VAR-008)
+      if info.is_temp then
+        local all_passages = {}
+        for _, p in ipairs(info.defined_in) do
+          if not table_contains(all_passages, p) then
+            table.insert(all_passages, p)
+          end
+        end
+        for _, p in ipairs(info.used_in) do
+          if not table_contains(all_passages, p) then
+            table.insert(all_passages, p)
+          end
+        end
+
+        if #all_passages > 1 then
+          table.insert(diagnostics, create_diagnostic(
+            self.ERROR_CODES.TEMP_CROSS_PASSAGE,
+            string.format('Temp variable "%s" is used across multiple passages', name),
+            "warning",
+            nil,
+            nil,
+            "Temp variables (starting with _) should only be used within a single passage"
+          ))
+        end
+      end
+    until true
   end
 
   local has_errors = false

@@ -326,17 +326,17 @@ local function interactive_search(search_engine)
       break
     end
     
-    if query:match("^%s*$") then
-      print("Please enter a search query.")
+    repeat
+      if query:match("^%s*$") then
+        print("Please enter a search query.")
+        print("")
+        break
+      end
+
       print("")
-      goto continue
-    end
-    
-    print("")
-    local results = search_engine:search(query, { limit = 5 })
-    display_results(results, query)
-    
-    ::continue::
+      local results = search_engine:search(query, { limit = 5 })
+      display_results(results, query)
+    until true
   end
   
   print("")
