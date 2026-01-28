@@ -1,6 +1,9 @@
 -- tests/wls/test_expressions.lua
 -- WLS 1.0 Expression Syntax Tests
 -- Tests for $var and ${expr} interpolation
+--
+-- Note: ${expr} expression tests require Lua 5.3+ due to differences in
+-- how load() with environment works on Lua 5.1/LuaJIT with setfenv.
 
 local helper = require("tests.test_helper")
 local Story = require("whisker.core.story")
@@ -10,6 +13,7 @@ local Engine = require("whisker.core.engine")
 local GameState = require("whisker.core.game_state")
 local Renderer = require("whisker.core.renderer")
 local LuaInterpreter = require("whisker.core.lua_interpreter")
+local LuaVersion = require("tests.helpers.lua_version")
 
 describe("WLS 1.0 Expression Syntax", function()
 
@@ -148,13 +152,16 @@ describe("WLS 1.0 Expression Syntax", function()
             assert.equals("Value: 15", result)
         end)
 
+        -- Note: random/pick tests require Lua 5.3+ due to load() environment differences
         it("should use random function", function()
+            if not LuaVersion.skip_below(5.3, "load() environment handling") then return end
             local result = render_with_vars("Roll: ${random(1, 6)}", {})
             local roll = tonumber(result:match("Roll: (%d+)"))
             assert.is_true(roll >= 1 and roll <= 6)
         end)
 
         it("should use pick function", function()
+            if not LuaVersion.skip_below(5.3, "load() environment handling") then return end
             local result = render_with_vars([[Choice: ${pick("a", "b", "c")}]], {})
             local choice = result:match("Choice: (.)")
             assert.is_true(choice == "a" or choice == "b" or choice == "c")

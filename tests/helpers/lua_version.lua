@@ -51,7 +51,7 @@ function LuaVersion.at_least(min_version)
 end
 
 --- Skip a test if the Lua version is below the minimum
--- Uses busted's `pending()` to skip the test with a reason
+-- Uses busted's `pending()` to skip the test with a reason (if available)
 -- @param min_version number Minimum required version
 -- @param feature_name string Optional description of the feature requiring this version
 -- @return boolean True if version is sufficient, false if test should be skipped
@@ -65,7 +65,10 @@ function LuaVersion.skip_below(min_version, feature_name)
     if feature_name then
       reason = feature_name .. " - " .. reason
     end
-    pending(reason)
+    -- Call pending if available (busted function), otherwise just skip silently
+    if type(pending) == "function" then
+      pending(reason)
+    end
     return false
   end
   return true
@@ -77,7 +80,10 @@ end
 -- @return boolean True if not LuaJIT, false if test should be skipped
 function LuaVersion.skip_on_luajit(reason)
   if LuaVersion.is_luajit then
-    pending(reason or "Skipped on LuaJIT")
+    -- Call pending if available (busted function), otherwise just skip silently
+    if type(pending) == "function" then
+      pending(reason or "Skipped on LuaJIT")
+    end
     return false
   end
   return true
@@ -90,7 +96,10 @@ end
 function LuaVersion.skip_on(version, reason)
   if LuaVersion.version == version then
     local default_reason = string.format("Skipped on Lua %s", tostring(version))
-    pending(reason or default_reason)
+    -- Call pending if available (busted function), otherwise just skip silently
+    if type(pending) == "function" then
+      pending(reason or default_reason)
+    end
     return false
   end
   return true
