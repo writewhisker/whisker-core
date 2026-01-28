@@ -189,8 +189,11 @@ function Renderer:evaluate_expressions(text, game_state)
   local processed = text
 
   if game_state then
-    -- Handle escaped $ (replace temporarily)
-    processed = processed:gsub("\\%$", "\0ESCAPED_DOLLAR\0")
+    -- Handle escaped $ (replace temporarily with unique marker)
+    -- Use string.char(1) (SOH) as delimiter for Lua 5.1/LuaJIT compatibility
+    -- Null bytes (\0) cause issues with pattern matching in older Lua versions
+    local MARKER = string.char(1) .. "ESCAPED_DOLLAR" .. string.char(1)
+    processed = processed:gsub("\\%$", MARKER)
 
     -- Handle {{variable}} syntax (allows underscores in variable names)
     processed = processed:gsub("{{([%w_]+)}}", function(var_name)
@@ -261,7 +264,7 @@ function Renderer:evaluate_expressions(text, game_state)
     end)
 
     -- Restore escaped $ signs
-    processed = processed:gsub("\0ESCAPED_DOLLAR\0", "$")
+    processed = processed:gsub(MARKER, "$")
   end
 
   return processed
