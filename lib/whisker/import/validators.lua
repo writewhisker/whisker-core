@@ -309,7 +309,9 @@ function Validators.check_encoding(story, report, options)
     
     -- Check for invalid UTF-8 (simple check)
     -- Note: This is a basic check, proper UTF-8 validation is more complex
-    if passage.content:match("[\x80-\xFF][\x00-\x7F]") then
+    -- Use string.char for Lua 5.1/LuaJIT compatibility (no \xNN syntax)
+    local invalid_utf8_pattern = "[" .. string.char(0x80) .. "-" .. string.char(0xFF) .. "][" .. string.char(0x00) .. "-" .. string.char(0x7F) .. "]"
+    if passage.content:match(invalid_utf8_pattern) then
       add_issue(report, Validators.Severity.WARNING,
         string.format("Passage '%s' may have encoding issues", passage.id or i),
         location,

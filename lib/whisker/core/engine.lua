@@ -614,9 +614,11 @@ function Engine:render_passage_content(passage)
   local state = self.game_state or self.state
 
   -- Handle escape sequences - temporarily replace with placeholders
-  local ESCAPE_DOLLAR = "\x00ESC_DOLLAR\x00"
-  local ESCAPE_BRACE_OPEN = "\x00ESC_BRACE_O\x00"
-  local ESCAPE_BRACE_CLOSE = "\x00ESC_BRACE_C\x00"
+  -- Use string.char(0) for null byte (Lua 5.1/LuaJIT compatible)
+  local NUL = string.char(0)
+  local ESCAPE_DOLLAR = NUL .. "ESC_DOLLAR" .. NUL
+  local ESCAPE_BRACE_OPEN = NUL .. "ESC_BRACE_O" .. NUL
+  local ESCAPE_BRACE_CLOSE = NUL .. "ESC_BRACE_C" .. NUL
 
   content = content:gsub("\\%$", ESCAPE_DOLLAR)
   content = content:gsub("\\{", ESCAPE_BRACE_OPEN)

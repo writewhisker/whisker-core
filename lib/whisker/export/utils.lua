@@ -34,19 +34,20 @@ function ExportUtils.escape_json(text)
   if not text then return "" end
   text = tostring(text)
 
-  -- Create control character pattern (works on all Lua versions including 5.1/LuaJIT)
-  -- The \xNN syntax is Lua 5.2+ only, so we use string.char() instead
-  local control_char_pattern = "[" .. string.char(0) .. "-" .. string.char(31) .. "]"
-
-  return text
+  -- Escape control characters using %c pattern class (works on all Lua versions)
+  -- %c matches all control characters (0x00-0x1f) in Lua
+  -- First handle specific characters, then remaining control chars
+  local result = text
     :gsub("\\", "\\\\")
     :gsub('"', '\\"')
     :gsub("\n", "\\n")
     :gsub("\r", "\\r")
     :gsub("\t", "\\t")
-    :gsub(control_char_pattern, function(c)
+    :gsub("%c", function(c)
       return string.format("\\u%04x", string.byte(c))
     end)
+
+  return result
 end
 
 --- Read file contents
