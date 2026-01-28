@@ -3,8 +3,9 @@
 -- whisker Interactive Fiction Engine
 -- Main CLI entry point
 
--- Add lib to package path
-package.path = package.path .. ";./lib/?.lua;./lib/?/init.lua"
+-- Add lib and project root to package path
+-- Project root is needed for example story dependencies (e.g., examples.shared.bootstrap)
+package.path = package.path .. ";./lib/?.lua;./lib/?/init.lua;./?.lua;./?/init.lua"
 
 -- Load configuration
 local config = require("config.default")
