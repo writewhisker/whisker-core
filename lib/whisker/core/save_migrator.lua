@@ -140,12 +140,13 @@ function SaveMigrator:validate(data)
         table.insert(errors, "Missing version field")
     end
 
-    if not data.current_passage then
-        table.insert(errors, "Missing current_passage field")
-    end
+    -- current_passage can be nil for new/empty game states
+    -- (no passage visited yet)
 
-    if not data.variables or type(data.variables) ~= "table" then
-        table.insert(errors, "Missing or invalid variables field")
+    -- variables can be nil (will default to empty table)
+    -- but if present, must be a table
+    if data.variables ~= nil and type(data.variables) ~= "table" then
+        table.insert(errors, "Invalid variables field type")
     end
 
     -- Check data types

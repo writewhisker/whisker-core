@@ -319,8 +319,15 @@ function Engine:navigate_to_passage(passage_id, skip_history)
 
   -- If we have game_state, return structured result for test compatibility
   if self.game_state then
-    -- Render content to process text alternatives and other dynamic features
+    -- First extract and register hooks from raw content
+    local raw_content = passage.content or (passage.get_content and passage:get_content()) or ""
+    self.renderer:extract_hooks(raw_content, passage_id)
+
+    -- Then process text alternatives, conditionals, and expressions
     local rendered_content = self:render_passage_content(passage)
+
+    -- Finally render the hooks (replace placeholders with hook content)
+    rendered_content = self.renderer:render_hooks(rendered_content, passage_id, self.game_state)
 
     -- Cache the rendered content so get_current_content doesn't re-render
     self._last_rendered_content = rendered_content

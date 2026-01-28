@@ -987,14 +987,14 @@ function LuaInterpreter:build_environment(game_state, context)
         env[k] = v
       end
     end
-    -- Add temp variables
+    -- Add temp variables with underscore prefix for direct access
     if game_state.get_all_temp_variables then
       for k, v in pairs(game_state:get_all_temp_variables()) do
-        env[k] = v
+        env["_" .. k] = v
       end
     elseif game_state.temp_variables then
       for k, v in pairs(game_state.temp_variables) do
-        env[k] = v
+        env["_" .. k] = v
       end
     end
   end
@@ -1049,12 +1049,12 @@ end
 -- @param expr string The expression to evaluate
 -- @param game_state table The game state for variable access
 -- @param context table Optional additional context
--- @return any The result of evaluation
--- @return string|nil Error message if evaluation failed
+-- @return boolean success True if evaluation succeeded
+-- @return any|nil result The result of evaluation, or nil on error
 function LuaInterpreter:evaluate_expression(expr, game_state, context)
   -- Handle empty expression
   if not expr or expr == "" then
-    return nil, "Empty expression"
+    return false, nil
   end
 
   -- Build evaluation environment
@@ -1066,15 +1066,15 @@ function LuaInterpreter:evaluate_expression(expr, game_state, context)
   -- Compile and execute (use load_with_env for Lua 5.1/LuaJIT compatibility)
   local chunk, err = load_with_env("return " .. lua_expr, "expr", env)
   if not chunk then
-    return nil, "Parse error: " .. tostring(err)
+    return false, nil
   end
 
-  local success, result = pcall(chunk)
-  if not success then
-    return nil, "Runtime error: " .. tostring(result)
+  local pcall_success, result = pcall(chunk)
+  if not pcall_success then
+    return false, nil
   end
 
-  return result
+  return true, result
 end
 
 --- Evaluate a condition expression and return boolean using WLS truthiness
@@ -1092,9 +1092,9 @@ function LuaInterpreter:evaluate_condition(condition, game_state, context)
   end
 
   -- Evaluate the expression
-  local result, err = self:evaluate_expression(condition, game_state, context)
+  local success, result = self:evaluate_expression(condition, game_state, context)
 
-  if err then
+  if not success then
     -- On error, return false with error info
     return false, nil
   end

@@ -302,8 +302,8 @@ function Renderer:evaluate_expressions(text, game_state)
   processed = processed:gsub("%${(.-)}", function(expr)
     -- Use interpreter to evaluate expression if available
     if self.interpreter and self.interpreter.evaluate_expression then
-      local result, err = self.interpreter:evaluate_expression(expr, game_state)
-      if not err then
+      local success, result = self.interpreter:evaluate_expression(expr, game_state)
+      if success then
         if result == nil then
           return ""  -- Nil becomes empty string
         end
@@ -311,7 +311,7 @@ function Renderer:evaluate_expressions(text, game_state)
       else
         -- On error, log if in debug mode, return empty string
         if self.config and self.config.debug then
-          io.stderr:write("[Expression Error] " .. expr .. ": " .. tostring(err) .. "\n")
+          io.stderr:write("[Expression Error] " .. expr .. ": evaluation failed\n")
         end
         return ""  -- Graceful degradation per GAP-015
       end

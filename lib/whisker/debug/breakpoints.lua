@@ -236,10 +236,11 @@ end
 function Breakpoints:evaluate_condition(condition, context)
     -- Use interpreter to evaluate if available
     if context and context.interpreter then
-        local success, result = pcall(function()
-            return context.interpreter:evaluate_expression(condition, context.game_state)
+        local pcall_ok, eval_success, result = pcall(function()
+            local s, r = context.interpreter:evaluate_expression(condition, context.game_state)
+            return s, r
         end)
-        if success then
+        if pcall_ok and eval_success then
             return true, result
         else
             return false, nil
@@ -268,10 +269,11 @@ function Breakpoints:format_log_message(template, context)
 
     return template:gsub("{([^}]+)}", function(expr)
         if context and context.interpreter then
-            local success, result = pcall(function()
-                return context.interpreter:evaluate_expression(expr, context.game_state)
+            local pcall_ok, eval_success, result = pcall(function()
+                local s, r = context.interpreter:evaluate_expression(expr, context.game_state)
+                return s, r
             end)
-            if success and result ~= nil then
+            if pcall_ok and eval_success and result ~= nil then
                 return tostring(result)
             end
         end

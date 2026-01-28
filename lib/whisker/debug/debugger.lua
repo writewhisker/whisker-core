@@ -492,10 +492,11 @@ function Debugger:evaluate(expression, frame_id)
 
     -- Try interpreter evaluation first
     if self.engine and self.engine.lua_interpreter then
-        local success, result = pcall(function()
-            return self.engine.lua_interpreter:evaluate_expression(expression, context)
+        local pcall_ok, eval_success, result = pcall(function()
+            local s, r = self.engine.lua_interpreter:evaluate_expression(expression, context)
+            return s, r
         end)
-        if success then
+        if pcall_ok and eval_success then
             return true, result
         end
     end

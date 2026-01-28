@@ -108,12 +108,13 @@ function Sandbox:create_safe_environment()
     -- NOT allowed: rawlen (not always available anyway)
 
     -- Safe math library
+    -- Note: math.atan2, math.log10, math.pow were deprecated in Lua 5.3+
     env.math = {
         abs = math.abs,
         acos = math.acos,
         asin = math.asin,
         atan = math.atan,
-        atan2 = math.atan2,
+        atan2 = math.atan2 or function(y, x) return math.atan(y, x) end,  -- Lua 5.3+ uses atan with 2 args
         ceil = math.ceil,
         cos = math.cos,
         deg = math.deg,
@@ -122,12 +123,12 @@ function Sandbox:create_safe_environment()
         fmod = math.fmod,
         huge = math.huge,
         log = math.log,
-        log10 = math.log10,
+        log10 = math.log10 or function(x) return math.log(x, 10) end,  -- Lua 5.3+ removed log10
         max = math.max,
         min = math.min,
         modf = math.modf,
         pi = math.pi,
-        pow = math.pow,
+        pow = math.pow or function(x, y) return x ^ y end,  -- Lua 5.3+ removed pow
         rad = math.rad,
         random = math.random,
         sin = math.sin,

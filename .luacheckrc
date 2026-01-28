@@ -106,6 +106,11 @@ files = {
         ignore = { "143" },  -- Accessing undefined field of global (assert.register)
     },
 
+    -- Sandbox provides fallbacks for deprecated Lua 5.1/5.2 math functions
+    ["lib/whisker/core/sandbox.lua"] = {
+        ignore = { "143" },  -- Accessing math.atan2, math.log10, math.pow (deprecated in Lua 5.3+)
+    },
+
     -- Tools have relaxed rules
     ["tools/*.lua"] = {
         ignore = { "113" },  -- Tools may use os, io, arg globals
