@@ -1,5 +1,10 @@
 -- spec/engine/test_hook_operations.lua
 -- Integration tests for Engine Hook Operations
+--
+-- Note: Some hook operations may behave differently on LuaJIT due to
+-- JIT compilation and table iteration ordering differences.
+
+local LuaVersion = require("tests.helpers.lua_version")
 
 describe("Engine Hook Operations", function()
   local Engine = require("lib.whisker.core.engine")

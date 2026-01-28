@@ -8,4 +8,5 @@ return {
   Assertions = require("tests.helpers.assertions"),
   Fixtures = require("tests.helpers.fixtures"),
   Async = require("tests.helpers.async"),
+  LuaVersion = require("tests.helpers.lua_version"),
 }
