@@ -4,8 +4,16 @@
 local json = {}
 
 -- JSON Encoder
-function json.encode(obj, indent_level)
-    indent_level = indent_level or 0
+-- Second argument can be:
+--   - number: indent level for recursive calls
+--   - table: options like { pretty = true }
+function json.encode(obj, options_or_indent)
+    local indent_level = 0
+    if type(options_or_indent) == "number" then
+        indent_level = options_or_indent
+    elseif type(options_or_indent) == "table" and options_or_indent.pretty then
+        indent_level = 1  -- Start with indentation for pretty printing
+    end
     local obj_type = type(obj)
 
     if obj == nil then
