@@ -184,40 +184,40 @@ function Validators.check_links(story, report, options)
   
   -- Check each passage's links
   for i, passage in ipairs(story.passages) do
-    if not passage.choices then
-      goto continue
-    end
-    
-    for j, choice in ipairs(passage.choices) do
-      local location = string.format("passages[%d].choices[%d]", i, j)
-      
-      if not choice.target then
-        add_issue(report, Validators.Severity.ERROR,
-          string.format("Choice in passage '%s' has no target", passage.id or i),
-          location,
-          "Add target passage ID or remove choice")
-      elseif not passage_map[choice.target] then
-        add_issue(report, Validators.Severity.ERROR,
-          string.format("Broken link: '%s' -> '%s'", passage.id or i, choice.target),
-          location,
-          "Create missing passage or fix target")
-        
-        if options.auto_fix and not options.strict then
-          -- Create placeholder passage
-          local placeholder = {
-            id = choice.target,
-            name = choice.target,
-            content = string.format("(Placeholder for '%s')", choice.target),
-            tags = {"placeholder", "auto-generated"}
-          }
-          table.insert(story.passages, placeholder)
-          passage_map[choice.target] = placeholder
-          record_fix(report, string.format("Created placeholder passage for '%s'", choice.target))
+    repeat
+      if not passage.choices then
+        break
+      end
+
+      for j, choice in ipairs(passage.choices) do
+        local location = string.format("passages[%d].choices[%d]", i, j)
+
+        if not choice.target then
+          add_issue(report, Validators.Severity.ERROR,
+            string.format("Choice in passage '%s' has no target", passage.id or i),
+            location,
+            "Add target passage ID or remove choice")
+        elseif not passage_map[choice.target] then
+          add_issue(report, Validators.Severity.ERROR,
+            string.format("Broken link: '%s' -> '%s'", passage.id or i, choice.target),
+            location,
+            "Create missing passage or fix target")
+
+          if options.auto_fix and not options.strict then
+            -- Create placeholder passage
+            local placeholder = {
+              id = choice.target,
+              name = choice.target,
+              content = string.format("(Placeholder for '%s')", choice.target),
+              tags = {"placeholder", "auto-generated"}
+            }
+            table.insert(story.passages, placeholder)
+            passage_map[choice.target] = placeholder
+            record_fix(report, string.format("Created placeholder passage for '%s'", choice.target))
+          end
         end
       end
-    end
-    
-    ::continue::
+    until true
   end
 end
 
@@ -288,37 +288,37 @@ function Validators.check_encoding(story, report, options)
   end
   
   for i, passage in ipairs(story.passages) do
-    if not passage.content then
-      goto continue
-    end
-    
-    local location = string.format("passages[%d].content", i)
-    
-    -- Check for null bytes
-    if passage.content:match("\0") then
-      add_issue(report, Validators.Severity.ERROR,
-        string.format("Passage '%s' contains null bytes", passage.id or i),
-        location,
-        "Remove null bytes from content")
-      
-      if options.auto_fix and not options.strict then
-        passage.content = passage.content:gsub("\0", "")
-        record_fix(report, string.format("Removed null bytes from passage '%s'", passage.id or i))
+    repeat
+      if not passage.content then
+        break
       end
-    end
-    
-    -- Check for invalid UTF-8 (simple check)
-    -- Note: This is a basic check, proper UTF-8 validation is more complex
-    -- Use string.char for Lua 5.1/LuaJIT compatibility (no \xNN syntax)
-    local invalid_utf8_pattern = "[" .. string.char(0x80) .. "-" .. string.char(0xFF) .. "][" .. string.char(0x00) .. "-" .. string.char(0x7F) .. "]"
-    if passage.content:match(invalid_utf8_pattern) then
-      add_issue(report, Validators.Severity.WARNING,
-        string.format("Passage '%s' may have encoding issues", passage.id or i),
-        location,
-        "Check character encoding (should be UTF-8)")
-    end
-    
-    ::continue::
+
+      local location = string.format("passages[%d].content", i)
+
+      -- Check for null bytes
+      if passage.content:match("\0") then
+        add_issue(report, Validators.Severity.ERROR,
+          string.format("Passage '%s' contains null bytes", passage.id or i),
+          location,
+          "Remove null bytes from content")
+
+        if options.auto_fix and not options.strict then
+          passage.content = passage.content:gsub("\0", "")
+          record_fix(report, string.format("Removed null bytes from passage '%s'", passage.id or i))
+        end
+      end
+
+      -- Check for invalid UTF-8 (simple check)
+      -- Note: This is a basic check, proper UTF-8 validation is more complex
+      -- Use string.char for Lua 5.1/LuaJIT compatibility (no \xNN syntax)
+      local invalid_utf8_pattern = "[" .. string.char(0x80) .. "-" .. string.char(0xFF) .. "][" .. string.char(0x00) .. "-" .. string.char(0x7F) .. "]"
+      if passage.content:match(invalid_utf8_pattern) then
+        add_issue(report, Validators.Severity.WARNING,
+          string.format("Passage '%s' may have encoding issues", passage.id or i),
+          location,
+          "Check character encoding (should be UTF-8)")
+      end
+    until true
   end
 end
 

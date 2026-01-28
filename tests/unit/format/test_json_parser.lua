@@ -327,4 +327,169 @@ Buy items here.
     end)
   end)
 
+  -- GAP-010: JSON Format Version
+  describe("Format Version (GAP-010)", function()
+    it("should include format_version at top level in export", function()
+      local story = {
+        name = "Test",
+        passages = {
+          {name = "Start", content = "Hello", tags = {}}
+        }
+      }
+
+      local json_str = JsonParser.to_json(story)
+      assert.is_not_nil(json_str)
+      assert.matches('"format_version"', json_str)
+      assert.matches('"1%.0%.0"', json_str)
+    end)
+
+    it("should accept matching format version on import", function()
+      local json_str = json.encode({
+        format_version = "1.0.0",
+        name = "Test",
+        passages = {
+          {name = "Start", content = "Hello"}
+        }
+      })
+
+      local story, err = JsonParser.parse(json_str)
+      assert.is_not_nil(story)
+      assert.is_nil(err)
+    end)
+
+    it("should warn about newer minor version", function()
+      local warned = false
+      local json_str = json.encode({
+        format_version = "1.1.0",
+        name = "Test",
+        passages = {
+          {name = "Start", content = "Hello"}
+        }
+      })
+
+      local story = JsonParser.parse(json_str, {
+        on_warning = function(msg)
+          warned = true
+          assert.matches("newer", msg)
+        end
+      })
+
+      assert.is_not_nil(story)
+      assert.is_true(warned)
+    end)
+
+    it("should reject incompatible major version in strict mode", function()
+      local json_str = json.encode({
+        format_version = "2.0.0",
+        name = "Test",
+        passages = {
+          {name = "Start", content = "Hello"}
+        }
+      })
+
+      local story, err = JsonParser.parse(json_str, { strict_version = true })
+      assert.is_nil(story)
+      assert.is_not_nil(err)
+      assert.matches("newer than supported", err)
+    end)
+
+    it("should check version compatibility correctly", function()
+      -- Same version is compatible
+      local compat1, warn1 = JsonParser.check_version_compatibility("1.0.0", "1.0.0")
+      assert.is_true(compat1)
+      assert.is_nil(warn1)
+
+      -- Older version is compatible
+      local compat2, warn2 = JsonParser.check_version_compatibility("0.9.0", "1.0.0")
+      assert.is_true(compat2)
+      assert.is_nil(warn2)
+
+      -- Newer minor version is compatible with warning
+      local compat3, warn3 = JsonParser.check_version_compatibility("1.1.0", "1.0.0")
+      assert.is_true(compat3)
+      assert.is_not_nil(warn3)
+
+      -- Newer major version is incompatible
+      local compat4, warn4 = JsonParser.check_version_compatibility("2.0.0", "1.0.0")
+      assert.is_false(compat4)
+      assert.is_not_nil(warn4)
+    end)
+  end)
+
+  -- GAP-011: JSON WLS Field
+  describe("WLS Field (GAP-011)", function()
+    it("should include wls field in export", function()
+      local story = {
+        name = "Test",
+        passages = {
+          {name = "Start", content = "Hello", tags = {}}
+        }
+      }
+
+      local json_str = JsonParser.to_json(story)
+      assert.is_not_nil(json_str)
+      assert.matches('"wls"', json_str)
+      assert.matches('"1%.0%.0"', json_str)
+    end)
+
+    it("should use story-declared wls version in export", function()
+      local story = {
+        name = "Test",
+        wls_version = "1.1.0",
+        passages = {
+          {name = "Start", content = "Hello", tags = {}}
+        }
+      }
+
+      local json_str = JsonParser.to_json(story)
+      local decoded = json.decode(json_str)
+      assert.equals("1.1.0", decoded.wls)
+    end)
+
+    it("should preserve wls version in parsed story", function()
+      local json_str = json.encode({
+        wls = "1.0.0",
+        name = "Test",
+        passages = {
+          {name = "Start", content = "Hello"}
+        }
+      })
+
+      local story = JsonParser.parse(json_str)
+      assert.equals("1.0.0", story.wls_version)
+    end)
+
+    it("should warn about unsupported wls major version", function()
+      local warned = false
+      local json_str = json.encode({
+        wls = "2.0.0",
+        name = "Test",
+        passages = {
+          {name = "Start", content = "Hello"}
+        }
+      })
+
+      JsonParser.parse(json_str, {
+        on_warning = function(msg)
+          warned = true
+        end
+      })
+
+      assert.is_true(warned)
+    end)
+
+    it("should include exporter field in metadata", function()
+      local story = {
+        name = "Test",
+        passages = {
+          {name = "Start", content = "Hello", tags = {}}
+        }
+      }
+
+      local json_str = JsonParser.to_json(story)
+      assert.matches('"exporter"', json_str)
+      assert.matches('"whisker%-core%-lua"', json_str)
+    end)
+  end)
+
 end)

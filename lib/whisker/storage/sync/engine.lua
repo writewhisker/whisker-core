@@ -306,29 +306,29 @@ function SyncEngine:_apply_remote_operations(operations)
   local applied = 0
   
   for _, op in ipairs(operations) do
-    -- Skip operations from this device
-    if op.device_id == self._device_id then
-      goto continue
-    end
-    
-    if op.type == Protocol.OperationType.CREATE or
-       op.type == Protocol.OperationType.UPDATE then
-      self._storage:save(op.story_id, op.data)
-      applied = applied + 1
-    elseif op.type == Protocol.OperationType.DELETE then
-      self._storage:delete(op.story_id)
-      applied = applied + 1
-    elseif op.type == Protocol.OperationType.METADATA_UPDATE then
-      -- Update metadata only
-      local story = self._storage:load(op.story_id)
-      if story then
-        story.metadata = op.data
-        self._storage:save(op.story_id, story)
-        applied = applied + 1
+    repeat
+      -- Skip operations from this device
+      if op.device_id == self._device_id then
+        break
       end
-    end
-    
-    ::continue::
+
+      if op.type == Protocol.OperationType.CREATE or
+         op.type == Protocol.OperationType.UPDATE then
+        self._storage:save(op.story_id, op.data)
+        applied = applied + 1
+      elseif op.type == Protocol.OperationType.DELETE then
+        self._storage:delete(op.story_id)
+        applied = applied + 1
+      elseif op.type == Protocol.OperationType.METADATA_UPDATE then
+        -- Update metadata only
+        local story = self._storage:load(op.story_id)
+        if story then
+          story.metadata = op.data
+          self._storage:save(op.story_id, story)
+          applied = applied + 1
+        end
+      end
+    until true
   end
   
   return applied

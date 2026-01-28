@@ -10,15 +10,12 @@ jobs:
   test:
     name: Test on ${{ matrix.os }} with Lua ${{ matrix.lua-version }}
     runs-on: ${{ matrix.os }}
-    # Allow Lua 5.5 to fail until gh-actions-lua adds support
-    continue-on-error: ${{ matrix.lua-version == '5.5' }}
 
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        lua-version: ['5.1', '5.2', '5.3', '5.4', '5.5', 'luajit']
-        # Lua 5.5.0 released Dec 22, 2025
+        lua-version: ['5.1', '5.2', '5.3', '5.4', 'luajit']
 
     steps:
     - name: Checkout code

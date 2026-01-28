@@ -244,193 +244,194 @@ function InkImporter:_parse_ink(content)
 
   local i = 1
   while i <= #lines do
-    local line = lines[i]
-    local trimmed = line:match("^%s*(.-)%s*$")
+    repeat
+      local line = lines[i]
+      local trimmed = line:match("^%s*(.-)%s*$")
 
-    -- Handle block comments
-    if in_block_comment then
-      if trimmed:find("%*/") then
-        in_block_comment = false
-      end
-      i = i + 1
-      goto continue
-    end
-
-    if trimmed:find("^/%*") then
-      if not trimmed:find("%*/") then
-        in_block_comment = true
-      end
-      i = i + 1
-      goto continue
-    end
-
-    -- Skip empty lines and single-line comments
-    if trimmed == "" or trimmed:match("^//") then
-      i = i + 1
-      goto continue
-    end
-
-    -- INCLUDE directive
-    local include = trimmed:match("^INCLUDE%s+(.+)$")
-    if include then
-      table.insert(story.includes, include:match("^%s*(.-)%s*$"))
-      self:_add_issue(Severity.INFO, "include", "INCLUDE directive",
-        "INCLUDE " .. include .. " - external files not automatically resolved")
-      i = i + 1
-      goto continue
-    end
-
-    -- EXTERNAL function declaration
-    local func = trimmed:match("^EXTERNAL%s+(%w+)")
-    if func then
-      table.insert(story.external_functions, func)
-      self:_add_issue(Severity.WARNING, "external", "EXTERNAL function",
-        "External function " .. func .. " requires manual implementation")
-      i = i + 1
-      goto continue
-    end
-
-    -- VAR declaration (use [%w_]+ to allow underscores in names)
-    local var_name, var_value = trimmed:match("^VAR%s+([%w_]+)%s*=%s*(.+)$")
-    if var_name then
-      story.variables[var_name] = {
-        value = var_value:match("^%s*(.-)%s*$"),
-        var_type = self:_infer_type(var_value:match("^%s*(.-)%s*$")),
-      }
-      i = i + 1
-      goto continue
-    end
-
-    -- CONST declaration (use [%w_]+ to allow underscores in names)
-    local const_name, const_value = trimmed:match("^CONST%s+([%w_]+)%s*=%s*(.+)$")
-    if const_name then
-      story.variables[const_name] = {
-        value = const_value:match("^%s*(.-)%s*$"),
-        var_type = self:_infer_type(const_value:match("^%s*(.-)%s*$")),
-      }
-      i = i + 1
-      goto continue
-    end
-
-    -- LIST declaration
-    local list_name, list_items = trimmed:match("^LIST%s+([%w_]+)%s*=%s*(.+)$")
-    if list_name then
-      local items = {}
-      local default_items = {}
-      for item in list_items:gmatch("[^,]+") do
-        local item_trimmed = item:match("^%s*(.-)%s*$")
-        -- Check for parentheses (default selected items)
-        local selected_item = item_trimmed:match("^%(([%w_]+)%)$")
-        if selected_item then
-          table.insert(items, selected_item)
-          table.insert(default_items, selected_item)
-        else
-          table.insert(items, item_trimmed)
+      -- Handle block comments
+      if in_block_comment then
+        if trimmed:find("%*/") then
+          in_block_comment = false
         end
+        i = i + 1
+        break
       end
-      story.lists[list_name] = {
-        items = items,
-        defaults = default_items,
-      }
-      -- Create a variable for the list
-      story.variables[list_name] = {
-        value = #default_items > 0 and default_items[1] or "",
-        var_type = "string",
-        is_list = true,
-      }
-      self:_add_issue(Severity.INFO, "list", "LIST declaration",
-        "LIST " .. list_name .. " converted to string variable with items: " .. table.concat(items, ", "))
-      i = i + 1
-      goto continue
-    end
 
-    -- Knot header (=== knot_name ===)
-    local knot_name, knot_params = trimmed:match("^===[ \t]*(%w+)[ \t]*%((.-)%)[ \t]*===?$")
-    if not knot_name then
-      knot_name = trimmed:match("^===[ \t]*(%w+)[ \t]*===?$")
-    end
+      if trimmed:find("^/%*") then
+        if not trimmed:find("%*/") then
+          in_block_comment = true
+        end
+        i = i + 1
+        break
+      end
 
-    if knot_name then
-      -- Save previous knot
-      if current_knot then
+      -- Skip empty lines and single-line comments
+      if trimmed == "" or trimmed:match("^//") then
+        i = i + 1
+        break
+      end
+
+      -- INCLUDE directive
+      local include = trimmed:match("^INCLUDE%s+(.+)$")
+      if include then
+        table.insert(story.includes, include:match("^%s*(.-)%s*$"))
+        self:_add_issue(Severity.INFO, "include", "INCLUDE directive",
+          "INCLUDE " .. include .. " - external files not automatically resolved")
+        i = i + 1
+        break
+      end
+
+      -- EXTERNAL function declaration
+      local func = trimmed:match("^EXTERNAL%s+(%w+)")
+      if func then
+        table.insert(story.external_functions, func)
+        self:_add_issue(Severity.WARNING, "external", "EXTERNAL function",
+          "External function " .. func .. " requires manual implementation")
+        i = i + 1
+        break
+      end
+
+      -- VAR declaration (use [%w_]+ to allow underscores in names)
+      local var_name, var_value = trimmed:match("^VAR%s+([%w_]+)%s*=%s*(.+)$")
+      if var_name then
+        story.variables[var_name] = {
+          value = var_value:match("^%s*(.-)%s*$"),
+          var_type = self:_infer_type(var_value:match("^%s*(.-)%s*$")),
+        }
+        i = i + 1
+        break
+      end
+
+      -- CONST declaration (use [%w_]+ to allow underscores in names)
+      local const_name, const_value = trimmed:match("^CONST%s+([%w_]+)%s*=%s*(.+)$")
+      if const_name then
+        story.variables[const_name] = {
+          value = const_value:match("^%s*(.-)%s*$"),
+          var_type = self:_infer_type(const_value:match("^%s*(.-)%s*$")),
+        }
+        i = i + 1
+        break
+      end
+
+      -- LIST declaration
+      local list_name, list_items = trimmed:match("^LIST%s+([%w_]+)%s*=%s*(.+)$")
+      if list_name then
+        local items = {}
+        local default_items = {}
+        for item in list_items:gmatch("[^,]+") do
+          local item_trimmed = item:match("^%s*(.-)%s*$")
+          -- Check for parentheses (default selected items)
+          local selected_item = item_trimmed:match("^%(([%w_]+)%)$")
+          if selected_item then
+            table.insert(items, selected_item)
+            table.insert(default_items, selected_item)
+          else
+            table.insert(items, item_trimmed)
+          end
+        end
+        story.lists[list_name] = {
+          items = items,
+          defaults = default_items,
+        }
+        -- Create a variable for the list
+        story.variables[list_name] = {
+          value = #default_items > 0 and default_items[1] or "",
+          var_type = "string",
+          is_list = true,
+        }
+        self:_add_issue(Severity.INFO, "list", "LIST declaration",
+          "LIST " .. list_name .. " converted to string variable with items: " .. table.concat(items, ", "))
+        i = i + 1
+        break
+      end
+
+      -- Knot header (=== knot_name ===)
+      local knot_name, knot_params = trimmed:match("^===[ \t]*(%w+)[ \t]*%((.-)%)[ \t]*===?$")
+      if not knot_name then
+        knot_name = trimmed:match("^===[ \t]*(%w+)[ \t]*===?$")
+      end
+
+      if knot_name then
+        -- Save previous knot
+        if current_knot then
+          if current_stitch then
+            current_knot.stitches[current_stitch] = self:_copy_table(current_content)
+          else
+            current_knot.content = self:_copy_table(current_content)
+          end
+          story.knots[current_knot.name] = current_knot
+        end
+
+        current_knot = {
+          name = knot_name,
+          content = {},
+          stitches = {},
+          is_function = knot_params ~= nil,
+        }
+        current_stitch = nil
+        current_content = {}
+        self._current_knot = knot_name
+
+        if knot_params then
+          self:_add_issue(Severity.WARNING, "function", "Parameterized knot",
+            "Knot " .. knot_name .. " has parameters - converted to regular passage", knot_name)
+        end
+
+        i = i + 1
+        break
+      end
+
+      -- Function header (=== function name(params) ===)
+      local func_name = trimmed:match("^===[ \t]*function[ \t]+(%w+)[ \t]*%(.-%)[ \t]*===?$")
+      if func_name then
+        if current_knot then
+          if current_stitch then
+            current_knot.stitches[current_stitch] = self:_copy_table(current_content)
+          else
+            current_knot.content = self:_copy_table(current_content)
+          end
+          story.knots[current_knot.name] = current_knot
+        end
+
+        current_knot = {
+          name = func_name,
+          content = {},
+          stitches = {},
+          is_function = true,
+        }
+        current_stitch = nil
+        current_content = {}
+        self._current_knot = func_name
+
+        self:_add_issue(Severity.WARNING, "function", "Ink function",
+          "Function " .. func_name .. " converted to tunnel passage", func_name)
+
+        i = i + 1
+        break
+      end
+
+      -- Stitch header (= stitch_name)
+      local stitch_name = trimmed:match("^=[ \t]*(%w+)%s*$")
+      if stitch_name and current_knot then
+        -- Save previous stitch content
         if current_stitch then
           current_knot.stitches[current_stitch] = self:_copy_table(current_content)
         else
           current_knot.content = self:_copy_table(current_content)
         end
-        story.knots[current_knot.name] = current_knot
+
+        current_stitch = stitch_name
+        current_content = {}
+
+        i = i + 1
+        break
       end
 
-      current_knot = {
-        name = knot_name,
-        content = {},
-        stitches = {},
-        is_function = knot_params ~= nil,
-      }
-      current_stitch = nil
-      current_content = {}
-      self._current_knot = knot_name
-
-      if knot_params then
-        self:_add_issue(Severity.WARNING, "function", "Parameterized knot",
-          "Knot " .. knot_name .. " has parameters - converted to regular passage", knot_name)
-      end
+      -- Regular content line
+      table.insert(current_content, line)
 
       i = i + 1
-      goto continue
-    end
-
-    -- Function header (=== function name(params) ===)
-    local func_name = trimmed:match("^===[ \t]*function[ \t]+(%w+)[ \t]*%(.-%)[ \t]*===?$")
-    if func_name then
-      if current_knot then
-        if current_stitch then
-          current_knot.stitches[current_stitch] = self:_copy_table(current_content)
-        else
-          current_knot.content = self:_copy_table(current_content)
-        end
-        story.knots[current_knot.name] = current_knot
-      end
-
-      current_knot = {
-        name = func_name,
-        content = {},
-        stitches = {},
-        is_function = true,
-      }
-      current_stitch = nil
-      current_content = {}
-      self._current_knot = func_name
-
-      self:_add_issue(Severity.WARNING, "function", "Ink function",
-        "Function " .. func_name .. " converted to tunnel passage", func_name)
-
-      i = i + 1
-      goto continue
-    end
-
-    -- Stitch header (= stitch_name)
-    local stitch_name = trimmed:match("^=[ \t]*(%w+)%s*$")
-    if stitch_name and current_knot then
-      -- Save previous stitch content
-      if current_stitch then
-        current_knot.stitches[current_stitch] = self:_copy_table(current_content)
-      else
-        current_knot.content = self:_copy_table(current_content)
-      end
-
-      current_stitch = stitch_name
-      current_content = {}
-
-      i = i + 1
-      goto continue
-    end
-
-    -- Regular content line
-    table.insert(current_content, line)
-
-    i = i + 1
-    ::continue::
+    until true
   end
 
   -- Save last knot
@@ -566,177 +567,177 @@ function InkImporter:_convert_content(lines, passage_name)
   local choice_index = 0
 
   for _, line in ipairs(lines) do
-    local trimmed = line:match("^%s*(.-)%s*$")
-    if trimmed == "" then
-      goto continue
-    end
-
-    -- Tags (# tag or # tag at end of line)
-    local tag_match = trimmed:match("^#%s*(.+)$")
-    if tag_match then
-      table.insert(tags, tag_match:match("^%s*(.-)%s*$"))
-      goto continue
-    end
-
-    -- Inline tags at end of line (text # tag1 # tag2)
-    local base_text, inline_tags = trimmed:match("^(.-)%s+(#.+)$")
-    if inline_tags then
-      for tag in inline_tags:gmatch("#%s*([^#]+)") do
-        table.insert(tags, tag:match("^%s*(.-)%s*$"))
-      end
-      if base_text and base_text ~= "" then
-        trimmed = base_text
-      else
-        goto continue
-      end
-    end
-
-    -- Glue (<>) - joins text without whitespace
-    if trimmed:find("<>") then
-      -- Convert glue to empty string (text joining marker)
-      trimmed = trimmed:gsub("<>", "")
-      -- Mark that next line should be joined without newline
-      if #content_parts > 0 then
-        content_parts[#content_parts] = content_parts[#content_parts] .. trimmed
-        goto continue
-      end
-    end
-
-    -- Choice (* or +)
-    local markers, bracket_text, after_text = trimmed:match("^([*+]+)%s*%[([^%]]*)%]%s*(.*)$")
-    if not markers then
-      markers, after_text = trimmed:match("^([*+]+)%s*(.*)$")
-    end
-
-    if markers then
-      local is_sticky = markers:sub(1, 1) == "+"
-      local text = bracket_text or after_text or "Continue"
-      local remaining_text = after_text or ""
-
-      -- Extract target from divert
-      local target = remaining_text:match("->%s*(%w+[%.%w]*)") or ""
-      remaining_text = remaining_text:gsub("->%s*%w+[%.%w]*", ""):match("^%s*(.-)%s*$")
-
-      local choice = {
-        id = passage_name .. "_choice_" .. choice_index,
-        text = (text:match("^%s*(.-)%s*$") ~= "" and text:match("^%s*(.-)%s*$")) or "Continue",
-        target = target ~= "" and target or nil,
-        sticky = is_sticky,
-      }
-      choice_index = choice_index + 1
-
-      table.insert(choices, choice)
-      goto continue
-    end
-
-    -- Divert (-> target) at end of line - check this BEFORE gather point
-    local divert_target = trimmed:match("^%->%s*([%w_]+[%.%w_]*)%s*$")
-    if divert_target then
-      local choice = {
-        id = passage_name .. "_divert_" .. choice_index,
-        text = "Continue",
-        target = divert_target,
-      }
-      choice_index = choice_index + 1
-      table.insert(choices, choice)
-      goto continue
-    end
-
-    -- Gather point (-) but NOT divert (->)
-    if trimmed:match("^%-+%s") and not trimmed:match("^%->") then
-      local gather_content = trimmed:gsub("^%-+%s*", "")
-      if gather_content ~= "" then
-        table.insert(content_parts, gather_content)
-      end
-      goto continue
-    end
-
-    -- Tunnel call (-> target ->)
-    local tunnel_target = trimmed:match("^%->%s*([%w_]+[%.%w_]*)%s*%->$")
-    if tunnel_target then
-      table.insert(content_parts, "-> " .. tunnel_target .. " ->")
-      goto continue
-    end
-
-    -- Tunnel return (<-)
-    if trimmed == "<-" then
-      table.insert(content_parts, "<-")
-      goto continue
-    end
-
-    -- Temp variable declaration (~ temp var = value)
-    local temp_var, temp_value = trimmed:match("^~%s*temp%s+([%w_]+)%s*=%s*(.+)$")
-    if temp_var then
-      table.insert(content_parts, "{do local " .. temp_var .. " = " .. self:_convert_expression(temp_value) .. "}")
-      goto continue
-    end
-
-    -- Variable assignment (~ var = value)
-    local var_name, var_value = trimmed:match("^~%s*([%w_]+)%s*=%s*(.+)$")
-    if var_name then
-      table.insert(content_parts, "{do " .. var_name .. " = " .. self:_convert_expression(var_value) .. "}")
-      goto continue
-    end
-
-    -- Conditional content ({ condition: text } or { condition })
-    local cond_inner = trimmed:match("^{([^}]+)}$")
-    if cond_inner then
-      -- Alternatives with special markers: {~alt1|alt2|alt3} (shuffle), {&alt1|alt2|alt3} (cycle), {!alt1|alt2|alt3} (sequence)
-      local alt_type, alt_content = cond_inner:match("^([~&!])(.+)$")
-      if alt_type and alt_content:find("|") then
-        local alt_type_name = alt_type == "~" and "shuffle" or (alt_type == "&" and "cycle" or "sequence")
-        table.insert(content_parts, "{" .. alt_type_name .. " " .. alt_content .. "}")
-        goto continue
+    repeat
+      local trimmed = line:match("^%s*(.-)%s*$")
+      if trimmed == "" then
+        break
       end
 
-      if cond_inner:find(":") then
-        -- Inline conditional
-        local cond, cond_text = cond_inner:match("([^:]+):(.+)")
-        if cond and cond_text then
-          table.insert(content_parts, "{" .. self:_convert_expression(cond:match("^%s*(.-)%s*$")) .. ": " .. cond_text:match("^%s*(.-)%s*$") .. " | }")
+      -- Tags (# tag or # tag at end of line)
+      local tag_match = trimmed:match("^#%s*(.+)$")
+      if tag_match then
+        table.insert(tags, tag_match:match("^%s*(.-)%s*$"))
+        break
+      end
+
+      -- Inline tags at end of line (text # tag1 # tag2)
+      local base_text, inline_tags = trimmed:match("^(.-)%s+(#.+)$")
+      if inline_tags then
+        for tag in inline_tags:gmatch("#%s*([^#]+)") do
+          table.insert(tags, tag:match("^%s*(.-)%s*$"))
         end
-      elseif cond_inner:find("|") then
-        -- Plain alternatives (default to sequence)
-        table.insert(content_parts, "{sequence " .. cond_inner .. "}")
-      else
-        -- Just condition check or variable interpolation
-        table.insert(content_parts, "${" .. self:_convert_expression(cond_inner) .. "}")
+        if base_text and base_text ~= "" then
+          trimmed = base_text
+        else
+          break
+        end
       end
-      goto continue
-    end
 
-    -- Regular text (convert inline Ink syntax)
-    local converted = line
-
-    -- Convert glue in inline text
-    converted = converted:gsub("<>", "")
-
-    -- Convert inline alternatives {~alt1|alt2|alt3}
-    converted = converted:gsub("{([~&!])([^}]+)}", function(alt_type, content)
-      local alt_type_name = alt_type == "~" and "shuffle" or (alt_type == "&" and "cycle" or "sequence")
-      return "{" .. alt_type_name .. " " .. content .. "}"
-    end)
-
-    -- Convert plain inline alternatives {one|two|three} (no prefix)
-    converted = converted:gsub("{([^}:~&!]+|[^}]+)}", function(content)
-      -- Only convert if it contains | and doesn't look like a variable
-      if content:find("|") then
-        return "{sequence " .. content .. "}"
+      -- Glue (<>) - joins text without whitespace
+      if trimmed:find("<>") then
+        -- Convert glue to empty string (text joining marker)
+        trimmed = trimmed:gsub("<>", "")
+        -- Mark that next line should be joined without newline
+        if #content_parts > 0 then
+          content_parts[#content_parts] = content_parts[#content_parts] .. trimmed
+          break
+        end
       end
-      return "{" .. content .. "}"
-    end)
 
-    -- Convert inline conditionals {cond: text}
-    converted = converted:gsub("{([^:}]+):([^}]+)}", function(cond, text)
-      return "{" .. self:_convert_expression(cond:match("^%s*(.-)%s*$")) .. ": " .. text:match("^%s*(.-)%s*$") .. " | }"
-    end)
+      -- Choice (* or +)
+      local markers, bracket_text, after_text = trimmed:match("^([*+]+)%s*%[([^%]]*)%]%s*(.*)$")
+      if not markers then
+        markers, after_text = trimmed:match("^([*+]+)%s*(.*)$")
+      end
 
-    -- Convert inline variable references {var} - do this LAST so it doesn't catch alternatives
-    converted = converted:gsub("{([%w_]+)}", "${%1}")
+      if markers then
+        local is_sticky = markers:sub(1, 1) == "+"
+        local text = bracket_text or after_text or "Continue"
+        local remaining_text = after_text or ""
 
-    table.insert(content_parts, converted)
+        -- Extract target from divert
+        local target = remaining_text:match("->%s*(%w+[%.%w]*)") or ""
+        remaining_text = remaining_text:gsub("->%s*%w+[%.%w]*", ""):match("^%s*(.-)%s*$")
 
-    ::continue::
+        local choice = {
+          id = passage_name .. "_choice_" .. choice_index,
+          text = (text:match("^%s*(.-)%s*$") ~= "" and text:match("^%s*(.-)%s*$")) or "Continue",
+          target = target ~= "" and target or nil,
+          sticky = is_sticky,
+        }
+        choice_index = choice_index + 1
+
+        table.insert(choices, choice)
+        break
+      end
+
+      -- Divert (-> target) at end of line - check this BEFORE gather point
+      local divert_target = trimmed:match("^%->%s*([%w_]+[%.%w_]*)%s*$")
+      if divert_target then
+        local choice = {
+          id = passage_name .. "_divert_" .. choice_index,
+          text = "Continue",
+          target = divert_target,
+        }
+        choice_index = choice_index + 1
+        table.insert(choices, choice)
+        break
+      end
+
+      -- Gather point (-) but NOT divert (->)
+      if trimmed:match("^%-+%s") and not trimmed:match("^%->") then
+        local gather_content = trimmed:gsub("^%-+%s*", "")
+        if gather_content ~= "" then
+          table.insert(content_parts, gather_content)
+        end
+        break
+      end
+
+      -- Tunnel call (-> target ->)
+      local tunnel_target = trimmed:match("^%->%s*([%w_]+[%.%w_]*)%s*%->$")
+      if tunnel_target then
+        table.insert(content_parts, "-> " .. tunnel_target .. " ->")
+        break
+      end
+
+      -- Tunnel return (<-)
+      if trimmed == "<-" then
+        table.insert(content_parts, "<-")
+        break
+      end
+
+      -- Temp variable declaration (~ temp var = value)
+      local temp_var, temp_value = trimmed:match("^~%s*temp%s+([%w_]+)%s*=%s*(.+)$")
+      if temp_var then
+        table.insert(content_parts, "{do local " .. temp_var .. " = " .. self:_convert_expression(temp_value) .. "}")
+        break
+      end
+
+      -- Variable assignment (~ var = value)
+      local var_name, var_value = trimmed:match("^~%s*([%w_]+)%s*=%s*(.+)$")
+      if var_name then
+        table.insert(content_parts, "{do " .. var_name .. " = " .. self:_convert_expression(var_value) .. "}")
+        break
+      end
+
+      -- Conditional content ({ condition: text } or { condition })
+      local cond_inner = trimmed:match("^{([^}]+)}$")
+      if cond_inner then
+        -- Alternatives with special markers: {~alt1|alt2|alt3} (shuffle), {&alt1|alt2|alt3} (cycle), {!alt1|alt2|alt3} (sequence)
+        local alt_type, alt_content = cond_inner:match("^([~&!])(.+)$")
+        if alt_type and alt_content:find("|") then
+          local alt_type_name = alt_type == "~" and "shuffle" or (alt_type == "&" and "cycle" or "sequence")
+          table.insert(content_parts, "{" .. alt_type_name .. " " .. alt_content .. "}")
+          break
+        end
+
+        if cond_inner:find(":") then
+          -- Inline conditional
+          local cond, cond_text = cond_inner:match("([^:]+):(.+)")
+          if cond and cond_text then
+            table.insert(content_parts, "{" .. self:_convert_expression(cond:match("^%s*(.-)%s*$")) .. ": " .. cond_text:match("^%s*(.-)%s*$") .. " | }")
+          end
+        elseif cond_inner:find("|") then
+          -- Plain alternatives (default to sequence)
+          table.insert(content_parts, "{sequence " .. cond_inner .. "}")
+        else
+          -- Just condition check or variable interpolation
+          table.insert(content_parts, "${" .. self:_convert_expression(cond_inner) .. "}")
+        end
+        break
+      end
+
+      -- Regular text (convert inline Ink syntax)
+      local converted = line
+
+      -- Convert glue in inline text
+      converted = converted:gsub("<>", "")
+
+      -- Convert inline alternatives {~alt1|alt2|alt3}
+      converted = converted:gsub("{([~&!])([^}]+)}", function(alt_type, content)
+        local alt_type_name = alt_type == "~" and "shuffle" or (alt_type == "&" and "cycle" or "sequence")
+        return "{" .. alt_type_name .. " " .. content .. "}"
+      end)
+
+      -- Convert plain inline alternatives {one|two|three} (no prefix)
+      converted = converted:gsub("{([^}:~&!]+|[^}]+)}", function(content)
+        -- Only convert if it contains | and doesn't look like a variable
+        if content:find("|") then
+          return "{sequence " .. content .. "}"
+        end
+        return "{" .. content .. "}"
+      end)
+
+      -- Convert inline conditionals {cond: text}
+      converted = converted:gsub("{([^:}]+):([^}]+)}", function(cond, text)
+        return "{" .. self:_convert_expression(cond:match("^%s*(.-)%s*$")) .. ": " .. text:match("^%s*(.-)%s*$") .. " | }"
+      end)
+
+      -- Convert inline variable references {var} - do this LAST so it doesn't catch alternatives
+      converted = converted:gsub("{([%w_]+)}", "${%1}")
+
+      table.insert(content_parts, converted)
+    until true
   end
 
   return table.concat(content_parts, "\n"), choices, tags

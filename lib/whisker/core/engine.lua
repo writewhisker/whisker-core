@@ -4,6 +4,7 @@
 local HookManager = require("lib.whisker.wls2.hook_manager")
 local Renderer = require("lib.whisker.core.renderer")
 local LuaInterpreter = require("lib.whisker.core.lua_interpreter")
+local GameState = require("lib.whisker.core.game_state")
 local Choice = require("lib.whisker.core.choice")
 
 local Engine = {}
@@ -60,6 +61,14 @@ function Engine.new(story_or_config, config_or_game_state)
       self.game_state = self.config.game_state
     end
 
+    -- WLS 1.0 GAP-009: Initialize game_state for tunnel stack support if not provided
+    if not self.game_state then
+      self.game_state = GameState.new()
+      if self.story then
+        self.game_state:initialize(self.story)
+      end
+    end
+
     -- Initialize Lua interpreter with hook API (unless provided in config)
     self.lua_interpreter = self.config.interpreter or LuaInterpreter.new(self)
   end
@@ -91,6 +100,12 @@ function Engine:init(story, config)
   self.state = {}
   self.history = {}
   self.current_passage = nil
+
+  -- WLS 1.0 GAP-009: Initialize game_state for tunnel stack support
+  self.game_state = GameState.new()
+  if story then
+    self.game_state:initialize(story)
+  end
 
   -- Initialize hook system
   self.hook_manager = HookManager.new()
@@ -194,45 +209,46 @@ function Engine:get_filtered_choices()
   if self.game_state then
     local filtered_choices = {}
     for _, choice in ipairs(choices) do
-      local choice_id = choice.id or (choice.get_id and choice:get_id())
-      local is_once_only = false
+      -- Use repeat...until true pattern for Lua 5.1 compatibility (no goto)
+      repeat
+        local choice_id = choice.id or (choice.get_id and choice:get_id())
+        local is_once_only = false
 
-      -- Check if once-only using various methods
-      if choice.choice_type then
-        is_once_only = choice.choice_type == "once"
-      elseif type(choice.is_once_only) == "function" then
-        is_once_only = choice:is_once_only()
-      elseif choice.once_only then
-        is_once_only = choice.once_only
-      end
-
-      -- Check if choice was selected
-      local was_selected = false
-      if choice_id then
-        if type(self.game_state.is_choice_selected) == "function" then
-          was_selected = self.game_state:is_choice_selected(choice_id)
-        elseif self.game_state.selected_choices then
-          was_selected = self.game_state.selected_choices[choice_id] == true
+        -- Check if once-only using various methods
+        if choice.choice_type then
+          is_once_only = choice.choice_type == "once"
+        elseif type(choice.is_once_only) == "function" then
+          is_once_only = choice:is_once_only()
+        elseif choice.once_only then
+          is_once_only = choice.once_only
         end
-      end
 
-      -- Skip once-only choices that have been selected
-      if is_once_only and was_selected then
-        goto continue
-      end
-
-      -- Check choice condition if present
-      local choice_condition = choice.condition or (type(choice.get_condition) == "function" and choice:get_condition())
-      if choice_condition and choice_condition ~= "" then
-        local condition_result = self:evaluate_condition(choice_condition, self.game_state)
-        if not condition_result then
-          goto continue
+        -- Check if choice was selected
+        local was_selected = false
+        if choice_id then
+          if type(self.game_state.is_choice_selected) == "function" then
+            was_selected = self.game_state:is_choice_selected(choice_id)
+          elseif self.game_state.selected_choices then
+            was_selected = self.game_state.selected_choices[choice_id] == true
+          end
         end
-      end
 
-      table.insert(filtered_choices, choice)
+        -- Skip once-only choices that have been selected
+        if is_once_only and was_selected then
+          break  -- continue to next iteration
+        end
 
-      ::continue::
+        -- Check choice condition if present
+        local choice_condition = choice.condition or (type(choice.get_condition) == "function" and choice:get_condition())
+        if choice_condition and choice_condition ~= "" then
+          local condition_result = self:evaluate_condition(choice_condition, self.game_state)
+          if not condition_result then
+            break  -- continue to next iteration
+          end
+        end
+
+        table.insert(filtered_choices, choice)
+      until true
     end
     return filtered_choices
   end
@@ -304,22 +320,132 @@ function Engine:navigate_to_passage(passage_id, skip_history)
 
   -- If we have game_state, return structured result for test compatibility
   if self.game_state then
-    -- Render content to process text alternatives and other dynamic features
+    -- First extract and register hooks from raw content
+    local raw_content = passage.content or (passage.get_content and passage:get_content()) or ""
+    self.renderer:extract_hooks(raw_content, passage_id)
+
+    -- Then process text alternatives, conditionals, and expressions
     local rendered_content = self:render_passage_content(passage)
+
+    -- Finally render the hooks (replace placeholders with hook content)
+    rendered_content = self.renderer:render_hooks(rendered_content, passage_id, self.game_state)
 
     -- Cache the rendered content so get_current_content doesn't re-render
     self._last_rendered_content = rendered_content
 
+    -- Get choices - handle both passage objects with get_choices method and plain tables
+    local choices = {}
+    if passage.get_choices and type(passage.get_choices) == "function" then
+      choices = passage:get_choices()
+    elseif passage.choices then
+      choices = passage.choices
+    end
+
     return {
       passage = passage,
       passage_id = passage_id,
-      choices = passage:get_choices(),
+      choices = choices,
       content = rendered_content
     }
   end
 
   -- Legacy mode: render passage and return string
   return self.renderer:render_passage(passage, self.state, passage_id)
+end
+
+-- ============================================================================
+-- WLS 1.0 GAP-009: Tunnel Navigation
+-- ============================================================================
+
+--- Execute a tunnel call (-> Target ->)
+-- Pushes the return address onto the tunnel stack and navigates to target
+-- @param target_passage string - Target passage name
+-- @return string|nil rendered_content - Rendered target passage content
+-- @return string|nil error - Error message if failed
+function Engine:tunnel_call(target_passage)
+  if not self.current_passage then
+    return nil, "No current passage for tunnel call"
+  end
+
+  if not self.game_state then
+    return nil, "Game state not initialized for tunnel operations"
+  end
+
+  -- Push return address
+  local success, err = self.game_state:tunnel_push(
+    self.current_passage.id,
+    nil  -- Could track position for inline tunnels
+  )
+
+  if not success then
+    return nil, err
+  end
+
+  -- Navigate to target
+  return self:navigate_to_passage(target_passage)
+end
+
+--- Execute a tunnel return (<-)
+-- Pops the return address from the tunnel stack and navigates back
+-- @return string|nil rendered_content - Rendered return passage content
+-- @return string|nil error - Error message if failed
+function Engine:tunnel_return()
+  if not self.game_state then
+    return nil, "Game state not initialized for tunnel operations"
+  end
+
+  -- Pop return address
+  local return_info, err = self.game_state:tunnel_pop()
+
+  if not return_info then
+    -- Empty stack - handle based on config
+    local empty_behavior = self.config and self.config.tunnel_empty_behavior or "error"
+
+    if empty_behavior == "error" then
+      return nil, err
+    elseif empty_behavior == "restart" then
+      -- Navigate to start passage
+      local start_passage = self.story and self.story.start_passage_name
+      if start_passage then
+        return self:navigate_to_passage(start_passage)
+      end
+      return nil, "No start passage defined for restart behavior"
+    else
+      -- Default: stay on current passage (re-render it)
+      if self.current_passage then
+        return self.renderer:render_passage(
+          self.current_passage,
+          self.state,
+          self.current_passage.id
+        )
+      end
+      return nil, "No current passage to stay on"
+    end
+  end
+
+  -- Navigate back to return passage
+  return self:navigate_to_passage(return_info.passage_id)
+end
+
+--- Process passage content for tunnel operations
+-- Checks if content ends with tunnel call or return
+-- @param content string - Rendered passage content
+-- @return string content - Content without tunnel operation
+-- @return table|nil navigation - { type, target } if tunnel operation found
+function Engine:process_tunnel_operations(content)
+  -- Check for tunnel call at end of content: -> Target ->
+  local text_before_call, tunnel_target = content:match("^(.-)%s*%->%s*([%w_]+)%s*%->%s*$")
+  if tunnel_target then
+    return text_before_call or "", { type = "tunnel_call", target = tunnel_target }
+  end
+
+  -- Check for tunnel return at end of content: <-
+  local text_before_return = content:match("^(.-)%s*<%-+%s*$")
+  if text_before_return then
+    return text_before_return, { type = "tunnel_return" }
+  end
+
+  return content, nil
 end
 
 --- Execute a hook operation and return updated content
@@ -355,6 +481,9 @@ function Engine:execute_hook_operation(operation, target, content)
     success, err = self.hook_manager:show_hook(hook_id)
   elseif operation == "hide" then
     success, err = self.hook_manager:hide_hook(hook_id)
+  elseif operation == "clear" then
+    -- GAP-019: Clear hook content to empty string (different from hide)
+    success, err = self.hook_manager:clear_hook(hook_id)
   else
     return nil, "Unknown operation: " .. operation
   end
@@ -431,6 +560,7 @@ function Engine:parse_hook_operations(choice_text)
 end
 
 --- Execute choice and handle hook operations
+-- WLS 1.0 GAP-031: Also processes gather points after choice execution
 -- @param choice_index number - Index of choice selected
 -- @return string|nil result - New passage content or error
 -- @return string|nil error - Error message if failed
@@ -446,6 +576,9 @@ function Engine:execute_choice(choice_index)
   if not choice then
     return nil, "Invalid choice index"
   end
+
+  -- Track choice depth for gather point processing (GAP-031)
+  local choice_depth = choice.depth or 1
 
   -- Track once-only choice selection
   local choice_id = choice.id
@@ -570,20 +703,99 @@ function Engine:execute_choice(choice_index)
     return self:navigate_to_passage(target_id)
   end
 
-  -- If no navigation, return current passage state
-  if self.game_state then
-    return {
-      passage = self.current_passage,
-      choices = self.current_passage:get_choices()
-    }
-  end
+  -- If no navigation, check for gather points at same depth (GAP-031)
+  local gather_content = self:execute_gather_after_choice(self.current_passage, choice_depth)
 
-  -- Legacy mode: re-render current passage
-  return self.renderer:rerender_passage(
+  -- Return re-rendered current passage with gather content
+  local rendered = self.renderer:rerender_passage(
     self.current_passage,
     self.state,
     self.current_passage.id
   )
+
+  -- Append gather content if present
+  if gather_content and gather_content ~= "" then
+    rendered = rendered .. "\n" .. gather_content
+  end
+
+  -- If we have game_state, return structured result
+  if self.game_state then
+    return {
+      passage = self.current_passage,
+      choices = self.current_passage:get_choices(),
+      content = rendered
+    }
+  end
+
+  return rendered
+end
+
+-- ============================================================================
+-- WLS 1.0 GAP-031: Gather Point Execution
+-- ============================================================================
+
+--- Execute gather points after a choice at a specific depth
+-- Gathers collect flow after choices at the same depth level
+-- @param passage table - The current passage with gathers
+-- @param choice_depth number - The depth of the choice that was selected
+-- @return string - Rendered gather content
+function Engine:execute_gather_after_choice(passage, choice_depth)
+  if not passage or not passage.gathers then
+    return ""
+  end
+
+  local gathers = passage.gathers
+  local gather_content = {}
+
+  -- Find gathers at matching depth and execute them
+  for _, gather in ipairs(gathers) do
+    if gather.depth == choice_depth then
+      -- Process gather content through control flow if available
+      local content = gather.content
+      if self.control_flow then
+        content = self.control_flow:process(content)
+      end
+
+      -- Render the gather content
+      local rendered = self.renderer:evaluate_expressions(content, self.state)
+      rendered = self.renderer:apply_formatting(rendered)
+
+      table.insert(gather_content, rendered)
+
+      -- After processing gather at this depth, continue to lower depth gathers
+      if choice_depth > 1 then
+        local lower_gather = self:execute_gather_after_choice(passage, choice_depth - 1)
+        if lower_gather and lower_gather ~= "" then
+          table.insert(gather_content, lower_gather)
+        end
+      end
+
+      -- Only execute the first matching gather at each depth
+      break
+    end
+  end
+
+  return table.concat(gather_content, "\n")
+end
+
+--- Get gathers organized by depth
+-- @param passage table - Passage with gathers
+-- @return table - Map of depth -> array of gathers
+function Engine:get_gathers_by_depth(passage)
+  if not passage or not passage.gathers then
+    return {}
+  end
+
+  local by_depth = {}
+  for _, gather in ipairs(passage.gathers) do
+    local depth = gather.depth or 1
+    if not by_depth[depth] then
+      by_depth[depth] = {}
+    end
+    table.insert(by_depth[depth], gather)
+  end
+
+  return by_depth
 end
 
 --- Serialize engine state for saving
@@ -593,7 +805,9 @@ function Engine:serialize_state()
     state = self.state,
     current_passage = self.current_passage and self.current_passage.id or nil,
     history = self.history,
-    hooks = self.hook_manager:serialize()
+    hooks = self.hook_manager:serialize(),
+    -- WLS 1.0 GAP-013: Include game_state which contains tunnel stack
+    game_state = self.game_state and self.game_state:serialize() or nil
   }
 end
 
@@ -1204,6 +1418,11 @@ end
 function Engine:deserialize_state(data)
   self.state = data.state or {}
   self.history = data.history or {}
+
+  -- WLS 1.0 GAP-013: Restore game_state which contains tunnel stack
+  if data.game_state and self.game_state then
+    self.game_state:deserialize(data.game_state)
+  end
 
   -- Restore current passage directly (without re-registering hooks)
   if data.current_passage and self.story then

@@ -15,6 +15,17 @@ local Hover = require("whisker.lsp.hover")
 local Navigation = require("whisker.lsp.navigation")
 local Symbols = require("whisker.lsp.symbols")
 local Diagnostics = require("whisker.lsp.diagnostics")
+local CodeActions = require("whisker.lsp.code_actions")
+local SemanticTokens = require("whisker.lsp.semantic_tokens")
+local Rename = require("whisker.lsp.rename")
+
+-- Create semantic tokens legend for capability registration
+local function create_semantic_tokens_legend()
+  return {
+    tokenTypes = SemanticTokens.TOKEN_TYPES,
+    tokenModifiers = SemanticTokens.TOKEN_MODIFIERS
+  }
+end
 
 --- Server capabilities
 local DEFAULT_CAPABILITIES = {
@@ -33,6 +44,22 @@ local DEFAULT_CAPABILITIES = {
   documentSymbolProvider = true,
   foldingRangeProvider = true,
   workspaceSymbolProvider = false,
+  codeActionProvider = {
+    codeActionKinds = {
+      "quickfix",
+      "refactor",
+      "refactor.extract",
+      "source"
+    }
+  },
+  semanticTokensProvider = {
+    legend = create_semantic_tokens_legend(),
+    full = true,
+    range = false
+  },
+  renameProvider = {
+    prepareProvider = true
+  }
 }
 
 --- Create a new LSP server
@@ -55,6 +82,12 @@ function Server.new(options)
   self._navigation = Navigation.new({ documents = self._documents })
   self._symbols = Symbols.new({ documents = self._documents })
   self._diagnostics = Diagnostics.new({ documents = self._documents })
+  self._code_actions = CodeActions.new({ documents = self._documents })
+  self._semantic_tokens = SemanticTokens.new({ documents = self._documents })
+  self._rename = Rename.new({
+    documents = self._documents,
+    navigation = self._navigation
+  })
 
   -- Parser reference (set via set_parser)
   self._parser = nil
@@ -75,6 +108,9 @@ function Server:set_parser(parser)
   self._navigation:set_parser(parser)
   self._symbols:set_parser(parser)
   self._diagnostics:set_parser(parser)
+  self._code_actions:set_parser(parser)
+  self._semantic_tokens:set_parser(parser)
+  self._rename:set_parser(parser)
 end
 
 --- Get server capabilities
@@ -233,6 +269,47 @@ function Server:folding_range(params)
   return self._symbols:get_folding_ranges(uri)
 end
 
+--- Handle textDocument/codeAction request
+-- @param params table Code action params
+-- @return table Array of code actions
+function Server:code_action(params)
+  local uri = params.textDocument.uri
+  local range = params.range
+  local context = params.context or {}
+
+  return self._code_actions:get_actions(uri, range, context)
+end
+
+--- Handle textDocument/semanticTokens/full request
+-- @param params table Semantic tokens params
+-- @return table Semantic tokens result
+function Server:semantic_tokens_full(params)
+  local uri = params.textDocument.uri
+
+  return self._semantic_tokens:get_full(uri)
+end
+
+--- Handle textDocument/prepareRename request
+-- @param params table Prepare rename params
+-- @return table|nil Prepare rename result
+function Server:prepare_rename(params)
+  local uri = params.textDocument.uri
+  local position = params.position
+
+  return self._rename:prepare_rename(uri, position.line, position.character)
+end
+
+--- Handle textDocument/rename request
+-- @param params table Rename params
+-- @return table|nil Workspace edit
+function Server:rename(params)
+  local uri = params.textDocument.uri
+  local position = params.position
+  local new_name = params.newName
+
+  return self._rename:do_rename(uri, position.line, position.character, new_name)
+end
+
 --- Validate a document and publish diagnostics
 -- @param uri string Document URI
 function Server:_validate_document(uri)
@@ -322,6 +399,14 @@ function Server:_handle_request(method, params)
     return self:document_symbol(params)
   elseif method == "textDocument/foldingRange" then
     return self:folding_range(params)
+  elseif method == "textDocument/codeAction" then
+    return self:code_action(params)
+  elseif method == "textDocument/semanticTokens/full" then
+    return self:semantic_tokens_full(params)
+  elseif method == "textDocument/prepareRename" then
+    return self:prepare_rename(params)
+  elseif method == "textDocument/rename" then
+    return self:rename(params)
   else
     return nil, { code = -32601, message = "Method not found: " .. method }
   end

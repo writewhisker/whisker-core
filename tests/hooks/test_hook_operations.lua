@@ -193,7 +193,9 @@ You are fighting. HP: |hp>[100]
       engine:navigate_to_passage("battle")
 
       -- Simulate choice selection
-      local rendered = engine:execute_choice(1)
+      local result = engine:execute_choice(1)
+      -- Result is structured when game_state exists
+      local rendered = type(result) == "table" and result.content or result
 
       assert.matches("85", rendered)
       assert.is_not.matches("100", rendered)
@@ -209,7 +211,9 @@ Items: |items>[empty]
       story:add_passage(passage)
       engine:navigate_to_passage("loot")
 
-      local rendered = engine:execute_choice(1)
+      local result = engine:execute_choice(1)
+      -- Result is structured when game_state exists
+      local rendered = type(result) == "table" and result.content or result
 
       assert.matches("open", rendered)
       assert.matches("gold, sword", rendered)
@@ -316,7 +320,9 @@ Items: |items>[empty]
       local passage = Passage.new("test", content)
       story:add_passage(passage)
 
-      local rendered = engine:navigate_to_passage("test")
+      local result = engine:navigate_to_passage("test")
+      -- Result is structured when game_state exists
+      local rendered = type(result) == "table" and result.content or result
 
       -- All hooks should render
       for i = 1, 50 do

@@ -12,13 +12,17 @@ local HotPathAnalyzer = {}
 -- @param entry table Profiling entry
 -- @param percentage number Percentage of total time
 -- @return number Priority score
+-- Lua 5.3+ compatibility: math.log10 was deprecated
+-- luacheck: ignore 143
+local log10 = math.log10 or function(x) return math.log(x, 10) end
+
 local function calculate_priority(entry, percentage)
   -- Priority factors:
   -- 1. High percentage of total time
   -- 2. High call count (more impact if optimized)
   -- 3. High average time per call (easier to optimize)
 
-  local call_factor = math.log10(entry.count + 1) + 1
+  local call_factor = log10(entry.count + 1) + 1
   local avg_factor = entry.avg_time > 0.0001 and 1.5 or 1.0
 
   return percentage * call_factor * avg_factor

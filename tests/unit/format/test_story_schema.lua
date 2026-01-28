@@ -13,6 +13,20 @@ describe("Story Schema", function()
       assert.is_string(StorySchema.SCHEMA_VERSION)
       assert.matches("%d+%.%d+%.%d+", StorySchema.SCHEMA_VERSION)
     end)
+
+    -- GAP-010: Format version constant
+    it("should have FORMAT_VERSION defined (GAP-010)", function()
+      assert.is_string(StorySchema.FORMAT_VERSION)
+      assert.matches("%d+%.%d+%.%d+", StorySchema.FORMAT_VERSION)
+      assert.equals("1.0.0", StorySchema.FORMAT_VERSION)
+    end)
+
+    -- GAP-011: WLS version constant
+    it("should have WLS_VERSION defined (GAP-011)", function()
+      assert.is_string(StorySchema.WLS_VERSION)
+      assert.matches("%d+%.%d+%.%d+", StorySchema.WLS_VERSION)
+      assert.equals("1.0.0", StorySchema.WLS_VERSION)
+    end)
   end)
 
   describe("Validation", function()

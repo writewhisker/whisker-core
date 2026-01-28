@@ -1,12 +1,19 @@
 --- Story Schema Definition
 -- Defines the JSON schema for story import/export
 -- @module whisker.format.schemas.story_schema
+-- GAP-020: JSON Settings Section
 
 local M = {}
 M._dependencies = {"json_codec"}
 
 --- Schema version for compatibility checking
 M.SCHEMA_VERSION = "1.0.0"
+
+--- JSON format version for compatibility checking (GAP-010)
+M.FORMAT_VERSION = "1.0.0"
+
+--- WLS specification version this implementation targets (GAP-011)
+M.WLS_VERSION = "1.0.0"
 
 --- Default values for optional fields
 M.DEFAULTS = {
@@ -15,6 +22,27 @@ M.DEFAULTS = {
   start = "Start",
   zoom = 1.0,
   tags = {},
+}
+
+--- Default settings values (GAP-020)
+M.DEFAULT_SETTINGS = {
+    tunnel_limit = 100,
+    choice_fallback = "implicit_end",
+    random_seed = nil,
+    strict_mode = false,
+    strict_hooks = false,
+    debug = false,
+    end_text = "The End",
+    continue_text = "Continue",
+    max_include_depth = 50,
+}
+
+--- Valid choice fallback behaviors (GAP-016)
+M.VALID_FALLBACK_BEHAVIORS = {
+    implicit_end = true,
+    continue = true,
+    error = true,
+    none = true,
 }
 
 --- Valid format types
@@ -214,7 +242,128 @@ function M:apply_defaults(story)
     end
   end
 
+  -- GAP-020: Apply default settings
+  result.settings = self:apply_default_settings(result.settings)
+
   return result
+end
+
+-- ============================================================================
+-- WLS 1.0 GAP-020: Settings Validation and Management
+-- ============================================================================
+
+--- Validate settings object
+---@param settings table
+---@return boolean valid
+---@return table errors
+function M:validate_settings(settings)
+    local errors = {}
+
+    if settings == nil then
+        return true, errors
+    end
+
+    if type(settings) ~= "table" then
+        return false, {"settings must be an object"}
+    end
+
+    -- Validate tunnel_limit
+    if settings.tunnel_limit ~= nil then
+        if type(settings.tunnel_limit) ~= "number" then
+            table.insert(errors, "settings.tunnel_limit must be a number")
+        elseif settings.tunnel_limit < 1 then
+            table.insert(errors, "settings.tunnel_limit must be at least 1")
+        end
+    end
+
+    -- Validate choice_fallback
+    if settings.choice_fallback ~= nil then
+        if type(settings.choice_fallback) ~= "string" then
+            table.insert(errors, "settings.choice_fallback must be a string")
+        elseif not M.VALID_FALLBACK_BEHAVIORS[settings.choice_fallback] then
+            local valid_list = {}
+            for k, _ in pairs(M.VALID_FALLBACK_BEHAVIORS) do
+                table.insert(valid_list, k)
+            end
+            table.sort(valid_list)
+            table.insert(errors, "settings.choice_fallback must be one of: " .. table.concat(valid_list, ", "))
+        end
+    end
+
+    -- Validate random_seed
+    if settings.random_seed ~= nil then
+        if type(settings.random_seed) ~= "number" and type(settings.random_seed) ~= "string" then
+            table.insert(errors, "settings.random_seed must be a number or string")
+        end
+    end
+
+    -- Validate boolean settings
+    for _, key in ipairs({"strict_mode", "strict_hooks", "debug"}) do
+        if settings[key] ~= nil and type(settings[key]) ~= "boolean" then
+            table.insert(errors, "settings." .. key .. " must be a boolean")
+        end
+    end
+
+    -- Validate string settings
+    for _, key in ipairs({"end_text", "continue_text"}) do
+        if settings[key] ~= nil and type(settings[key]) ~= "string" then
+            table.insert(errors, "settings." .. key .. " must be a string")
+        end
+    end
+
+    -- Validate max_include_depth
+    if settings.max_include_depth ~= nil then
+        if type(settings.max_include_depth) ~= "number" then
+            table.insert(errors, "settings.max_include_depth must be a number")
+        elseif settings.max_include_depth < 1 then
+            table.insert(errors, "settings.max_include_depth must be at least 1")
+        end
+    end
+
+    return #errors == 0, errors
+end
+
+--- Apply default settings
+---@param settings table|nil
+---@return table
+function M:apply_default_settings(settings)
+    local result = {}
+
+    -- Start with defaults
+    for k, v in pairs(M.DEFAULT_SETTINGS) do
+        result[k] = v
+    end
+
+    -- Override with provided settings
+    if settings then
+        for k, v in pairs(settings) do
+            result[k] = v
+        end
+    end
+
+    return result
+end
+
+--- Serialize settings, omitting default values (for clean JSON)
+---@param settings table
+---@return table|nil
+function M:serialize_settings(settings)
+    if not settings then
+        return nil
+    end
+
+    local result = {}
+    local has_values = false
+
+    for key, value in pairs(settings) do
+        -- Only include if different from default
+        if value ~= M.DEFAULT_SETTINGS[key] then
+            result[key] = value
+            has_values = true
+        end
+    end
+
+    return has_values and result or nil
 end
 
 --- Get JSON schema definition (for documentation/tooling)

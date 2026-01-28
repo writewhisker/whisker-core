@@ -66,8 +66,9 @@ function HookManager:replace_hook(hook_id, new_content)
   if not hook then
     return false, "Hook not found: " .. hook_id
   end
-  
+
   hook.current_content = new_content
+  hook.cleared = false  -- GAP-019: Content restored, no longer cleared
   hook.modified_count = hook.modified_count + 1
   return true
 end
@@ -123,9 +124,53 @@ function HookManager:hide_hook(hook_id)
   if not hook then
     return false, "Hook not found: " .. hook_id
   end
-  
+
   hook.visible = false
   return true
+end
+
+-- GAP-019: Clear hook content (different from hide)
+
+--- Clear a hook's content to empty string
+-- Unlike hide(), clear() sets content to empty but keeps hook visible
+-- @param hook_id string Hook identifier
+-- @return boolean, string Success status and error message if failed
+function HookManager:clear_hook(hook_id)
+  local hook = self._hooks[hook_id]
+  if not hook then
+    return false, "Hook not found: " .. hook_id
+  end
+
+  -- Clear current content to empty string
+  hook.current_content = ""
+
+  -- Track that this was a clear operation (not just empty replace)
+  hook.cleared = true
+
+  -- Keep hook visible (this is the key difference from hide)
+  -- hook.visible remains unchanged
+
+  hook.modified_count = hook.modified_count + 1
+  return true
+end
+
+--- Check if a hook was cleared
+-- @param hook_id string Hook identifier
+-- @return boolean True if hook was explicitly cleared
+function HookManager:is_cleared(hook_id)
+  local hook = self._hooks[hook_id]
+  return hook and hook.cleared == true
+end
+
+--- Check if a hook is visible
+-- @param hook_id string Hook identifier
+-- @return boolean True if hook exists and is visible
+function HookManager:is_visible(hook_id)
+  local hook = self._hooks[hook_id]
+  if not hook then
+    return false
+  end
+  return hook.visible ~= false
 end
 
 --- Clear all hooks for a passage (on navigation)
@@ -168,6 +213,176 @@ end
 function HookManager:deserialize(data)
   self._hooks = data.hooks or {}
   self._passage_hooks = data.passage_hooks or {}
+end
+
+-- ============================================================================
+-- GAP-073: Dedicated hook.clear() and hook.reset()
+-- ============================================================================
+
+--- Reset hook to original content
+-- @param hook_id string Hook identifier
+-- @return boolean, string Success status and error message if failed
+function HookManager:reset_hook(hook_id)
+  local hook = self._hooks[hook_id]
+  if not hook then
+    return false, "Hook not found: " .. hook_id
+  end
+
+  hook.current_content = hook.content  -- Original content
+  hook.modified_count = 0
+  hook.cleared = false
+  return true
+end
+
+-- ============================================================================
+-- GAP-072: Hook All Implementation - Bulk Operations
+-- ============================================================================
+
+--- Hide all hooks in a passage
+-- @param passage_id string Passage identifier
+-- @param pattern string|nil Optional name pattern to match
+-- @return number Count of hooks hidden
+function HookManager:hide_all(passage_id, pattern)
+  local hooks = self:get_passage_hooks(passage_id)
+  local count = 0
+
+  for _, hook in ipairs(hooks) do
+    if not pattern or hook.name:match(pattern) then
+      if hook.visible then
+        hook.visible = false
+        count = count + 1
+      end
+    end
+  end
+
+  return count
+end
+
+--- Show all hooks in a passage
+-- @param passage_id string Passage identifier
+-- @param pattern string|nil Optional name pattern to match
+-- @return number Count of hooks shown
+function HookManager:show_all(passage_id, pattern)
+  local hooks = self:get_passage_hooks(passage_id)
+  local count = 0
+
+  for _, hook in ipairs(hooks) do
+    if not pattern or hook.name:match(pattern) then
+      if not hook.visible then
+        hook.visible = true
+        count = count + 1
+      end
+    end
+  end
+
+  return count
+end
+
+--- Replace content of all hooks in a passage
+-- @param passage_id string Passage identifier
+-- @param new_content string New content for all hooks
+-- @param pattern string|nil Optional name pattern to match
+-- @return number Count of hooks replaced
+function HookManager:replace_all(passage_id, new_content, pattern)
+  local hooks = self:get_passage_hooks(passage_id)
+  local count = 0
+
+  for _, hook in ipairs(hooks) do
+    if not pattern or hook.name:match(pattern) then
+      hook.current_content = new_content
+      hook.modified_count = hook.modified_count + 1
+      hook.cleared = false
+      count = count + 1
+    end
+  end
+
+  return count
+end
+
+--- Clear all hooks in a passage (set to empty string)
+-- @param passage_id string Passage identifier
+-- @param pattern string|nil Optional name pattern
+-- @return number Count of hooks cleared
+function HookManager:clear_all(passage_id, pattern)
+  local hooks = self:get_passage_hooks(passage_id)
+  local count = 0
+
+  for _, hook in ipairs(hooks) do
+    if not pattern or hook.name:match(pattern) then
+      hook.current_content = ""
+      hook.modified_count = hook.modified_count + 1
+      hook.cleared = true
+      count = count + 1
+    end
+  end
+
+  return count
+end
+
+--- Reset all hooks in a passage to original content
+-- @param passage_id string Passage identifier
+-- @param pattern string|nil Optional name pattern
+-- @return number Count of hooks reset
+function HookManager:reset_all(passage_id, pattern)
+  local hooks = self:get_passage_hooks(passage_id)
+  local count = 0
+
+  for _, hook in ipairs(hooks) do
+    if not pattern or hook.name:match(pattern) then
+      hook.current_content = hook.content
+      hook.modified_count = 0
+      hook.cleared = false
+      count = count + 1
+    end
+  end
+
+  return count
+end
+
+--- Iterate over all hooks with callback
+-- @param passage_id string Passage identifier
+-- @param callback function Function(hook) to call for each hook
+-- @param pattern string|nil Optional name pattern to match
+function HookManager:each(passage_id, callback, pattern)
+  local hooks = self:get_passage_hooks(passage_id)
+
+  for _, hook in ipairs(hooks) do
+    if not pattern or hook.name:match(pattern) then
+      callback(hook)
+    end
+  end
+end
+
+--- Get hooks matching criteria
+-- @param passage_id string Passage identifier
+-- @param criteria table { pattern, visible, content_pattern }
+-- @return table Array of matching hooks
+function HookManager:find_hooks(passage_id, criteria)
+  local hooks = self:get_passage_hooks(passage_id)
+  local results = {}
+  criteria = criteria or {}
+
+  for _, hook in ipairs(hooks) do
+    local matches = true
+
+    if criteria.pattern and not hook.name:match(criteria.pattern) then
+      matches = false
+    end
+
+    if criteria.visible ~= nil and hook.visible ~= criteria.visible then
+      matches = false
+    end
+
+    if criteria.content_pattern and not hook.current_content:match(criteria.content_pattern) then
+      matches = false
+    end
+
+    if matches then
+      table.insert(results, hook)
+    end
+  end
+
+  return results
 end
 
 return HookManager

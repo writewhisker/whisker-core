@@ -53,6 +53,7 @@ local RULES = {
       "core%.control_flow",   -- Control flow needed by factories
       "core%.engine",         -- Engine is core infrastructure
       "core%.modules_runtime", -- Modules runtime is core infrastructure
+      "core%.path_resolver",  -- Path resolver is core infrastructure
       "core%.factories%..*",  -- Factories can be required
       -- Intra-module requires are allowed (same module can require its own files)
       "security%..*",         -- Security module intra-module
