@@ -148,7 +148,8 @@ function Whisker.set(key, value)
 end
 
 --- DEPRECATED: Use whisker.passage.go instead
-function Whisker.goto(passage_id)
+-- Note: Using bracket notation because 'goto' is a reserved keyword in Lua 5.2+
+Whisker["goto"] = function(passage_id)
     warn_deprecated("whisker.goto()", "whisker.passage.go()")
     return passage.go(passage_id)
 end
