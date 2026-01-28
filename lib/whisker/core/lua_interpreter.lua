@@ -220,19 +220,406 @@ end
 function LuaInterpreter:eval(code)
   -- Create a function from the code
   local func, err = load(code, "eval", "t", self.env)
-  
+
   if not func then
     return nil, err
   end
-  
+
   -- Execute the function
   local success, result = pcall(func)
-  
+
   if not success then
     return nil, result
   end
-  
+
   return result
+end
+
+--- Execute Lua code with game state context
+-- @param code string Lua code to execute
+-- @param game_state table Game state for variable access
+-- @param context table Additional context (story, engine, etc.)
+-- @return boolean success Whether execution succeeded
+-- @return any result Result of execution or error message
+function LuaInterpreter:execute_code(code, game_state, context)
+  -- Create environment with whisker API and game state access
+  local env = self:create_execution_env(game_state, context)
+
+  -- Load the code
+  local func, err = load(code, "execute", "t", env)
+  if not func then
+    return false, err
+  end
+
+  -- Execute
+  local success, result = pcall(func)
+  return success, result
+end
+
+--- Evaluate an expression and return the result
+-- @param expr string Expression to evaluate
+-- @param game_state table Game state for variable access
+-- @return boolean success Whether evaluation succeeded
+-- @return any result Result of evaluation or error message
+function LuaInterpreter:evaluate_expression(expr, game_state)
+  local env = self:create_execution_env(game_state, {})
+
+  local func, err = load("return " .. expr, "expr", "t", env)
+  if not func then
+    return false, err
+  end
+
+  local success, result = pcall(func)
+  return success, result
+end
+
+--- Evaluate a condition and return boolean result
+-- @param expr string Condition expression
+-- @param game_state table Game state for variable access
+-- @return boolean success Whether evaluation succeeded
+-- @return boolean|string result Boolean result or error message
+function LuaInterpreter:evaluate_condition(expr, game_state)
+  local success, result = self:evaluate_expression(expr, game_state)
+  if not success then
+    return false, result
+  end
+  return true, not not result  -- Convert to boolean
+end
+
+--- Create the whisker.state API for script access
+-- @param game_state table Game state to wrap
+-- @param context table|nil Optional context; if provided, returns full {whisker: {state: ...}} structure
+-- @return table api The whisker.state API table (or full nested structure if context provided)
+function LuaInterpreter:create_story_api(game_state, context)
+  local state_api = {
+    get = function(key)
+      if game_state.get then
+        return game_state:get(key)
+      end
+      return game_state[key]
+    end,
+    set = function(key, value)
+      if game_state.set then
+        return game_state:set(key, value)
+      end
+      game_state[key] = value
+    end,
+    has = function(key)
+      if game_state.has then
+        return game_state:has(key)
+      end
+      return game_state[key] ~= nil
+    end,
+    delete = function(key)
+      if game_state.delete then
+        return game_state:delete(key)
+      end
+      game_state[key] = nil
+    end,
+    all = function()
+      if game_state.get_all_variables then
+        return game_state:get_all_variables()
+      end
+      return game_state
+    end,
+    reset = function()
+      if game_state.reset then
+        return game_state:reset()
+      end
+    end,
+    -- Temp variable support
+    get_temp = function(key)
+      if game_state.get_temp then
+        return game_state:get_temp(key)
+      end
+      return nil
+    end,
+    set_temp = function(key, value)
+      -- Check if a story variable with the same name exists (prevent shadowing)
+      local story_var_exists = false
+      if game_state.has then
+        story_var_exists = game_state:has(key)
+      else
+        story_var_exists = game_state[key] ~= nil
+      end
+      if story_var_exists then
+        error("Cannot set temp variable '" .. key .. "': story variable with same name exists (shadowing not allowed)", 2)
+      end
+      if game_state.set_temp then
+        return game_state:set_temp(key, value)
+      end
+    end,
+    has_temp = function(key)
+      if game_state.has_temp then
+        return game_state:has_temp(key)
+      end
+      return false
+    end
+  }
+
+  -- If context is provided, return full nested structure for testing
+  if context ~= nil then
+    return {
+      whisker = {
+        state = state_api
+      }
+    }
+  end
+
+  return state_api
+end
+
+--- Create execution environment with whisker API
+-- @param game_state table Game state
+-- @param context table Additional context
+-- @return table env Execution environment
+function LuaInterpreter:create_execution_env(game_state, context)
+  local env = {}
+
+  -- Copy base environment
+  for k, v in pairs(self.env) do
+    env[k] = v
+  end
+
+  -- Add whisker.state API
+  env.whisker = env.whisker or {}
+  env.whisker.state = self:create_story_api(game_state)
+
+  -- Add whisker.passage API
+  env.whisker.passage = {
+    current = function()
+      if context and context.engine and context.engine.current_passage then
+        return context.engine.current_passage
+      end
+      return nil
+    end,
+    get = function(passage_id)
+      if context and context.story then
+        return context.story:get_passage(passage_id)
+      end
+      return nil
+    end,
+    exists = function(passage_id)
+      if context and context.story then
+        return context.story:get_passage(passage_id) ~= nil
+      end
+      return false
+    end,
+    all = function()
+      if context and context.story then
+        local ids = {}
+        local passages = context.story:get_all_passages()
+        for _, p in ipairs(passages) do
+          table.insert(ids, p.id)
+        end
+        return ids
+      end
+      return {}
+    end,
+    tags = function(tag)
+      if context and context.story then
+        local result = {}
+        local passages = context.story:get_all_passages()
+        for _, p in ipairs(passages) do
+          if p.tags then
+            for _, t in ipairs(p.tags) do
+              if t == tag then
+                table.insert(result, p)
+                break
+              end
+            end
+          end
+        end
+        return result
+      end
+      return {}
+    end,
+    go = function(passage_id)
+      -- Deferred navigation - store for engine to process
+      if context then
+        context._pending_navigation = passage_id
+      end
+    end
+  }
+
+  -- Add whisker.history API
+  env.whisker.history = {
+    canBack = function()
+      if context and context.engine and context.engine.history then
+        return #context.engine.history > 0
+      end
+      return false
+    end,
+    list = function()
+      if game_state and game_state.visited_passages then
+        local list = {}
+        for passage_id, _ in pairs(game_state.visited_passages) do
+          table.insert(list, passage_id)
+        end
+        return list
+      end
+      return {}
+    end,
+    count = function()
+      if game_state and game_state.visited_passages then
+        local count = 0
+        for _ in pairs(game_state.visited_passages) do
+          count = count + 1
+        end
+        return count
+      end
+      return 0
+    end,
+    contains = function(passage_id)
+      if game_state and game_state.visited_passages then
+        return game_state.visited_passages[passage_id] ~= nil
+      end
+      return false
+    end,
+    clear = function()
+      if game_state then
+        game_state.visited_passages = {}
+      end
+    end
+  }
+
+  -- Add whisker.choice API
+  env.whisker.choice = {
+    available = function()
+      if context and context.engine and context.engine.current_passage then
+        local passage = context.engine.current_passage
+        if passage.get_choices then
+          return passage:get_choices()
+        elseif passage.choices then
+          return passage.choices
+        end
+      end
+      return {}
+    end,
+    count = function()
+      local choices = env.whisker.choice.available()
+      return #choices
+    end,
+    select = function(index)
+      -- Deferred choice selection
+      if context then
+        context._pending_choice = index
+      end
+    end
+  }
+
+  -- Add top-level functions
+
+  -- visited() - check visit count for current or specific passage
+  env.visited = function(passage_id)
+    if passage_id then
+      return game_state:get_visit_count(passage_id) or 0
+    else
+      local current = game_state:get_current_passage()
+      return current and (game_state:get_visit_count(current) or 0) or 0
+    end
+  end
+
+  -- random(max) or random(min, max) - generate random number
+  env.random = function(a, b)
+    if b then
+      return math.random(a, b)
+    else
+      return math.random(1, a)
+    end
+  end
+
+  -- pick(...) - pick random from arguments
+  env.pick = function(...)
+    local args = {...}
+    if #args == 0 then return nil end
+    return args[math.random(1, #args)]
+  end
+
+  -- get(key) - legacy get function
+  env.get = function(key)
+    if game_state.get then
+      return game_state:get(key)
+    end
+    return game_state[key]
+  end
+
+  -- set(key, value) - legacy set function
+  env.set = function(key, value)
+    if game_state.set then
+      game_state:set(key, value)
+    else
+      game_state[key] = value
+    end
+  end
+
+  -- has(key) - legacy has function
+  env.has = function(key)
+    if game_state.has then
+      return game_state:has(key)
+    end
+    return game_state[key] ~= nil
+  end
+
+  -- del(key) - legacy delete function
+  env.del = function(key)
+    if game_state.delete then
+      return game_state:delete(key)
+    end
+    game_state[key] = nil
+  end
+
+  -- inc(key, amount) - legacy increment function
+  env.inc = function(key, amount)
+    amount = amount or 1
+    if game_state.increment then
+      return game_state:increment(key, amount)
+    end
+    local current = game_state[key] or 0
+    game_state[key] = current + amount
+    return game_state[key]
+  end
+
+  -- dec(key, amount) - legacy decrement function
+  env.dec = function(key, amount)
+    amount = amount or 1
+    if game_state.decrement then
+      return game_state:decrement(key, amount)
+    end
+    local current = game_state[key] or 0
+    game_state[key] = current - amount
+    return game_state[key]
+  end
+
+  -- Add direct variable access (variables accessible as globals)
+  setmetatable(env, {
+    __index = function(_, key)
+      -- First check if it's a temp variable (prefixed with _)
+      if key:sub(1, 1) == "_" and game_state.get_temp then
+        local temp_key = key:sub(2)
+        local val = game_state:get_temp(temp_key)
+        if val ~= nil then return val end
+      end
+      -- Then check story variables
+      if game_state.get then
+        local val = game_state:get(key)
+        if val ~= nil then return val end
+      elseif game_state[key] ~= nil then
+        return game_state[key]
+      end
+      -- Fall back to global environment
+      return _G[key]
+    end,
+    __newindex = function(_, key, value)
+      if game_state.set then
+        game_state:set(key, value)
+      else
+        game_state[key] = value
+      end
+    end
+  })
+
+  return env
 end
 
 return LuaInterpreter
