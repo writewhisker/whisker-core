@@ -1,4 +1,4 @@
-.PHONY: all clean test test-coverage test-unit test-integration test-contract build install dev docs docs-serve lint format validate validate-modularity help
+.PHONY: all clean test test-coverage test-unit test-integration test-contract test-all-versions build install dev docs docs-serve lint format validate validate-modularity help
 
 # Colors for output
 GREEN  := $(shell tput -Txterm setaf 2)
@@ -23,6 +23,7 @@ help:
 	@echo "  $(YELLOW)make test-unit$(RESET)        - Run unit tests only"
 	@echo "  $(YELLOW)make test-integration$(RESET) - Run integration tests only"
 	@echo "  $(YELLOW)make test-contract$(RESET)    - Run contract tests only"
+	@echo "  $(YELLOW)make test-all-versions$(RESET)- Run tests across all Lua versions"
 	@echo ""
 	@echo "$(GREEN)Validation:$(RESET)"
 	@echo "  $(YELLOW)make build$(RESET)            - Validate Lua modules (luacheck)"
@@ -66,6 +67,10 @@ test-integration:
 
 test-contract:
 	@$(BUSTED) --verbose tests/contract/
+
+# Run tests across all Lua versions (skips versions not installed locally)
+test-all-versions:
+	@./scripts/test-all-versions.sh
 
 # Build/validate all components (Lua is interpreted, so this runs validation)
 build:

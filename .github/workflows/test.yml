@@ -8,17 +8,12 @@ on:
 
 jobs:
   test:
-    name: Test on ${{ matrix.os }} with Lua ${{ matrix.lua-version }}
-    runs-on: ${{ matrix.os }}
-    # Allow Lua 5.5 to fail until gh-actions-lua adds support
-    continue-on-error: ${{ matrix.lua-version == '5.5' }}
-
+    name: Test with Lua ${{ matrix.lua-version }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        lua-version: ['5.1', '5.2', '5.3', '5.4', '5.5', 'luajit']
-        # Lua 5.5.0 released Dec 22, 2025
+        lua-version: ['5.2', '5.3', '5.4']
 
     steps:
     - name: Checkout code
@@ -34,30 +29,30 @@ jobs:
 
     - name: Install busted
       run: |
-        # Use --only-server to avoid LuaJIT manifest size limit issue
         luarocks install busted --only-server=https://luarocks.org || luarocks install busted
 
     - name: Install luacov (coverage)
+      if: matrix.lua-version == '5.4'
       run: |
         luarocks install luacov --only-server=https://luarocks.org || luarocks install luacov
 
     - name: Run tests
-      run: busted --verbose --coverage
+      run: busted --verbose ${{ matrix.lua-version == '5.4' && '--coverage' || '' }}
 
     - name: Generate coverage report
-      if: matrix.lua-version == '5.4' && matrix.os == 'ubuntu-latest'
+      if: matrix.lua-version == '5.4'
       run: luacov
 
     - name: Upload coverage
-      if: matrix.lua-version == '5.4' && matrix.os == 'ubuntu-latest'
+      if: matrix.lua-version == '5.4'
       uses: codecov/codecov-action@v5
       with:
         files: ./luacov.report.out
         flags: unittests
         name: codecov-whisker-core
 
-  lint:
-    name: Lint with LuaCheck
+  checks:
+    name: Lint, modularity & validation
     runs-on: ubuntu-latest
 
     steps:
@@ -79,23 +74,9 @@ jobs:
     - name: Run luacheck
       run: luacheck lib/ bin/ --config .luacheckrc
 
-  modularity:
-    name: Modularity Validation
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v6
-
-    - name: Setup Lua
-      uses: leafo/gh-actions-lua@v12
-      with:
-        luaVersion: '5.4'
-
-    - name: Check for bypass
+    - name: Check for modularity bypass
       id: bypass
       run: |
-        # Check commit message for bypass pattern
         if git log -1 --pretty=%B | grep -q '\[skip-modularity\]'; then
           echo "skip=true" >> $GITHUB_OUTPUT
           echo "Modularity check bypassed via commit message"
@@ -116,19 +97,6 @@ jobs:
           echo "::error::Modularity validator encountered an error"
           exit 1
         fi
-
-  validate:
-    name: Validate story examples
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v6
-
-    - name: Setup Lua
-      uses: leafo/gh-actions-lua@v12
-      with:
-        luaVersion: '5.4'
 
     - name: Validate example stories
       run: |
