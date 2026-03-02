@@ -43,7 +43,7 @@ jobs:
           busted
 
       - name: Upload Lua test results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: lua-test-results
@@ -161,7 +161,7 @@ jobs:
           "
 
       - name: Upload parity results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: parity-results
