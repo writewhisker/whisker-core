@@ -45,7 +45,7 @@ jobs:
 
     - name: Upload coverage
       if: matrix.lua-version == '5.4'
-      uses: codecov/codecov-action@v5
+      uses: codecov/codecov-action@v6
       with:
         files: ./luacov.report.out
         flags: unittests
